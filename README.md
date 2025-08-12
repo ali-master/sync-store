@@ -274,24 +274,6 @@ cd docker/mariadb
 docker-compose up -d
 ```
 
-### Environment Variables
-Create `.env` file in `apps/api/`:
-```env
-# Database
-DATABASE_URL="mysql://user:password@localhost:3306/syncstore"
-
-# Redis
-REDIS_URL="redis://localhost:6379"
-
-# JWT
-JWT_SECRET="your-secret-key"
-JWT_EXPIRES_IN="7d"
-
-# Server
-PORT=3000
-NODE_ENV=production
-```
-
 ## 🛠️ Development
 
 ### Available Scripts

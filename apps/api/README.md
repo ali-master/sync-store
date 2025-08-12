@@ -265,57 +265,6 @@ model ApiKey {
 
 ## 🔧 Configuration
 
-### Environment Variables
-
-```env
-# Server
-NODE_ENV=production
-PORT=3000
-API_URL=https://api.yourdomain.com
-
-# Database (MariaDB)
-DATABASE_URL="mysql://user:password@localhost:3306/syncstore"
-DB_CONNECTION_LIMIT=10
-DB_SSL=true
-
-# Redis (Optional - for caching)
-REDIS_URL="redis://localhost:6379"
-REDIS_DB=0
-
-# Authentication
-JWT_SECRET=your-secret-key-min-32-chars
-JWT_EXPIRES_IN=7d
-JWT_REFRESH_SECRET=your-refresh-secret
-JWT_REFRESH_EXPIRES_IN=30d
-
-# API Keys
-API_KEYS_ENABLED=true
-API_KEY_TOKEN_PREFIX=sk_live_
-API_KEY_DEFAULT_SCOPES=["read", "write"]
-API_KEY_EXPIRATION_DAYS=365
-
-# Security
-BCRYPT_SALT_ROUNDS=12
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=100
-CSRF_SECRET=your-csrf-secret
-
-# CORS
-CORS_ORIGIN=https://app.yourdomain.com
-CORS_CREDENTIALS=true
-
-# Monitoring
-LOG_LEVEL=info
-LOG_FORMAT=json
-ENABLE_ANALYTICS=true
-ANALYTICS_BATCH_SIZE=100
-
-# Storage Limits
-MAX_ITEM_SIZE_KB=100
-MAX_STORAGE_PER_USER_MB=100
-TTL_CLEANUP_INTERVAL_HOURS=24
-```
-
 ## 🚀 Getting Started
 
 ### Prerequisites
