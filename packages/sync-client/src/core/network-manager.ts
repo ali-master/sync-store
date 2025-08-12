@@ -14,10 +14,10 @@ export class NetworkManager extends EventEmitter<{
   private baseReconnectDelay = 1000;
   private maxReconnectDelay = 30000;
   private reconnectTimeout?: NodeJS.Timeout;
-  
+
   // Config properties
-  private backgroundSync: boolean;
-  private backgroundInterval: number;
+  private readonly backgroundSync: boolean;
+  private readonly backgroundInterval: number;
 
   constructor(config?: NetworkConfig) {
     super();
@@ -46,7 +46,7 @@ export class NetworkManager extends EventEmitter<{
   setState(state: ConnectionState): void {
     if (this.currentState !== state) {
       this.currentState = state;
-      this.emit("state-change", state);
+      void this.emit("state-change", state);
 
       // Reset reconnect attempts on successful connection
       if (state === ConnectionState.CONNECTED) {
@@ -67,7 +67,7 @@ export class NetworkManager extends EventEmitter<{
     const delay = this.calculateReconnectDelay();
     this.reconnectAttempts++;
 
-    this.emit("reconnect-attempt", { attempt: this.reconnectAttempts, delay });
+    void this.emit("reconnect-attempt", { attempt: this.reconnectAttempts, delay });
 
     this.reconnectTimeout = setTimeout(() => {
       this.setState(ConnectionState.CONNECTING);

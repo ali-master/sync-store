@@ -135,11 +135,7 @@ export class ConflictResolver {
    */
   private merge<T>(conflict: ConflictData<T>): ConflictResolution<T> {
     try {
-      const merged = this.intelligentMerge(
-        conflict.localValue,
-        conflict.remoteValue,
-        conflict.conflictType,
-      );
+      const merged = this.intelligentMerge(conflict.localValue, conflict.remoteValue);
 
       return {
         id: conflict.id,
@@ -185,7 +181,7 @@ export class ConflictResolver {
   /**
    * Intelligent merge based on data types
    */
-  private intelligentMerge(local: any, remote: any, _conflictType?: string): any {
+  private intelligentMerge(local: any, remote: any): any {
     // Handle null/undefined cases
     if (local === null || local === undefined) return remote;
     if (remote === null || remote === undefined) return local;

@@ -136,6 +136,7 @@ export class SyncStorageRepository {
         isDeleted: false,
       },
       update: {
+        instanceId: data.instanceId,
         value,
         metadata,
         version: data.version,
@@ -325,6 +326,7 @@ export class SyncStorageRepository {
             isDeleted: false,
           },
           update: {
+            instanceId: item.instanceId,
             value,
             metadata,
             version: item.version,

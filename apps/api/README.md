@@ -1,6 +1,6 @@
 # 🚀 Sync Store API
 
-> Enterprise-grade real-time synchronization backend with CQRS architecture, advanced conflict resolution, and comprehensive analytics
+> Real-time synchronization backend with CQRS architecture, advanced conflict resolution, and comprehensive analytics
 
 ## 📋 Overview
 

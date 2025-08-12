@@ -129,7 +129,7 @@ export interface ConflictData<T = any> {
 }
 
 export interface SyncEvent<T = any> {
-  type: "sync" | "remove" | "clear" | "conflict" | "batch";
+  type: "sync" | "remove" | "clear" | "conflict" | "batch" | "initial_sync";
   key?: string;
   value?: T;
   metadata?: Record<string, any>;
@@ -137,6 +137,12 @@ export interface SyncEvent<T = any> {
   version?: number;
   source: "local" | "remote";
   instanceId?: string;
+  // Properties for initial_sync type
+  keys?: string[];
+  uploadSucceeded?: number;
+  uploadFailed?: number;
+  downloadSucceeded?: number;
+  downloadFailed?: number;
 }
 
 export interface BatchOperation {

@@ -85,6 +85,9 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     if (pendingUpdates.length > 0) {
       client.emit("pending-updates", pendingUpdates);
     }
+
+    // Notify this instance about successful connection
+    this.notifyInstanceConnectionStatus(instanceId, "connected");
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
@@ -95,6 +98,8 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
     if (userId && instanceId) {
       await this.userSessionService.removeSession(userId, instanceId, client.id);
+      // Notify this instance about disconnection
+      this.notifyInstanceConnectionStatus(instanceId, "disconnected");
     }
   }
 
@@ -114,7 +119,18 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
       const result = await this.commandBus.execute(command);
 
-      this.server.to(`user:${userId}`).except(client.id).emit("sync:update", {
+      // Broadcast to all user's instances except the current one
+      this.broadcastToUserExcept(userId, client.id, "sync:update", {
+        type: "sync",
+        key,
+        value: result.value,
+        metadata: result.metadata,
+        timestamp: result.timestamp,
+        version: result.version,
+      });
+
+      // Also notify key-specific subscribers
+      this.broadcastToKey(userId, key, "sync:update", {
         type: "sync",
         key,
         value: result.value,
@@ -124,6 +140,13 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
       });
 
       this.eventBus.publish(new ItemSyncedEvent(userId, instanceId, key, value, metadata));
+
+      // Example usage: Check if user is approaching storage quota
+      // This would typically be done by a service, but showing how to use broadcastToUser
+      // const userStorageSize = await this.getUserStorageSize(userId);
+      // if (userStorageSize > MAX_STORAGE_WARNING_THRESHOLD) {
+      //   this.notifyUserStorageQuotaExceeded(userId, userStorageSize, MAX_STORAGE_SIZE);
+      // }
 
       return {
         type: "response",
@@ -158,7 +181,15 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
       const command = new RemoveItemCommand(userId, instanceId, key);
       await this.commandBus.execute(command);
 
-      this.server.to(`user:${userId}`).except(client.id).emit("sync:remove", {
+      // Broadcast to all user's instances except the current one
+      this.broadcastToUserExcept(userId, client.id, "sync:remove", {
+        type: "sync",
+        key,
+        timestamp: Date.now(),
+      });
+
+      // Also notify key-specific subscribers
+      this.broadcastToKey(userId, key, "sync:remove", {
         type: "sync",
         key,
         timestamp: Date.now(),
@@ -277,5 +308,33 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
   broadcastToKey(userId: string, key: string, event: string, data: any): void {
     this.server.to(`key:${userId}:${key}`).emit(event, data);
+  }
+
+  broadcastToUserExcept(userId: string, excludeSocketId: string, event: string, data: any): void {
+    this.server.to(`user:${userId}`).except(excludeSocketId).emit(event, data);
+  }
+
+  // Utility methods for common broadcast scenarios
+  notifyUserStorageQuotaExceeded(userId: string, currentSize: number, maxSize: number): void {
+    this.broadcastToUser(userId, "storage:quota-exceeded", {
+      currentSize,
+      maxSize,
+      timestamp: Date.now(),
+    });
+  }
+
+  notifyInstanceConnectionStatus(instanceId: string, status: "connected" | "disconnected"): void {
+    this.broadcastToInstance(instanceId, "connection:status", {
+      status,
+      timestamp: Date.now(),
+    });
+  }
+
+  notifyUserSyncComplete(userId: string, syncedKeys: string[]): void {
+    this.broadcastToUser(userId, "sync:complete", {
+      keys: syncedKeys,
+      count: syncedKeys.length,
+      timestamp: Date.now(),
+    });
   }
 }

@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { useRemoteStorage, useStorageItem, useStorageKeys } from "@usex/sync-client";
+import React, { useState, useEffect, createContext, useContext } from "react";
+import { useRemoteStorage, RemoteStorage } from "@usex/sync-client";
 import "./App.css";
+
+// Create a context for sharing the storage instance
+const StorageContext = createContext<RemoteStorage | null>(null);
 
 // Demo components
 function ConnectionStatus({
@@ -27,30 +30,62 @@ function ConnectionStatus({
   );
 }
 
-function UserPreferences({ userId }: { userId: string }) {
-  const {
-    value: preferences,
-    setValue: setPreferences,
-    isLoading,
-    isConnected,
-    error,
-  } = useStorageItem(userId, "user-preferences", {
+function UserPreferences() {
+  const storage = useContext(StorageContext);
+  const [preferences, setPreferences] = useState({
     theme: "light",
     language: "en",
     notifications: true,
   });
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleThemeToggle = async () => {
-    if (!preferences) return;
-    await setPreferences({
-      ...preferences,
-      theme: preferences.theme === "dark" ? "light" : "dark",
-    });
+  useEffect(() => {
+    if (!storage) return;
+
+    const loadPreferences = async () => {
+      try {
+        const stored = await storage.getItem("user-preferences");
+        if (stored) {
+          setPreferences(stored);
+        }
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Failed to load preferences:", error);
+        setIsLoading(false);
+      }
+    };
+
+    loadPreferences();
+
+    const handleChange = (event: any) => {
+      if (event.key === "user-preferences") {
+        setPreferences(
+          event.newValue || {
+            theme: "light",
+            language: "en",
+            notifications: true,
+          },
+        );
+      }
+    };
+
+    storage.on("change", handleChange);
+    return () => storage.off("change", handleChange);
+  }, [storage]);
+
+  const updatePreferences = async (newPrefs: any) => {
+    if (!storage) return;
+    try {
+      await storage.setItem("user-preferences", newPrefs);
+      setPreferences(newPrefs);
+    } catch (error) {
+      console.error("Failed to update preferences:", error);
+    }
   };
 
   const handleLanguageChange = async (language: string) => {
     if (!preferences) return;
-    await setPreferences({
+    await updatePreferences({
       ...preferences,
       language,
     });
@@ -58,14 +93,14 @@ function UserPreferences({ userId }: { userId: string }) {
 
   const handleNotificationsToggle = async () => {
     if (!preferences) return;
-    await setPreferences({
+    await updatePreferences({
       ...preferences,
       notifications: !preferences.notifications,
     });
   };
 
   if (isLoading) return <div>Loading preferences...</div>;
-  if (error) return <div>Error loading preferences: {error.message}</div>;
+  if (!storage) return <div>Storage not available</div>;
   if (!preferences) return <div>No preferences found</div>;
 
   return (
@@ -76,8 +111,8 @@ function UserPreferences({ userId }: { userId: string }) {
           Theme:
           <select
             value={preferences.theme}
-            onChange={(e) => setPreferences({ ...preferences, theme: e.target.value })}
-            disabled={!isConnected}
+            onChange={(e) => updatePreferences({ ...preferences, theme: e.target.value })}
+            disabled={!storage?.isConnected()}
           >
             <option value="light">Light</option>
             <option value="dark">Dark</option>
@@ -91,7 +126,7 @@ function UserPreferences({ userId }: { userId: string }) {
           <select
             value={preferences.language}
             onChange={(e) => handleLanguageChange(e.target.value)}
-            disabled={!isConnected}
+            disabled={!storage?.isConnected()}
           >
             <option value="en">English</option>
             <option value="es">Spanish</option>
@@ -107,7 +142,7 @@ function UserPreferences({ userId }: { userId: string }) {
             type="checkbox"
             checked={preferences.notifications}
             onChange={handleNotificationsToggle}
-            disabled={!isConnected}
+            disabled={!storage?.isConnected()}
           />
           Enable Notifications
         </label>
@@ -121,30 +156,39 @@ function UserPreferences({ userId }: { userId: string }) {
   );
 }
 
-function StorageManager({ userId }: { userId: string }) {
-  const { storage, isConnected, setItem, removeItem, getAllItems } = useRemoteStorage(userId);
-
-  const { keys } = useStorageKeys(userId);
+function StorageManager() {
+  const storage = useContext(StorageContext);
+  const [keys, setKeys] = useState<string[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
 
-  useEffect(() => {
-    if (storage) {
-      getAllItems().then(setAllItems).catch(console.error);
+  const refreshData = async () => {
+    if (!storage) return;
+    try {
+      const items = await storage.getAllItems();
+      setAllItems(items);
+      setKeys(storage.getAllKeys());
+    } catch (error) {
+      console.error("Failed to refresh data:", error);
     }
-  }, [storage, getAllItems]);
+  };
+
+  useEffect(() => {
+    refreshData();
+  }, [storage]);
 
   useEffect(() => {
     if (!storage) return;
 
-    const handleChange = () => {
-      getAllItems().then(setAllItems).catch(console.error);
+    const handleChange = (event: any) => {
+      console.log("Storage change event:", event);
+      refreshData();
     };
 
     const handleSync = (event: any) => {
       console.log("Data synced:", event);
-      getAllItems().then(setAllItems).catch(console.error);
+      refreshData();
     };
 
     storage.on("change", handleChange);
@@ -154,10 +198,10 @@ function StorageManager({ userId }: { userId: string }) {
       storage.off("change", handleChange);
       storage.off("sync", handleSync);
     };
-  }, [storage, getAllItems]);
+  }, [storage]);
 
   const handleAddItem = async () => {
-    if (!newKey || !newValue) return;
+    if (!newKey || !newValue || !storage) return;
 
     try {
       let parsedValue: any;
@@ -167,9 +211,11 @@ function StorageManager({ userId }: { userId: string }) {
         parsedValue = newValue; // Use as string if not valid JSON
       }
 
-      await setItem(newKey, parsedValue);
+      await storage.setItem(newKey, parsedValue);
       setNewKey("");
       setNewValue("");
+      // Force refresh to ensure UI updates
+      await refreshData();
     } catch (error) {
       console.error("Failed to add item:", error);
       alert("Failed to add item: " + (error as Error).message);
@@ -177,8 +223,11 @@ function StorageManager({ userId }: { userId: string }) {
   };
 
   const handleRemoveItem = async (key: string) => {
+    if (!storage) return;
     try {
-      await removeItem(key);
+      await storage.removeItem(key);
+      // Force refresh to ensure UI updates
+      await refreshData();
     } catch (error) {
       console.error("Failed to remove item:", error);
       alert("Failed to remove item: " + (error as Error).message);
@@ -197,16 +246,19 @@ function StorageManager({ userId }: { userId: string }) {
             placeholder="Key"
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
-            disabled={!isConnected}
+            disabled={!storage?.isConnected()}
           />
           <input
             type="text"
             placeholder="Value (JSON or string)"
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
-            disabled={!isConnected}
+            disabled={!storage?.isConnected()}
           />
-          <button onClick={handleAddItem} disabled={!isConnected || !newKey || !newValue}>
+          <button
+            onClick={handleAddItem}
+            disabled={!storage?.isConnected() || !newKey || !newValue}
+          >
             Add
           </button>
         </div>
@@ -229,7 +281,7 @@ function StorageManager({ userId }: { userId: string }) {
                 <strong>{item.key}</strong>
                 <button
                   onClick={() => handleRemoveItem(item.key)}
-                  disabled={!isConnected}
+                  disabled={!storage?.isConnected()}
                   className="remove-btn"
                 >
                   Remove
@@ -251,21 +303,40 @@ function StorageManager({ userId }: { userId: string }) {
   );
 }
 
-function App() {
-  const [userId, setUserId] = useState("demo-user-" + Math.random().toString(36).substr(2, 9));
+// @ts-ignore
+export default function App() {
+  const [userId, setUserId] = useState("demo-user-r68zvaaatfk0umhe4rqwpmzr");
+  const [instanceId, setInstanceId] = useState("instance-j99e2yie91z5m943n12qamve");
   const [serverUrl, setServerUrl] = useState("http://localhost:3000");
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const { isConnected, isLoading, error } = useRemoteStorage(isInitialized ? userId : "", {
+  // Only create storage when actually initialized to prevent empty userId connections
+  const storageResult = useRemoteStorage(userId, {
     serverUrl,
-    autoConnect: true,
+    instanceId,
+    autoConnect: false, // Don't auto-connect, we'll control it manually
   });
 
+  // Manually control connection based on isInitialized state
+  useEffect(() => {
+    if (
+      isInitialized &&
+      userId &&
+      instanceId &&
+      serverUrl &&
+      !storageResult.storage.isConnected()
+    ) {
+      storageResult.storage.connect().catch(console.error);
+    } else if (!isInitialized && storageResult.storage.isConnected()) {
+      storageResult.storage.disconnect();
+    }
+  }, [isInitialized, userId, instanceId, serverUrl, storageResult.storage]);
+
   const handleConnect = () => {
-    if (userId && serverUrl) {
+    if (userId && instanceId && serverUrl) {
       setIsInitialized(true);
     } else {
-      alert("Please enter both User ID and Server URL");
+      alert("Please enter User ID, Instance ID, and Server URL");
     }
   };
 
@@ -274,65 +345,79 @@ function App() {
   };
 
   return (
-    <div className="app">
-      <header>
-        <h1>🔄 Remote Sync Storage Demo</h1>
-        <p>A React example showing real-time data synchronization across devices and browsers.</p>
-      </header>
+    <StorageContext.Provider value={isInitialized ? storageResult.storage : null}>
+      <div className="app">
+        <header>
+          <h1>🔄 Remote Sync Storage Demo</h1>
+          <p>A React example showing real-time data synchronization across devices and browsers.</p>
+        </header>
 
-      <div className="connection-section">
-        <h2>Connection Setup</h2>
-        <div className="form-row">
-          <label>
-            User ID:
-            <input
-              type="text"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              disabled={isInitialized}
-              placeholder="Enter unique user ID"
-            />
-          </label>
-          <label>
-            Server URL:
-            <input
-              type="text"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              disabled={isInitialized}
-              placeholder="http://localhost:3000"
-            />
-          </label>
-        </div>
+        <div className="connection-section">
+          <h2>Connection Setup</h2>
+          <div className="form-row">
+            <label>
+              User ID:
+              <input
+                type="text"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                disabled={isInitialized}
+                placeholder="Enter unique user ID"
+              />
+            </label>
+            <label>
+              Instance ID:
+              <input
+                type="text"
+                value={instanceId}
+                onChange={(e) => setInstanceId(e.target.value)}
+                disabled={isInitialized}
+                placeholder="Enter unique instance ID"
+              />
+            </label>
+            <label>
+              Server URL:
+              <input
+                type="text"
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                disabled={isInitialized}
+                placeholder="http://localhost:3000"
+              />
+            </label>
+          </div>
 
-        <div className="connection-controls">
-          {!isInitialized ? (
-            <button onClick={handleConnect}>Connect</button>
-          ) : (
-            <button onClick={handleDisconnect}>Disconnect</button>
+          <div className="connection-controls">
+            {!isInitialized ? (
+              <button onClick={handleConnect}>Connect</button>
+            ) : (
+              <button onClick={handleDisconnect}>Disconnect</button>
+            )}
+          </div>
+
+          {isInitialized && (
+            <ConnectionStatus
+              isConnected={storageResult.isConnected}
+              isLoading={storageResult.isLoading}
+              error={storageResult.error}
+            />
           )}
         </div>
 
         {isInitialized && (
-          <ConnectionStatus isConnected={isConnected} isLoading={isLoading} error={error} />
+          <>
+            <UserPreferences />
+            <StorageManager />
+          </>
         )}
+
+        <footer>
+          <p>
+            <strong>Try this:</strong> Open this app in multiple browser tabs or devices with the
+            same User ID to see real-time synchronization in action!
+          </p>
+        </footer>
       </div>
-
-      {isInitialized && (
-        <>
-          <UserPreferences userId={userId} />
-          <StorageManager userId={userId} />
-        </>
-      )}
-
-      <footer>
-        <p>
-          <strong>Try this:</strong> Open this app in multiple browser tabs or devices with the same
-          User ID to see real-time synchronization in action!
-        </p>
-      </footer>
-    </div>
+    </StorageContext.Provider>
   );
 }
-
-export default App;

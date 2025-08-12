@@ -9,6 +9,7 @@ export interface StorageOptions {
   encrypt?: boolean;
   ttl?: number;
   namespace?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface StorageStats {
@@ -108,6 +109,7 @@ export class EnhancedStorage {
           encrypted,
           size: new Blob([serialized]).size,
           version: 1,
+          ...options.metadata,
         },
       };
 
@@ -174,6 +176,19 @@ export class EnhancedStorage {
       return storageItem;
     } catch (error) {
       this.logger.error(`Failed to retrieve item with metadata: ${key}`, { error });
+      return null;
+    }
+  }
+
+  /**
+   * Get item metadata only
+   */
+  getItemMetadata(key: string): Record<string, any> | null {
+    try {
+      const itemWithMetadata = this.getItemWithMetadata(key);
+      return itemWithMetadata?.metadata || null;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve item metadata: ${key}`, { error });
       return null;
     }
   }

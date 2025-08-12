@@ -73,8 +73,11 @@ export interface SyncStoreHookResult {
 export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult {
   const { config, autoConnect = true, subscribeToKeys = [], syncFilter } = options;
 
-  // Create storage instance (only once)
-  const storage = useMemo(() => new RemoteStorage(config), []);
+  // Create storage instance (only once) - use stable config reference
+  const storage = useMemo(
+    () => new RemoteStorage(config),
+    [config.userId, config.serverUrl, config.instanceId],
+  );
 
   // State
   const [isConnected, setIsConnected] = useState(false);
@@ -123,12 +126,20 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
 
   // Auto-connect on mount
   useEffect(() => {
-    if (autoConnect) {
+    let cancelled = false;
+
+    if (autoConnect && !storage.isConnected()) {
       storage.connect().catch((err) => {
-        setError(err);
-        setIsLoading(false);
+        if (!cancelled) {
+          setError(err);
+          setIsLoading(false);
+        }
       });
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [storage, autoConnect]);
 
   // Auto-subscribe to keys
@@ -158,6 +169,10 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Disconnect properly before destroy to avoid lingering connections
+      if (storage.isConnected()) {
+        storage.disconnect();
+      }
       storage.destroy();
     };
   }, [storage]);

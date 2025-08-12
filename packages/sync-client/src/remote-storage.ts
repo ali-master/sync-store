@@ -50,7 +50,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   };
   private localStorage: EnhancedStorage;
   private syncQueue: Array<{ method: string; args: any[]; timestamp: number }> = [];
-  private connectionInfo: ConnectionInfo;
+  private readonly connectionInfo: ConnectionInfo;
   private conflictResolver: ConflictResolver;
   private networkManager: NetworkManager;
   private analytics: Analytics;
@@ -168,6 +168,12 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     if (this.socket?.connected) {
       this.logger.debug("Already connected");
       return;
+    }
+
+    // If there's an existing socket that's not connected, clean it up first
+    if (this.socket && !this.socket.connected) {
+      this.socket.disconnect();
+      this.socket = null;
     }
 
     this.logger.info("Connecting to server", { serverUrl: this.config.serverUrl });
@@ -299,19 +305,21 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     const timestamp = Date.now();
     const version = this.getNextVersion(key);
 
-    // Store locally first
-    const storageData = {
-      value,
-      metadata: metadata || {},
+    // Store locally first - let EnhancedStorage handle metadata wrapping
+    const oldValue = this.localStorage.getItem(key);
+
+    // Store just the value, with custom metadata that includes our sync info
+    const customMetadata = {
+      ...(metadata || {}),
       timestamp,
       version,
+      syncMetadata: true,
     };
 
-    const oldValue = this.localStorage.getItem(key);
-    this.localStorage.setItem(key, JSON.stringify(storageData));
+    this.localStorage.setItem(key, value, { metadata: customMetadata });
 
     // Emit local change event
-    this.emit("change", {
+    void this.emit("change", {
       key,
       oldValue,
       newValue: value,
@@ -344,13 +352,12 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     const startTime = performance.now();
 
     try {
-      const stored = this.localStorage.getItem(key);
-      if (!stored) return null;
-
-      const data = JSON.parse(stored as string);
+      const result = this.localStorage.getItem(key);
+      if (result === null) return null;
 
       this.analytics.trackStorageOperation("get", key, undefined, true);
-      return data.value;
+      // EnhancedStorage returns the actual value directly, no need to parse
+      return result;
     } catch (error) {
       this.logger.error(`Failed to get item: ${key}`, { error });
       this.analytics.trackError("storage", error as Error, { operation: "get", key });
@@ -373,7 +380,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.localStorage.removeItem(key);
 
     // Emit local change event
-    this.emit("change", {
+    void this.emit("change", {
       key,
       oldValue,
       newValue: null,
@@ -407,7 +414,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
     // Emit change events for each cleared key
     keys.forEach((key) => {
-      this.emit("change", {
+      void this.emit("change", {
         key,
         oldValue: null,
         newValue: null,
@@ -642,7 +649,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   private setupEventListeners(): void {
     this.networkManager.on("state-change", (state) => {
       this.connectionInfo.state = state;
-      this.emit("network-change", {
+      void this.emit("network-change", {
         state,
         isOnline: this.networkManager.isOnline(),
         timestamp: Date.now(),
@@ -652,7 +659,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     // Removed complex network quality monitoring
 
     this.analytics.on("performance-warning", (warning) => {
-      this.emit("performance-warning", warning);
+      void this.emit("performance-warning", warning);
     });
   }
 
@@ -661,23 +668,38 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.connectionInfo.connectedAt = Date.now();
     this.connectionInfo.reconnectAttempts = 0;
 
+    // Process existing sync queue first
     void this.processSyncQueue();
-    this.emit("connect", {});
+
+    // Then sync any local storage items that haven't been synced yet
+    void this.syncLocalStorageItems();
+
+    void this.emit("connect", {});
     this.analytics.track("connected");
   }
 
   private handleDisconnect(reason: string): void {
+    this.logger.debug(`Socket disconnected: ${reason}`);
     this.connectionInfo.state = ConnectionState.DISCONNECTED;
-    this.emit("disconnect", {});
-    this.analytics.track("disconnected", { reason });
+
+    // Only emit disconnect if we were actually connected before
+    if (this.socket) {
+      void this.emit("disconnect", {});
+      this.analytics.track("disconnected", { reason });
+    }
   }
 
   private handleReconnect(): void {
     this.connectionInfo.state = ConnectionState.CONNECTED;
     this.connectionInfo.reconnectAttempts = 0;
 
+    // Process existing sync queue first
     void this.processSyncQueue();
-    this.emit("reconnect", {});
+
+    // Then sync any local storage items that haven't been synced yet
+    void this.syncLocalStorageItems();
+
+    void this.emit("reconnect", {});
     this.analytics.track("reconnected");
   }
 
@@ -685,7 +707,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.connectionInfo.reconnectAttempts++;
     this.connectionInfo.error = error.message || String(error);
 
-    this.emit("error", {
+    void this.emit("error", {
       type: "connection",
       message: "Connection failed",
       error,
@@ -695,7 +717,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   }
 
   private handleSocketError(error: any): void {
-    this.emit("error", {
+    void this.emit("error", {
       type: "socket",
       message: "Socket error",
       error,
@@ -732,24 +754,23 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
           metadata: data.metadata,
         };
 
-        this.emit("conflict", conflictData);
+        void this.emit("conflict", conflictData);
         return;
       }
     }
 
-    // Apply remote update
-    this.localStorage.setItem(
-      data.key,
-      JSON.stringify({
-        value: data.value,
-        metadata: data.metadata || {},
-        timestamp: data.timestamp,
-        version: data.version || 1,
-      }),
-    );
+    // Apply remote update - let EnhancedStorage handle metadata wrapping
+    const customMetadata = {
+      ...(data.metadata || {}),
+      timestamp: data.timestamp,
+      version: data.version || 1,
+      syncMetadata: true,
+    };
 
-    this.emit("sync", data);
-    this.emit("change", {
+    this.localStorage.setItem(data.key, data.value, { metadata: customMetadata });
+
+    void this.emit("sync", data);
+    void this.emit("change", {
       key: data.key,
       oldValue: currentValue,
       newValue: data.value,
@@ -765,8 +786,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     const oldValue = this.getItem(data.key);
     this.localStorage.removeItem(data.key);
 
-    this.emit("sync", data);
-    this.emit("change", {
+    void this.emit("sync", data);
+    void this.emit("change", {
       key: data.key,
       oldValue,
       newValue: null,
@@ -796,7 +817,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
         });
       }
     } else {
-      this.emit("conflict", conflictData);
+      void this.emit("conflict", conflictData);
     }
   }
 
@@ -837,15 +858,14 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     );
 
     if (resolution.success && resolution.resolvedValue !== undefined) {
-      this.localStorage.setItem(
-        key,
-        JSON.stringify({
-          value: resolution.resolvedValue,
-          metadata: syncEvent.metadata || {},
-          timestamp: Date.now(),
-          version: Math.max(conflictData.localVersion, conflictData.remoteVersion) + 1,
-        }),
-      );
+      const customMetadata = {
+        ...(syncEvent.metadata || {}),
+        timestamp: Date.now(),
+        version: Math.max(conflictData.localVersion, conflictData.remoteVersion) + 1,
+        syncMetadata: true,
+      };
+
+      this.localStorage.setItem(key, resolution.resolvedValue, { metadata: customMetadata });
 
       this.analytics.track("conflict_auto_resolved", {
         strategy: resolution.strategy,
@@ -875,6 +895,144 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
         // Re-queue failed operations
         this.queueSync(method, args);
       }
+    }
+  }
+
+  /**
+   * Sync local storage items to remote server on connection
+   */
+  private async syncLocalStorageItems(): Promise<void> {
+    try {
+      this.logger.debug("Starting initial bidirectional sync");
+
+      // First, get latest data from server
+      let serverItems: StorageItem[] = [];
+      try {
+        serverItems = await this.getRemoteItems();
+        this.logger.debug(`Retrieved ${serverItems.length} items from server`);
+      } catch (error) {
+        this.logger.warn("Failed to retrieve items from server during initial sync", { error });
+      }
+
+      // Get all keys from local storage
+      const localKeys = this.getAllKeys();
+      this.logger.debug(`Found ${localKeys.length} local items to sync`);
+
+      // Create a map of server items for quick lookup
+      const serverItemMap = new Map(serverItems.map((item) => [item.key, item]));
+
+      // Sync local items to server (with conflict resolution)
+      const uploadResults = await Promise.allSettled(
+        localKeys.map(async (key) => {
+          try {
+            const localValue = this.localStorage.getItem(key);
+            const localMetadata = this.localStorage.getItemMetadata(key);
+
+            if (localValue !== null && localMetadata?.syncMetadata) {
+              const serverItem = serverItemMap.get(key);
+              const {
+                timestamp: localTimestamp,
+                version: localVersion,
+                syncMetadata: _syncMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
+                ...userMetadata
+              } = localMetadata;
+
+              // Conflict resolution: compare timestamps
+              if (serverItem && serverItem.timestamp && serverItem.timestamp > localTimestamp) {
+                // Server item is newer, update local
+                this.logger.debug(`Server version newer for key ${key}, updating local`);
+                await this.handleRemoteUpdate({
+                  type: "sync",
+                  key: serverItem.key,
+                  value: serverItem.value,
+                  metadata: serverItem.metadata,
+                  timestamp: serverItem.timestamp || Date.now(),
+                  version: serverItem.version,
+                  source: "remote",
+                });
+              } else {
+                // Local is newer or same, sync to server
+                this.logger.debug(`Local version newer/same for key ${key}, syncing to server`);
+                await this.syncToRemote(
+                  "set",
+                  key,
+                  localValue,
+                  userMetadata,
+                  localVersion,
+                  localTimestamp,
+                );
+              }
+
+              // Remove from server map (processed)
+              serverItemMap.delete(key);
+            }
+          } catch (error) {
+            this.logger.error(`Failed to sync local item: ${key}`, { error });
+            throw error;
+          }
+        }),
+      );
+
+      // Download remaining server items that don't exist locally
+      const downloadResults = await Promise.allSettled(
+        Array.from(serverItemMap.values()).map(async (serverItem) => {
+          try {
+            this.logger.debug(`Downloading new server item: ${serverItem.key}`);
+            await this.handleRemoteUpdate({
+              type: "sync",
+              key: serverItem.key,
+              value: serverItem.value,
+              metadata: serverItem.metadata,
+              timestamp: serverItem.timestamp || Date.now(),
+              version: serverItem.version,
+              source: "remote",
+            });
+          } catch (error) {
+            this.logger.error(`Failed to download server item: ${serverItem.key}`, { error });
+            throw error;
+          }
+        }),
+      );
+
+      // Log sync results
+      const uploadSucceeded = uploadResults.filter(
+        (result) => result.status === "fulfilled",
+      ).length;
+      const uploadFailed = uploadResults.filter((result) => result.status === "rejected").length;
+      const downloadSucceeded = downloadResults.filter(
+        (result) => result.status === "fulfilled",
+      ).length;
+      const downloadFailed = downloadResults.filter(
+        (result) => result.status === "rejected",
+      ).length;
+
+      this.logger.info(
+        `Initial sync completed - Upload: ${uploadSucceeded}/${localKeys.length}, Download: ${downloadSucceeded}/${serverItemMap.size}`,
+      );
+
+      this.analytics.track("initial_sync_completed", {
+        uploadSucceeded,
+        uploadFailed,
+        downloadSucceeded,
+        downloadFailed,
+        totalLocal: localKeys.length,
+        totalServer: serverItems.length,
+      });
+
+      // Emit sync complete event
+      void this.emit("sync", {
+        type: "initial_sync",
+        keys: [...localKeys, ...Array.from(serverItemMap.keys())],
+        uploadSucceeded,
+        uploadFailed,
+        downloadSucceeded,
+        downloadFailed,
+        timestamp: Date.now(),
+        source: "local",
+      });
+    } catch (error) {
+      this.logger.error("Failed to sync local storage items", { error });
+      this.analytics.trackError("initial_sync", error as Error);
     }
   }
 
@@ -970,11 +1128,17 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
   private getItemMetadata(key: string): Record<string, any> | undefined {
     try {
-      const stored = this.localStorage.getItem(key);
-      if (!stored) return undefined;
+      const metadata = this.localStorage.getItemMetadata(key);
+      if (!metadata || !metadata.syncMetadata) return undefined;
 
-      const data = JSON.parse(stored as string);
-      return data.metadata;
+      // Return the custom metadata we stored, excluding internal sync fields
+      const {
+        timestamp: _timestamp, // eslint-disable-line @typescript-eslint/no-unused-vars
+        version: _version, // eslint-disable-line @typescript-eslint/no-unused-vars
+        syncMetadata: _syncMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
+        ...userMetadata
+      } = metadata;
+      return userMetadata;
     } catch {
       return undefined;
     }
@@ -986,11 +1150,10 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
   private getCurrentVersion(key: string): number {
     try {
-      const stored = this.localStorage.getItem(key);
-      if (!stored) return 0;
+      const metadata = this.localStorage.getItemMetadata(key);
+      if (!metadata || !metadata.syncMetadata) return 0;
 
-      const data = JSON.parse(stored as string);
-      return data.version || 0;
+      return metadata.version || 0;
     } catch {
       return 0;
     }
