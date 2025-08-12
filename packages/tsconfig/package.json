@@ -1,0 +1,38 @@
+{
+  "name": "@usex/tsconfig",
+  "version": "0.0.1",
+  "description": "Shared TypeScript config",
+  "license": "MIT",
+  "author": {
+    "name": "Ali Torki",
+    "email": "ali_4286@live.com"
+  },
+  "main": "tsconfig.json",
+  "exports": {
+    ".": {
+      "import": "./tsconfig.json",
+      "require": "./tsconfig.json"
+    },
+    "./tsconfig.json": "./tsconfig.json",
+    "./tsconfig.lib.json": "./tsconfig.lib.json"
+  },
+  "scripts": {
+    "build": "echo \"no test specified\"",
+    "dev": "echo \"no test specified\"",
+    "test": "echo \"no test specified\"",
+    "preinstall": "npx only-allow pnpm",
+    "test:types": "echo \"no test specified\"",
+    "test:knip": "knip",
+    "test:knip:fix": "knip --fix",
+    "format": "echo \"no test specified\"",
+    "lint": "echo \"no test specified\"",
+    "lint:fix": "echo \"no test specified\""
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "files": [
+    "tsconfig.json",
+    "tsconfig.lib.json"
+  ]
+}

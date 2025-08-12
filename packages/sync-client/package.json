@@ -1,0 +1,43 @@
+{
+  "name": "@usex/sync-client",
+  "version": "1.0.0",
+  "description": "Browser client for remote sync storage",
+  "author": "Ali Torki",
+  "private": false,
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint \"**/*.ts\"",
+    "lint:fix": "eslint \"**/*.ts\" --fix",
+    "format": "prettier --write \"**/*.ts\""
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1",
+    "react": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.10",
+    "@types/node": "^24.2.1",
+    "@usex/tsconfig": "workspace:*",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
+    "tsup": "^8.5.0"
+  },
+  "packageManager": "pnpm@10.14.0"
+}

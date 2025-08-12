@@ -1,0 +1,269 @@
+// Sync Storage Models with Advanced Features
+
+// Core storage item model
+model SyncStorageItem {
+  id           String   @id @default(cuid(2))
+  userId       String
+  instanceId   String
+  key          String
+  value        String   @db.Text // JSON serialized value
+  metadata     String?  @db.Text // JSON serialized metadata
+  version      Int      @default(1)
+  timestamp    BigInt
+  lastModified DateTime @default(now())
+  isDeleted    Boolean  @default(false)
+
+  // Advanced features
+  size            Int       @default(0) // Size in bytes for quota management
+  compressionType String? // gzip, lz4, etc.
+  encryptionType  String? // AES-256, ChaCha20, etc.
+  tags            String?   @db.Text // JSON array of tags for organization
+  ttl             DateTime? // Time to live for automatic cleanup
+  priority        Int       @default(0) // Priority for conflict resolution
+
+  // Relationships
+  conflicts SyncConflict[]
+  audits    SyncAudit[]
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([instanceId])
+  @@index([userId, key])
+  @@index([timestamp])
+  @@index([lastModified])
+  @@index([isDeleted])
+  @@index([ttl])
+  @@index([priority])
+  @@map("sync_storage_items")
+}
+
+// User session and instance tracking
+model SyncSession {
+  id             String    @id @default(cuid(2))
+  userId         String
+  instanceId     String
+  socketId       String?
+  connectionType String    @default("websocket") // websocket, sse, polling
+  connectedAt    DateTime  @default(now())
+  lastActivity   DateTime  @default(now())
+  disconnectedAt DateTime?
+
+  // Connection metadata
+  userAgent String?
+  ipAddress String?
+  country   String?
+  city      String?
+  device    String? @db.Text // JSON serialized device info
+
+  // Feature flags for this session
+  features String? @db.Text // JSON array of enabled features
+
+  // Performance metrics
+  latencyMs       Int @default(0)
+  packetsReceived Int @default(0)
+  packetsSent     Int @default(0)
+
+  @@unique([userId, instanceId, socketId])
+  @@index([userId])
+  @@index([instanceId])
+  @@index([connectedAt])
+  @@index([lastActivity])
+  @@index([ipAddress])
+  @@map("sync_sessions")
+}
+
+// Smart conflict resolution and history
+model SyncConflict {
+  id                 String @id @default(cuid(2))
+  itemId             String
+  userId             String
+  conflictType       String // concurrent_update, version_mismatch, schema_change
+  resolutionStrategy String // last_write_wins, merge, manual, ai_assisted
+  status             String @default("pending") // pending, resolved, escalated
+
+  // Conflict data
+  originalValue    String  @db.Text // JSON
+  conflictingValue String  @db.Text // JSON
+  resolvedValue    String? @db.Text // JSON
+  resolutionReason String?
+
+  // Auto-resolution metadata
+  confidence    Float? // AI confidence score (0.0 - 1.0)
+  aiModel       String? // Model used for resolution
+  humanReviewed Boolean @default(false)
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  // Relationships
+  item SyncStorageItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([userId])
+  @@index([status])
+  @@index([conflictType])
+  @@index([createdAt])
+  @@map("sync_conflicts")
+}
+
+// Comprehensive audit and analytics
+model SyncAudit {
+  id         String  @id @default(cuid(2))
+  itemId     String?
+  userId     String
+  instanceId String?
+  action     String // create, update, delete, read, sync, conflict
+
+  // Change tracking
+  oldValue   String? @db.Text // JSON
+  newValue   String? @db.Text // JSON
+  changeSize Int     @default(0) // Size of change in bytes
+
+  // Context
+  ipAddress String?
+  userAgent String?
+  country   String?
+  sessionId String?
+
+  // Performance metrics
+  executionTimeMs  Int    @default(0)
+  memoryUsageMb    Float? @default(0)
+  networkLatencyMs Int?   @default(0)
+
+  // Metadata
+  metadata String? @db.Text // JSON
+  tags     String? @db.Text // JSON array
+
+  createdAt DateTime @default(now())
+
+  // Relationships
+  item SyncStorageItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([instanceId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("sync_audits")
+}
+
+// User and instance quota management
+model SyncQuota {
+  id     String @id @default(cuid(2))
+  userId String @unique
+
+  // Storage quotas
+  maxStorageBytes     BigInt @default(104857600) // 100MB default
+  currentStorageBytes BigInt @default(0)
+  maxItems            Int    @default(10000)
+  currentItems        Int    @default(0)
+
+  // Rate limiting quotas
+  requestsPerMinute Int @default(1000)
+  requestsPerHour   Int @default(50000)
+  requestsPerDay    Int @default(1000000)
+
+  // Advanced quotas
+  maxInstancesPerUser   Int @default(10)
+  maxConflictsPerHour   Int @default(100)
+  maxAuditRetentionDays Int @default(90)
+
+  // Current usage counters
+  currentMinuteRequests Int @default(0)
+  currentHourRequests   Int @default(0)
+  currentDailyRequests  Int @default(0)
+
+  // Feature limits
+  aiResolutionEnabled  Boolean @default(false)
+  encryptionEnabled    Boolean @default(false)
+  compressionEnabled   Boolean @default(true)
+  priorityQueueEnabled Boolean @default(false)
+
+  lastResetAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("sync_quotas")
+}
+
+// Advanced analytics and insights
+model SyncAnalytics {
+  id     String   @id @default(cuid(2))
+  userId String
+  date   DateTime // Daily aggregation
+
+  // Usage metrics
+  totalOperations  Int @default(0)
+  readOperations   Int @default(0)
+  writeOperations  Int @default(0)
+  deleteOperations Int @default(0)
+  syncOperations   Int @default(0)
+
+  // Performance metrics
+  avgResponseTimeMs Float @default(0)
+  p50ResponseTimeMs Int   @default(0)
+  p90ResponseTimeMs Int   @default(0)
+  p99ResponseTimeMs Int   @default(0)
+
+  // Storage metrics
+  storageUsedBytes BigInt @default(0)
+  itemCount        Int    @default(0)
+  avgItemSizeBytes Int    @default(0)
+
+  // Conflict metrics
+  conflictsGenerated Int   @default(0)
+  conflictsResolved  Int   @default(0)
+  autoResolutionRate Float @default(0)
+
+  // Session metrics
+  activeSessions         Int    @default(0)
+  peakConcurrentSessions Int    @default(0)
+  avgSessionDurationMs   BigInt @default(0)
+
+  // Error metrics
+  errorRate   Float @default(0)
+  timeoutRate Float @default(0)
+
+  // Advanced insights
+  dataHotspots           String? @db.Text // JSON array of most accessed keys
+  userBehaviorPatterns   String? @db.Text // JSON object with patterns
+  performanceBottlenecks String? @db.Text // JSON object with bottlenecks
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("sync_analytics")
+}
+
+// Smart data lifecycle management
+model SyncArchive {
+  id             String  @id @default(cuid(2))
+  userId         String
+  originalItemId String
+  key            String
+  value          String  @db.Text // Compressed/encrypted data
+  metadata       String? @db.Text // JSON
+
+  // Archive metadata
+  archiveReason    String // ttl_expired, user_inactive, storage_quota, manual
+  originalSize     Int    @default(0)
+  compressedSize   Int    @default(0)
+  compressionRatio Float  @default(1.0)
+
+  // Timestamps
+  originalCreatedAt DateTime
+  archivedAt        DateTime  @default(now())
+  expiresAt         DateTime? // When to delete from archive
+
+  // Retrieval info
+  retrievalCount  Int       @default(0)
+  lastRetrievedAt DateTime?
+
+  @@index([userId])
+  @@index([key])
+  @@index([archivedAt])
+  @@index([expiresAt])
+  @@map("sync_archives")
+}

@@ -1,0 +1,243 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0c29;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#302b63;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#24243e;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Main accent gradient -->
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Sync gradient -->
+    <linearGradient id="syncGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Glow filter -->
+    <filter id="textGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Soft shadow -->
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="0" dy="4" result="offsetblur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.3"/>
+      <feComposite in2="offsetblur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1280" height="640" fill="url(#bgGradient)"/>
+  
+  <!-- Grid pattern -->
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" stroke-width="0.5" opacity="0.05"/>
+  </pattern>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  
+  <!-- Animated background particles -->
+  <g opacity="0.3">
+    <circle cx="100" cy="100" r="2" fill="#4facfe">
+      <animate attributeName="cy" values="100;540;100" dur="20s" repeatCount="indefinite"/>
+      <animate attributeName="cx" values="100;200;100" dur="15s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="300" cy="500" r="3" fill="#667eea">
+      <animate attributeName="cy" values="500;100;500" dur="18s" repeatCount="indefinite"/>
+      <animate attributeName="cx" values="300;400;300" dur="22s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1100" cy="200" r="2" fill="#f093fb">
+      <animate attributeName="cy" values="200;400;200" dur="16s" repeatCount="indefinite"/>
+      <animate attributeName="cx" values="1100;1000;1100" dur="19s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="900" cy="500" r="4" fill="#00f2fe">
+      <animate attributeName="cy" values="500;300;500" dur="21s" repeatCount="indefinite"/>
+      <animate attributeName="cx" values="900;1000;900" dur="17s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Left side - Logo -->
+  <g transform="translate(200, 320)">
+    <!-- Logo background circle -->
+    <circle cx="0" cy="0" r="120" fill="url(#accentGradient)" opacity="0.1"/>
+    
+    <!-- Outer ring -->
+    <circle cx="0" cy="0" r="110" fill="none" stroke="url(#accentGradient)" stroke-width="2" opacity="0.3" stroke-dasharray="15 8">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 0 0"
+        to="360 0 0"
+        dur="45s"
+        repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Central storage icon scaled up -->
+    <g transform="scale(1.3)" filter="url(#softShadow)">
+      <!-- Database shape -->
+      <ellipse cx="0" cy="-25" rx="45" ry="15" fill="url(#accentGradient)"/>
+      <rect x="-45" y="-25" width="90" height="50" fill="url(#accentGradient)"/>
+      <ellipse cx="0" cy="25" rx="45" ry="15" fill="url(#accentGradient)"/>
+      
+      <!-- Storage lines -->
+      <ellipse cx="0" cy="-7" rx="45" ry="15" fill="none" stroke="white" stroke-width="1.5" opacity="0.4"/>
+      <ellipse cx="0" cy="7" rx="45" ry="15" fill="none" stroke="white" stroke-width="1.5" opacity="0.4"/>
+    </g>
+    
+    <!-- Sync arrows -->
+    <g>
+      <!-- Arrow 1 -->
+      <g transform="rotate(45)">
+        <path d="M 55,-7 L 75,-7 L 75,-20 L 95,0 L 75,20 L 75,7 L 55,7 Z" 
+              fill="url(#syncGradient)" 
+              opacity="0.9">
+          <animateTransform
+            attributeName="transform"
+            type="translate"
+            values="0,0; 8,0; 0,0"
+            dur="3s"
+            repeatCount="indefinite"/>
+        </path>
+      </g>
+      
+      <!-- Arrow 2 -->
+      <g transform="rotate(225)">
+        <path d="M 55,-7 L 75,-7 L 75,-20 L 95,0 L 75,20 L 75,7 L 55,7 Z" 
+              fill="url(#syncGradient)" 
+              opacity="0.9">
+          <animateTransform
+            attributeName="transform"
+            type="translate"
+            values="0,0; 8,0; 0,0"
+            dur="3s"
+            begin="1.5s"
+            repeatCount="indefinite"/>
+        </path>
+      </g>
+    </g>
+    
+    <!-- Orbiting nodes -->
+    <g>
+      <g>
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="10s"
+          repeatCount="indefinite"/>
+        <circle cx="95" cy="0" r="10" fill="#4facfe"/>
+      </g>
+      <g>
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="120 0 0"
+          to="480 0 0"
+          dur="10s"
+          repeatCount="indefinite"/>
+        <circle cx="95" cy="0" r="10" fill="#00f2fe"/>
+      </g>
+      <g>
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="240 0 0"
+          to="600 0 0"
+          dur="10s"
+          repeatCount="indefinite"/>
+        <circle cx="95" cy="0" r="10" fill="#667eea"/>
+      </g>
+    </g>
+  </g>
+  
+  <!-- Right side - Text content -->
+  <g transform="translate(640, 320)">
+    <!-- Main title -->
+    <text x="0" y="-80" font-family="'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+          font-size="72" font-weight="700" fill="white" filter="url(#textGlow)">
+      Sync Store
+    </text>
+    
+    <!-- Tagline -->
+    <text x="0" y="-20" font-family="'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+          font-size="28" font-weight="400" fill="url(#syncGradient)" opacity="0.9">
+      Real-time synchronized storage
+    </text>
+    
+    <!-- Subtitle -->
+    <text x="0" y="10" font-family="'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+          font-size="22" font-weight="300" fill="white" opacity="0.7">
+      for distributed applications
+    </text>
+    
+    <!-- Feature badges -->
+    <g transform="translate(0, 60)">
+      <!-- Badge 1 -->
+      <rect x="0" y="0" width="140" height="36" rx="18" fill="url(#accentGradient)" opacity="0.2"/>
+      <text x="70" y="24" font-family="'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+            font-size="14" font-weight="500" fill="white" text-anchor="middle">
+        TypeScript
+      </text>
+      
+      <!-- Badge 2 -->
+      <rect x="150" y="0" width="140" height="36" rx="18" fill="url(#syncGradient)" opacity="0.2"/>
+      <text x="220" y="24" font-family="'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+            font-size="14" font-weight="500" fill="white" text-anchor="middle">
+        Real-time
+      </text>
+      
+      <!-- Badge 3 -->
+      <rect x="300" y="0" width="140" height="36" rx="18" fill="url(#accentGradient)" opacity="0.2"/>
+      <text x="370" y="24" font-family="'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+            font-size="14" font-weight="500" fill="white" text-anchor="middle">
+        React Ready
+      </text>
+    </g>
+    
+    <!-- Website/GitHub info -->
+    <g transform="translate(0, 140)">
+      <text x="0" y="0" font-family="'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace" 
+            font-size="16" font-weight="400" fill="white" opacity="0.5">
+        github.com/yourusername/sync-store
+      </text>
+    </g>
+  </g>
+  
+  <!-- Decorative elements -->
+  <g opacity="0.1">
+    <!-- Top left corner -->
+    <path d="M 0,100 Q 100,100 100,0" fill="none" stroke="url(#accentGradient)" stroke-width="2"/>
+    
+    <!-- Bottom right corner -->
+    <path d="M 1180,640 Q 1180,540 1280,540" fill="none" stroke="url(#syncGradient)" stroke-width="2"/>
+  </g>
+  
+  <!-- Floating connection lines -->
+  <g opacity="0.15">
+    <line x1="420" y1="320" x2="540" y2="240" stroke="url(#syncGradient)" stroke-width="1" stroke-dasharray="5 5">
+      <animate attributeName="stroke-dashoffset" values="0;10" dur="2s" repeatCount="indefinite"/>
+    </line>
+    <line x1="420" y1="320" x2="540" y2="320" stroke="url(#syncGradient)" stroke-width="1" stroke-dasharray="5 5">
+      <animate attributeName="stroke-dashoffset" values="0;10" dur="2s" repeatCount="indefinite"/>
+    </line>
+    <line x1="420" y1="320" x2="540" y2="400" stroke="url(#syncGradient)" stroke-width="1" stroke-dasharray="5 5">
+      <animate attributeName="stroke-dashoffset" values="0;10" dur="2s" repeatCount="indefinite"/>
+    </line>
+  </g>
+</svg>

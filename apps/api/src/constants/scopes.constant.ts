@@ -1,0 +1,2 @@
+export const API_KEY_SCOPES_KEY = Symbol("SCOPES_KEY");
+export const API_KEY_REQUIREMENTS_KEY = Symbol("API_KEY_REQUIREMENTS_KEY");

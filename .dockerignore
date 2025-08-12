@@ -1,0 +1,7 @@
+**/dist
+**/node_modules
+**/docker-compose.yml
+**/Dockerfile
+**/README.md
+apps/dashboard
+apps/mcp

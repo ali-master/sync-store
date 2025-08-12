@@ -1,0 +1,27 @@
+{
+  "extends": "@usex/tsconfig",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node", "@nestjs/common"],
+    "lib": ["ES2022"],
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@root": ["./src"],
+      "@root/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "../../packages/*/dist",
+    "../../packages/*/node_modules"
+  ]
+}

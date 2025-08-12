@@ -1,0 +1,78 @@
+// API Key model with comprehensive security and monitoring features
+model ApiKey {
+  id         String    @id @default(cuid(2))
+  name       String
+  key        String    @unique
+  isActive   Boolean   @default(true)
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Description and metadata
+  description String? @db.Text
+  metadata    String? @default("{}") @db.Text
+
+  // Basic Permissions
+  canRead  Boolean @default(true)
+  canWrite Boolean @default(false)
+
+  // Scopes - what resources the key can access
+  scopes String? @default("[]") @db.Text // Array of scope strings
+
+  // IP and Country Access Restrictions
+  ipRestrictions      String? @default("[]") @db.Text // Array of IP addresses or CIDR ranges
+  countryRestrictions String? @default("[]") @db.Text // Array of country codes (ISO 3166-1 alpha-2)
+  restrictionMode     String? @default("allow") // "allow" or "deny"
+
+  // Quota Management (multiple time periods)
+  minuteQuota  Int? // Requests per minute
+  hourQuota    Int? // Requests per hour
+  dailyQuota   Int? // Requests per day
+  monthlyQuota Int? // Requests per month
+
+  // Current usage counters (these reset based on time periods)
+  currentMinuteUsage  Int      @default(0)
+  currentHourUsage    Int      @default(0)
+  currentDailyUsage   Int      @default(0)
+  currentMonthlyUsage Int      @default(0)
+  lastQuotaResetAt    DateTime @default(now())
+
+  // Origin and Website Restrictions
+  originRestrictions String? @default("[]") @db.Text // Array of OriginRestriction objects
+  websiteOrigins     String? @default("[]") @db.Text // Array of allowed origins/domains
+
+  // Security and Rate Limiting
+  rateLimitPerSecond Int?    @default(10) // Rate limit per second
+  allowedUserAgents  String? @default("[]") @db.Text // Array of allowed user agent patterns
+  blockedUserAgents  String? @default("[]") @db.Text // Array of blocked user agent patterns
+  requireHttps       Boolean @default(false) // Require HTTPS for all requests
+  allowedMethods     String? @default("[\"GET\", \"POST\"]") @db.Text // Array of allowed HTTP methods
+
+  // Analytics and Monitoring
+  enableAnalytics Boolean @default(true)
+  alertThresholds String? @default("{}") @db.Text // AlertThreshold object
+  webhookUrl      String? @db.Text // Webhook URL for notifications
+  webhookEvents   String? @default("[]") @db.Text // Array of events that trigger webhooks
+
+  // Usage statistics
+  totalCalls        Int       @default(0)
+  successfulCalls   Int       @default(0)
+  failedCalls       Int       @default(0)
+  lastFailedAt      DateTime?
+  lastFailureReason String?
+
+  // Performance metrics
+  avgResponseTimeMs Int @default(0)
+  p95ResponseTimeMs Int @default(0)
+  p99ResponseTimeMs Int @default(0)
+
+  // Security metrics
+  securityViolations    Int       @default(0)
+  lastSecurityViolation DateTime?
+
+  @@index([key])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("api_keys")
+}

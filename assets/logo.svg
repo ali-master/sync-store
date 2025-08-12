@@ -1,0 +1,200 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for main circle -->
+    <linearGradient id="mainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Gradient for sync arrows -->
+    <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.2"/>
+      <feComposite in2="offsetblur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Glow effect -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="url(#mainGradient)" opacity="0.1"/>
+  
+  <!-- Outer rotating ring -->
+  <g transform="translate(100, 100)">
+    <circle cx="0" cy="0" r="85" fill="none" stroke="url(#mainGradient)" stroke-width="2" opacity="0.3" stroke-dasharray="10 5">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 0 0"
+        to="360 0 0"
+        dur="60s"
+        repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Central storage icon -->
+  <g transform="translate(100, 100)" filter="url(#shadow)">
+    <!-- Database/Storage shape -->
+    <ellipse cx="0" cy="-20" rx="35" ry="12" fill="url(#mainGradient)"/>
+    <rect x="-35" y="-20" width="70" height="40" fill="url(#mainGradient)"/>
+    <ellipse cx="0" cy="20" rx="35" ry="12" fill="url(#mainGradient)"/>
+    
+    <!-- Storage lines -->
+    <ellipse cx="0" cy="-5" rx="35" ry="12" fill="none" stroke="white" stroke-width="1" opacity="0.3"/>
+    <ellipse cx="0" cy="5" rx="35" ry="12" fill="none" stroke="white" stroke-width="1" opacity="0.3"/>
+  </g>
+  
+  <!-- Sync arrows -->
+  <g transform="translate(100, 100)">
+    <!-- Top-right arrow -->
+    <g transform="rotate(45)">
+      <path d="M 40,-5 L 55,-5 L 55,-15 L 70,0 L 55,15 L 55,5 L 40,5 Z" 
+            fill="url(#arrowGradient)" 
+            opacity="0.8"
+            filter="url(#glow)">
+        <animateTransform
+          attributeName="transform"
+          type="translate"
+          values="0,0; 5,0; 0,0"
+          dur="2s"
+          repeatCount="indefinite"/>
+        <animate
+          attributeName="opacity"
+          values="0.8; 1; 0.8"
+          dur="2s"
+          repeatCount="indefinite"/>
+      </path>
+    </g>
+    
+    <!-- Bottom-left arrow -->
+    <g transform="rotate(225)">
+      <path d="M 40,-5 L 55,-5 L 55,-15 L 70,0 L 55,15 L 55,5 L 40,5 Z" 
+            fill="url(#arrowGradient)" 
+            opacity="0.8"
+            filter="url(#glow)">
+        <animateTransform
+          attributeName="transform"
+          type="translate"
+          values="0,0; 5,0; 0,0"
+          dur="2s"
+          begin="1s"
+          repeatCount="indefinite"/>
+        <animate
+          attributeName="opacity"
+          values="0.8; 1; 0.8"
+          dur="2s"
+          begin="1s"
+          repeatCount="indefinite"/>
+      </path>
+    </g>
+  </g>
+  
+  <!-- Orbiting nodes -->
+  <g transform="translate(100, 100)">
+    <!-- Node 1 -->
+    <g>
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 0 0"
+        to="360 0 0"
+        dur="8s"
+        repeatCount="indefinite"/>
+      <circle cx="75" cy="0" r="8" fill="#4facfe" opacity="0.9">
+        <animate
+          attributeName="r"
+          values="8; 10; 8"
+          dur="2s"
+          repeatCount="indefinite"/>
+      </circle>
+    </g>
+    
+    <!-- Node 2 -->
+    <g>
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="120 0 0"
+        to="480 0 0"
+        dur="8s"
+        repeatCount="indefinite"/>
+      <circle cx="75" cy="0" r="8" fill="#00f2fe" opacity="0.9">
+        <animate
+          attributeName="r"
+          values="8; 10; 8"
+          dur="2s"
+          begin="0.67s"
+          repeatCount="indefinite"/>
+      </circle>
+    </g>
+    
+    <!-- Node 3 -->
+    <g>
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="240 0 0"
+        to="600 0 0"
+        dur="8s"
+        repeatCount="indefinite"/>
+      <circle cx="75" cy="0" r="8" fill="#667eea" opacity="0.9">
+        <animate
+          attributeName="r"
+          values="8; 10; 8"
+          dur="2s"
+          begin="1.33s"
+          repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </g>
+  
+  <!-- Connection lines -->
+  <g transform="translate(100, 100)" opacity="0.2">
+    <line x1="0" y1="0" x2="75" y2="0" stroke="url(#arrowGradient)" stroke-width="1">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 0 0"
+        to="360 0 0"
+        dur="8s"
+        repeatCount="indefinite"/>
+    </line>
+    <line x1="0" y1="0" x2="75" y2="0" stroke="url(#arrowGradient)" stroke-width="1">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="120 0 0"
+        to="480 0 0"
+        dur="8s"
+        repeatCount="indefinite"/>
+    </line>
+    <line x1="0" y1="0" x2="75" y2="0" stroke="url(#arrowGradient)" stroke-width="1">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="240 0 0"
+        to="600 0 0"
+        dur="8s"
+        repeatCount="indefinite"/>
+    </line>
+  </g>
+</svg>

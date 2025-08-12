@@ -1,0 +1,24 @@
+{
+  "extends": "@usex/tsconfig",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@root": ["./src"],
+      "@root/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "src/**/*.d.ts",
+    "test/**/*.spec.ts",
+    "test/**/*.bench.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    ".idea",
+    ".vscode",
+    "**/dist/*"
+  ]
+}

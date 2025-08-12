@@ -1,0 +1,39 @@
+import { eslintrc } from "@usex/static-analyzer";
+
+export default [
+  ...eslintrc,
+  {
+    ignores: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/coverage/**",
+      "**/.DS_Store",
+      "**/.git/**",
+      "**/forks-profile/**",
+    ],
+    rules: {
+      "security/detect-object-injection": "off",
+      "sonarjs/no-nested-functions": "off",
+      "@typescript-eslint/no-unsafe-function-type": "off",
+      "security/detect-non-literal-regexp": "off",
+      "sonarjs/no-nested-template-literals": "off",
+      "sonarjs/no-duplicated-branches": "off",
+      "ex/no-unhandled": "off",
+      "sonarjs/no-unused-vars": "off",
+      "sonarjs/no-dead-store": "off",
+      "sonarjs/redundant-type-aliases": "off",
+      "sonarjs/no-hardcoded-ip": "off",
+      "sonarjs/use-type-alias": "off",
+      "sonarjs/no-nested-conditional": "off",
+      "sonarjs/assertions-in-tests": "off",
+      "no-useless-catch": "off",
+      "sonarjs/no-useless-catch": "off",
+      "no-empty": "off",
+      "sonarjs/todo-tag": "off",
+      "sonarjs/prefer-single-boolean-return": "off",
+      "sonarjs/no-commented-code": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+];

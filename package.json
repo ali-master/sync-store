@@ -1,0 +1,78 @@
+{
+  "name": "usex",
+  "version": "0.0.0",
+  "private": true,
+  "author": {
+    "name": "Ali Torki",
+    "url": "https://sync-store.usestrict.dev",
+    "email": "ali_4286@live.com"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "build:api": "turbo run build --filter=@usex/api",
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@usex/api",
+    "start:prod": "turbo run start:prod --filter=@usex/api",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "test": "turbo run test",
+    "clean": "turbo run clean",
+    "db:generate": "turbo run db:generate --filter=@usex/api",
+    "db:push": "turbo run db:push --filter=@usex/api",
+    "db:reset": "turbo run db:reset --filter=@usex/api",
+    "db:deploy": "turbo run db:deploy --filter=@usex/api",
+    "db:migrate": "turbo run db:migrate --filter=@usex/api",
+    "db:seed": "turbo run db:seed --filter=@usex/api",
+    "db:seed:prepare": "turbo run db:seed:prepare --filter=@usex/api",
+    "db:seed:prune": "turbo run db:seed:prune, --filter=@usex/api",
+    "db:seed:patch": "turbo run db:seed:patch --filter=@usex/api",
+    "db:setup": "pnpm db:deploy && pnpm db:seed:prune && pnpm db:seed:prepare",
+    "db:view": "turbo run db:view --filter=@usex/api",
+    "test:types": "tsc --noEmit",
+    "test:knip": "knip",
+    "test:knip:fix": "knip --fix",
+    "depcruise": "pnpm depcruise packages --include-only \"^packages/.*/src\" --exclude \"\\.spec\\.ts\" --config --output-type dot | dot -T svg | yarn depcruise-wrap-stream-in-html > dependency-graph.html"
+  },
+  "dependencies": {
+    "@nestjs/cqrs": "^11.0.3",
+    "@nestjs/platform-socket.io": "^11.1.6",
+    "@nestjs/websockets": "^11.1.6",
+    "axios": "^1.11.0",
+    "effect": "^3.17.7",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@swc/core": "1.13.3",
+    "@types/node": "^24.2.1",
+    "@usex/static-analyzer": "workspace:*",
+    "dependency-cruiser": "^17.0.1",
+    "eslint": "^9.33.0",
+    "prettier": "^3.6.2",
+    "tsup": "8.5.0",
+    "turbo": "^2.5.5",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=23.11.0"
+  },
+  "resolutions": {
+    "@usex/utils": "workspace:*",
+    "@usex/tsconfig": "workspace:*",
+    "@usex/static-analyzer": "workspace:*"
+  },
+  "packageManager": "pnpm@10.14.0",
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "*"
+      ],
+      "allowAny": [
+        "*"
+      ]
+    }
+  }
+}

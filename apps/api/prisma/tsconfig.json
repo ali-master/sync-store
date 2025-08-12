@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "commonjs",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "noCheck": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig-prisma.tsbuildinfo",
+  },
+  "include": ["./seed.ts"]
+}

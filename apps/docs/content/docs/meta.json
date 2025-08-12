@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "---Introduction---",
+    "index",
+    "---Guides---",
+    "guides/api-key-management",
+    "---API Documentation---",
+    "...",
+    "---References---",
+    "...(api)"
+  ]
+}
