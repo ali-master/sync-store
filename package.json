@@ -4,8 +4,12 @@
   "private": true,
   "author": {
     "name": "Ali Torki",
-    "url": "https://sync-store.usestrict.dev",
+    "url": "https://github.com/ali-master",
     "email": "ali_4286@live.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ali-master/sync-store.git"
   },
   "workspaces": [
     "apps/*",
@@ -48,6 +52,7 @@
   "devDependencies": {
     "@swc/core": "1.13.3",
     "@types/node": "^24.2.1",
+    "@usex/prune-mod": "^0.0.13",
     "@usex/static-analyzer": "workspace:*",
     "dependency-cruiser": "^17.0.1",
     "eslint": "^9.33.0",

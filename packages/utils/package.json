@@ -2,6 +2,16 @@
   "name": "@usex/utils",
   "version": "0.0.0",
   "private": true,
+  "author": {
+    "name": "Ali Torki",
+    "url": "https://github.com/ali-master",
+    "email": "ali_4286@live.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ali-master/sync-store.git",
+    "directory": "packages/utils"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "typings": "dist/index.d.ts",
@@ -48,40 +58,20 @@
     "preinstall": "npx is-ci || npx only-allow pnpm"
   },
   "dependencies": {
-    "@amaabca/sensitive-param-filter": "^1.2.10",
     "@nestjs/common": "^11.1.6",
-    "@nestjs/core": "^11.1.6",
-    "@nestjs/swagger": "^11.2.0",
-    "@noble/ciphers": "^1.3.0",
     "@orama/cuid2": "^2.2.3",
-    "@persian-tools/persian-tools": "^3.6.0",
     "@supercharge/request-ip": "^1.2.0",
     "@visulima/humanizer": "^1.2.2",
-    "ansi-regex": "^6.1.0",
-    "cacheable-lookup": "^7.0.0",
-    "date-fns": "^4.1.0",
     "decimal.js": "^10.6.0",
-    "exponential-backoff": "^3.1.2",
-    "fastify-file-interceptor": "^1.0.9",
-    "hibp": "^15.0.1",
-    "ioredis": "^5.7.0",
-    "ip-range-check": "^0.2.0",
     "isbot": "^5.1.29",
-    "jsonpath-plus": "^10.3.0",
-    "libphonenumber-js": "^1.12.10",
-    "mailchecker": "^6.0.17",
-    "maskdata": "^1.3.3",
+    "kill-port": "^2.0.1",
     "nest-winston": "^1.10.2",
     "node-device-detector": "^2.2.2",
-    "safe-stable-stringify": "^2.5.0",
-    "stacktrace-parser": "^0.1.11",
-    "type-fest": "^4.41.0",
     "uncrypto": "^0.1.3",
-    "undici": "^7.13.0",
-    "uuid": "^11.1.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
+    "@types/kill-port": "^2.0.3",
     "@usex/tsconfig": "workspace:*"
   },
   "peerDependencies": {

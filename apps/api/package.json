@@ -2,8 +2,17 @@
   "name": "@usex/api",
   "version": "1.0.0",
   "description": "Sync Store API service",
-  "author": "Ali Torki",
   "private": true,
+  "author": {
+    "name": "Ali Torki",
+    "url": "https://github.com/ali-master",
+    "email": "ali_4286@live.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ali-master/sync-store.git",
+    "directory": "apps/api"
+  },
   "engines": {
     "node": ">=23.11.0"
   },
