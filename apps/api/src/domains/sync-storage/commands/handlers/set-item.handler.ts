@@ -32,7 +32,7 @@ export class SetItemHandler implements ICommandHandler<SetItemCommand> {
     if (existingItem) {
       version = existingItem.version + 1;
 
-      // Enhanced conflict detection
+      // conflict detection
       const conflictCheck = await this.conflictResolution.detectConflict(
         userId,
         key,
@@ -93,7 +93,7 @@ export class SetItemHandler implements ICommandHandler<SetItemCommand> {
       lastModified: new Date(),
     });
 
-    // Enhanced event with conflict information
+    // event with conflict information
     this.eventBus.publish(
       new ItemSyncedEvent(userId, instanceId, key, resolvedValue, {
         ...resolvedMetadata,

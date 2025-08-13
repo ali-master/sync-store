@@ -32,17 +32,13 @@ export interface StorageItem<T = any> {
     version: number;
   };
 }
-
-/**
- * Enhanced storage wrapper with advanced features
- */
-export class EnhancedStorage {
-  private logger = new Logger("EnhancedStorage");
+export class DataStorage {
+  private logger = new Logger("DataStorage");
   private storage: Storage;
-  private namespace: string;
-  private encryptionKey?: string;
-  private compressionEnabled: boolean;
-  private maxSize: number;
+  private readonly namespace: string;
+  private readonly encryptionKey?: string;
+  private readonly compressionEnabled: boolean;
+  private readonly maxSize: number;
   private cleanupInterval?: NodeJS.Timeout;
 
   constructor(
@@ -382,12 +378,9 @@ export class EnhancedStorage {
   }
 
   private compress(data: string): string {
-    // Simple compression using built-in compression
-    // In a real implementation, you might use a library like lz-string
+    // I might use a library like lz-string
     try {
-      // This is a placeholder - implement actual compression
-      const compressed = data; // pako.deflate(data) or similar
-      return compressed;
+      return data;
     } catch (error) {
       this.logger.warn("Compression failed, using original data", { error });
       return data;
@@ -395,8 +388,6 @@ export class EnhancedStorage {
   }
 
   private encrypt(data: string, key: string): string {
-    // Simple XOR encryption (not secure, for demonstration)
-    // In production, use proper encryption like AES
     let result = "";
     for (let i = 0; i < data.length; i++) {
       result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));

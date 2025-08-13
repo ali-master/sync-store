@@ -1,6 +1,12 @@
 // Core types and interfaces for the sync-client library
 
 export interface RemoteStorageConfig {
+  /**
+   * Storage namespace
+   *
+   * @default "sync"
+   */
+  namespace?: string;
   serverUrl?: string;
   userId: string;
   instanceId?: string;

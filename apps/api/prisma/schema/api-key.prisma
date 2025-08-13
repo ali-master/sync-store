@@ -1,4 +1,3 @@
-// API Key model with comprehensive security and monitoring features
 model ApiKey {
   id         String    @id @default(cuid(2))
   name       String

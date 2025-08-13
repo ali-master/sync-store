@@ -17,7 +17,7 @@ import { EventEmitter } from "./core/event-emitter";
 import { ConflictResolver } from "./core/conflict-resolver";
 import { NetworkManager } from "./core/network-manager";
 import { Analytics } from "./core/analytics";
-import { EnhancedStorage } from "./utils/storage";
+import { DataStorage } from "./utils/storage";
 import { Logger } from "./utils/logger";
 import { retry, retryConfigs, withTimeout } from "./utils/retry";
 import { generateInstanceId, generateUniqueId } from "./utils";
@@ -35,9 +35,6 @@ interface RemoteStorageEvents {
   "performance-warning": { metric: string; value: number; threshold: number };
 }
 
-/**
- * Enhanced RemoteStorage with comprehensive sync capabilities
- */
 export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   private socket: Socket | null = null;
   private readonly config: RemoteStorageConfig & {
@@ -48,7 +45,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     timeout: number;
     retry: RetryConfig;
   };
-  private localStorage: EnhancedStorage;
+  private localStorage: DataStorage;
   private syncQueue: Array<{ method: string; args: any[]; timestamp: number }> = [];
   private readonly connectionInfo: ConnectionInfo;
   private conflictResolver: ConflictResolver;
@@ -126,8 +123,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     };
 
     // Initialize components
-    this.localStorage = new EnhancedStorage({
-      namespace: `sync:${this.config.userId}`,
+    this.localStorage = new DataStorage({
+      namespace: `${this.config.namespace ?? "sync"}:${this.config.userId}`,
       maxSize: this.config.storage?.maxSize ?? 10 * 1024 * 1024,
       compressionEnabled: this.config.storage?.compressionEnabled ?? false,
       autoCleanup: true,
@@ -305,7 +302,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     const timestamp = Date.now();
     const version = this.getNextVersion(key);
 
-    // Store locally first - let EnhancedStorage handle metadata wrapping
+    // Store locally first - let DataStorage handle metadata wrapping
     const oldValue = this.localStorage.getItem(key);
 
     // Store just the value, with custom metadata that includes our sync info
@@ -356,7 +353,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       if (result === null) return null;
 
       this.analytics.trackStorageOperation("get", key, undefined, true);
-      // EnhancedStorage returns the actual value directly, no need to parse
+      // DataStorage returns the actual value directly, no need to parse
       return result;
     } catch (error) {
       this.logger.error(`Failed to get item: ${key}`, { error });
@@ -467,6 +464,150 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    */
   get length(): number {
     return this.getAllKeys().length;
+  }
+
+  /**
+   * Check if item exists (locally or on server)
+   */
+  async hasItem(key: string): Promise<boolean> {
+    // First check locally
+    const localExists = this.localStorage.hasItem(key);
+    if (localExists) return true;
+
+    // If not found locally and connected, check server
+    if (this.isConnected()) {
+      try {
+        const serverItem = await this.getRemoteItem(key);
+        return serverItem !== null;
+      } catch (error) {
+        this.logger.warn(`Failed to check item existence on server: ${key}`, { error });
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get remaining TTL for item (fetch from server if needed)
+   */
+  async getTTL(key: string): Promise<number> {
+    // First check locally
+    const localTTL = this.localStorage.getTTL(key);
+    if (localTTL >= 0) return localTTL;
+
+    // If not found locally and connected, get from server
+    if (this.isConnected()) {
+      try {
+        const serverItem = await this.getRemoteItem(key);
+        if (serverItem && serverItem.metadata?.ttl) {
+          const remaining = serverItem.timestamp + serverItem.metadata.ttl - Date.now();
+          return Math.max(0, remaining);
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to get TTL from server: ${key}`, { error });
+      }
+    }
+
+    return -1;
+  }
+
+  /**
+   * Extend TTL for item and sync with server
+   */
+  async extendTTL(key: string, additionalMs: number): Promise<void> {
+    // Check if item exists locally
+    let item = this.localStorage.getItemWithMetadata(key);
+
+    // If not found locally but connected, try to get from server
+    if (!item && this.isConnected()) {
+      try {
+        const serverItem = await this.getRemoteItem(key);
+        if (serverItem) {
+          // Store locally first
+          await this.handleRemoteUpdate({
+            type: "sync",
+            key: serverItem.key,
+            value: serverItem.value,
+            metadata: serverItem.metadata,
+            timestamp: serverItem.timestamp || Date.now(),
+            version: serverItem.version,
+            source: "remote",
+          });
+          item = this.localStorage.getItemWithMetadata(key);
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to fetch item from server for TTL extension: ${key}`, { error });
+      }
+    }
+
+    // Extend TTL locally
+    if (item) {
+      const newTTL = (item.metadata.ttl || 0) + additionalMs;
+      await this.setItem(key, item.value, { ...item.metadata, ttl: newTTL });
+    }
+  }
+
+  /**
+   * Check if storage is near capacity (considers server storage limits)
+   */
+  async isNearCapacity(threshold = 80): Promise<boolean> {
+    // Check local capacity
+    const localNearCapacity = this.localStorage.isNearCapacity(threshold);
+
+    // If connected, also check server capacity
+    if (this.isConnected()) {
+      try {
+        const serverCapacity = await this.getServerStorageInfo();
+        if (serverCapacity && serverCapacity.usagePercentage >= threshold) {
+          return true;
+        }
+      } catch (error) {
+        this.logger.warn("Failed to check server storage capacity", { error });
+      }
+    }
+
+    return localNearCapacity;
+  }
+
+  /**
+   * Export data for backup (includes server data)
+   */
+  async export(): Promise<Record<string, any>> {
+    let exportData = this.localStorage.export();
+
+    // If connected, merge with server data
+    if (this.isConnected()) {
+      try {
+        const serverItems = await this.getRemoteItems();
+        const serverData: Record<string, any> = {};
+
+        serverItems.forEach((item) => {
+          // Only include items not already in local export
+          if (!exportData.data[item.key]) {
+            serverData[item.key] = {
+              value: item.value,
+              metadata: {
+                timestamp: item.timestamp || Date.now(),
+                version: item.version,
+                ...item.metadata,
+              },
+            };
+          }
+        });
+
+        // Merge server data with local export
+        exportData = {
+          ...exportData,
+          data: { ...exportData.data, ...serverData },
+          includesServerData: true,
+        };
+      } catch (error) {
+        this.logger.warn("Failed to include server data in export", { error });
+        exportData.includesServerData = false;
+      }
+    }
+
+    return exportData;
   }
 
   /**
@@ -759,7 +900,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       }
     }
 
-    // Apply remote update - let EnhancedStorage handle metadata wrapping
+    // Apply remote update - let DataStorage handle metadata wrapping
     const customMetadata = {
       ...(data.metadata || {}),
       timestamp: data.timestamp,
@@ -1098,6 +1239,59 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
             reject(new Error(response.error));
           } else {
             resolve(response.items || []);
+          }
+        },
+      );
+    });
+  }
+
+  /**
+   * Get a single item from the remote server
+   */
+  private async getRemoteItem(key: string): Promise<StorageItem | null> {
+    if (!this.socket) throw new Error("Not connected");
+
+    return new Promise((resolve, reject) => {
+      this.socket!.emit(
+        "sync:get",
+        {
+          key,
+          userId: this.config.userId,
+          instanceId: this.config.instanceId,
+        },
+        (response: any) => {
+          if (response?.type === "error") {
+            reject(new Error(response.error));
+          } else {
+            resolve(response.item || null);
+          }
+        },
+      );
+    });
+  }
+
+  /**
+   * Get server storage information
+   */
+  private async getServerStorageInfo(): Promise<{
+    usagePercentage: number;
+    totalSize: number;
+    usedSize: number;
+  } | null> {
+    if (!this.socket) throw new Error("Not connected");
+
+    return new Promise((resolve, reject) => {
+      this.socket!.emit(
+        "sync:storageInfo",
+        {
+          userId: this.config.userId,
+          instanceId: this.config.instanceId,
+        },
+        (response: any) => {
+          if (response?.type === "error") {
+            reject(new Error(response.error));
+          } else {
+            resolve(response.storageInfo || null);
           }
         },
       );
