@@ -6,12 +6,16 @@ export default [
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
+      "packages/*/dist/*.*",
+      "**/dist/*.*",
       "**/build/**",
       "**/coverage/**",
       "**/.DS_Store",
       "**/.git/**",
       "**/forks-profile/**",
+      "**/.turbo/**",
     ],
+    files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
     rules: {
       "security/detect-object-injection": "off",
       "sonarjs/no-nested-functions": "off",
@@ -34,6 +38,7 @@ export default [
       "sonarjs/prefer-single-boolean-return": "off",
       "sonarjs/no-commented-code": "off",
       "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": "off",
     },
   },
 ];

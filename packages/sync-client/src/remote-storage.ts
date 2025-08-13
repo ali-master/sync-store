@@ -20,7 +20,7 @@ import { Analytics } from "./core/analytics";
 import { DataStorage } from "./utils/storage";
 import { Logger } from "./utils/logger";
 import { retry, retryConfigs, withTimeout } from "./utils/retry";
-import { generateInstanceId, generateUniqueId } from "./utils";
+import { generateInstanceId, generateUniqueId } from "./utils/base";
 
 interface RemoteStorageEvents {
   change: ChangeEvent;
@@ -61,11 +61,11 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
     // Merge with defaults
     this.config = {
-      serverUrl: "http://localhost:3000",
-      instanceId: generateInstanceId(),
-      autoConnect: true,
-      reconnection: true,
-      timeout: 5000,
+      serverUrl: config.serverUrl ?? "http://localhost:3000",
+      instanceId: config.instanceId ?? generateInstanceId(),
+      autoConnect: config.autoConnect ?? true,
+      reconnection: config.reconnection ?? true,
+      timeout: config.timeout ?? 5000,
       retry: retryConfigs.standard,
       conflict: {
         strategy: config.conflict?.strategy || ConflictStrategy.LAST_WRITE_WINS,
@@ -1074,7 +1074,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
               const {
                 timestamp: localTimestamp,
                 version: localVersion,
-                syncMetadata: _syncMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
+                syncMetadata: _syncMetadata,
                 ...userMetadata
               } = localMetadata;
 
@@ -1327,9 +1327,9 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
       // Return the custom metadata we stored, excluding internal sync fields
       const {
-        timestamp: _timestamp, // eslint-disable-line @typescript-eslint/no-unused-vars
-        version: _version, // eslint-disable-line @typescript-eslint/no-unused-vars
-        syncMetadata: _syncMetadata, // eslint-disable-line @typescript-eslint/no-unused-vars
+        timestamp: _timestamp,
+        version: _version,
+        syncMetadata: _syncMetadata,
         ...userMetadata
       } = metadata;
       return userMetadata;

@@ -1,7 +1,3 @@
-/**
- * React hooks for sync-client integration
- */
-
 import { useEffect, useState, useCallback, useMemo } from "react";
 import type {
   RemoteStorageConfig,

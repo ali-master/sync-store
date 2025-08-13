@@ -3,7 +3,7 @@ import { EventEmitter } from "./event-emitter";
 import { Logger } from "../utils/logger";
 
 /**
- * Comprehensive analytics and telemetry system
+ * Analytics and telemetry system
  */
 export class Analytics extends EventEmitter<{
   "event-tracked": AnalyticsEvent;

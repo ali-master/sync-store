@@ -1,8 +1,17 @@
 {
   "name": "@usex/sync-client",
-  "version": "1.0.0",
-  "description": "Browser client for remote sync storage",
-  "author": "Ali Torki",
+  "version": "0.0.0",
+  "description": "A robust and flexible client-side communication layer for data synchronization, supporting both WebSocket and HTTP REST protocols with intelligent fallback mechanisms.",
+  "author": {
+    "name": "Ali Torki",
+    "url": "https://github.com/ali-master",
+    "email": "ali_4286@live.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ali-master/sync-store.git",
+    "directory": "packages/sync-client"
+  },
   "private": false,
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -23,9 +32,11 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint \"**/*.ts\"",
-    "lint:fix": "eslint \"**/*.ts\" --fix",
-    "format": "prettier --write \"**/*.ts\""
+    "test:types": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
   },
   "dependencies": {
     "socket.io-client": "^4.8.1",

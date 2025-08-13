@@ -10,5 +10,5 @@ export default defineConfig({
   minify: true,
   target: "es2020",
   outDir: "dist",
-  external: ["socket.io-client"],
+  external: ["socket.io-client", "react"],
 });
