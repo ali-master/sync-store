@@ -51,14 +51,14 @@
   },
   "devDependencies": {
     "@swc/core": "1.13.3",
-    "@types/node": "^24.2.1",
+    "@types/node": "^24.3.0",
     "@usex/prune-mod": "^0.0.13",
     "@usex/static-analyzer": "workspace:*",
     "dependency-cruiser": "^17.0.1",
     "eslint": "^9.33.0",
     "prettier": "^3.6.2",
     "tsup": "8.5.0",
-    "turbo": "^2.5.5",
+    "turbo": "^2.5.6",
     "typescript": "^5.9.2"
   },
   "engines": {
