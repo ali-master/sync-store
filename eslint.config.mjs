@@ -1,6 +1,7 @@
 import { eslintrc } from "@usex/static-analyzer";
 
 export default [
+  { ignores: ["**/contract.d.ts", "**/prisma/migrations/**"] },
   ...eslintrc,
   {
     ignores: [

@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["node"],
     "declaration": false,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -7,8 +8,8 @@
     "resolveJsonModule": true,
     "inlineSourceMap": false,
     "target": "ES2024",
-    "moduleResolution": "Node",
-    "module": "CommonJS",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
     "sourceMap": true,
     // Disabled because of https://github.com/Microsoft/TypeScript/issues/29172
     "outDir": "dist",

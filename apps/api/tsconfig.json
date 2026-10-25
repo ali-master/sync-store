@@ -2,8 +2,8 @@
   "extends": "@usex/tsconfig",
   "compilerOptions": {
     "outDir": "./dist",
-    "baseUrl": "./",
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "types": ["node", "@nestjs/common"],
     "lib": ["ES2022"],

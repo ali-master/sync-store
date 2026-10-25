@@ -1,3 +1,3 @@
-import type { DurationInput as DurationInputType } from "effect/Duration";
+import type { Input as DurationInputType } from "effect/Duration";
 
 export type DurationInput = DurationInputType;

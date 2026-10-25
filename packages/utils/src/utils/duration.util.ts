@@ -4,7 +4,7 @@ import { duration as humanizer } from "@visulima/humanizer";
 // @ts-ignore
 import { durationLanguage as DurationFaLanguage } from "@visulima/humanizer/language/fa";
 // Types
-import type { DurationInput, Duration as DurationType } from "effect/Duration";
+import type { Input as DurationInput, Duration as DurationType } from "effect/Duration";
 
 export const toMillis = (self: DurationInput) => Duration.toMillis(self);
 export const toSeconds = (self: DurationInput) => Duration.toSeconds(self);
@@ -13,7 +13,7 @@ export const toHours = (self: DurationInput) => Duration.toHours(self);
 export const toDays = (self: DurationInput) => Duration.toDays(self);
 export const toWeeks = (self: DurationInput) => Duration.toWeeks(self);
 export const toNanos = (self: DurationInput) => Duration.toNanos(self);
-export const unsafeToNanos = (self: DurationInput) => Duration.unsafeToNanos(self);
+export const unsafeToNanos = (self: DurationInput) => Duration.toNanosUnsafe(self);
 export const toHrTime = (self: DurationInput) => Duration.toHrTime(self);
 
 // Creation & Operations
@@ -47,30 +47,32 @@ export const nanos = (nanos: bigint) => Duration.nanos(nanos);
  * toDuration("3 weeks") // same as Duration.weeks(3)
  * ```
  */
-export const toDuration = (self: DurationInput) => Duration.decode(self);
-export const formatDuration = (self: DurationInput) => Duration.format(self);
+export const toDuration = (self: DurationInput) => Duration.fromInputUnsafe(self);
+export const formatDuration = (self: DurationInput) => Duration.format(toDuration(self));
 
 // Comparison
 export const durationEq = (self: DurationInput, other: DurationInput) =>
-  Duration.equals(self, other);
+  Duration.equals(toDuration(self), toDuration(other));
 export const durationGt = (self: DurationInput, other: DurationInput) =>
-  Duration.greaterThan(self, other);
+  Duration.isGreaterThan(toDuration(self), toDuration(other));
 export const durationGte = (self: DurationInput, other: DurationInput) =>
-  Duration.greaterThanOrEqualTo(self, other);
+  Duration.isGreaterThanOrEqualTo(toDuration(self), toDuration(other));
 export const durationLt = (self: DurationInput, other: DurationInput) =>
-  Duration.lessThan(self, other);
+  Duration.isLessThan(toDuration(self), toDuration(other));
 export const durationLte = (self: DurationInput, other: DurationInput) =>
-  Duration.lessThanOrEqualTo(self, other);
-export const durationMax = (self: DurationInput, other: DurationInput) => Duration.max(self, other);
-export const durationMin = (self: DurationInput, other: DurationInput) => Duration.min(self, other);
+  Duration.isLessThanOrEqualTo(toDuration(self), toDuration(other));
+export const durationMax = (self: DurationInput, other: DurationInput) =>
+  Duration.max(toDuration(self), toDuration(other));
+export const durationMin = (self: DurationInput, other: DurationInput) =>
+  Duration.min(toDuration(self), toDuration(other));
 export const durationClamp = (
   self: DurationInput,
   minimum: DurationInput,
   maximum: DurationInput,
 ) =>
-  Duration.clamp(self, {
-    minimum,
-    maximum,
+  Duration.clamp(toDuration(self), {
+    minimum: toDuration(minimum),
+    maximum: toDuration(maximum),
   });
 export const durationBetween = (
   self: DurationInput,
@@ -78,16 +80,16 @@ export const durationBetween = (
   maximum: DurationInput,
 ) =>
   Duration.between({
-    minimum,
-    maximum,
-  })(self);
+    minimum: toDuration(minimum),
+    maximum: toDuration(maximum),
+  })(toDuration(self));
 export const durationDivide = (self: DurationInput, divisor: number) =>
-  Duration.divide(self, divisor);
+  Duration.divide(toDuration(self), divisor);
 
 // Validations
 export const isDuration = (self: unknown): self is DurationType => {
   try {
-    Duration.decode(self as DurationInput);
+    Duration.fromInputUnsafe(self as DurationInput);
 
     return true;
   } catch {
@@ -106,7 +108,7 @@ export const durationIsFinite = (self: Duration.Duration) => Duration.isFinite(s
 export function toPersianHumanDuration(input: string | number): string {
   let $input = input as DurationInput;
   if (!isDuration(input)) {
-    $input = Duration.decode(input as DurationInput);
+    $input = Duration.fromInputUnsafe(input as DurationInput);
   }
 
   return humanizer(Duration.toMillis($input), {

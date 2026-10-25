@@ -5,7 +5,7 @@
 ## Install
 
 ```sh
-npm install --save-dev @usex/tsconfig
+bun add --dev @usex/tsconfig
 ```
 
 *This config requires TypeScript 4.7 or later.*
@@ -23,7 +23,7 @@ npm install --save-dev @usex/tsconfig
 }
 ```
 
-When you are targeting a higher version of Node.js, check the relevant ECMAScript version and add it as `target`:
+When you are targeting a newer runtime, check the relevant ECMAScript version and add it as `target`:
 
 ```json
 {

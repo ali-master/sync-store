@@ -6,7 +6,7 @@
   "language": "ts",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": ["**/*.env"],
+    "assets": ["**/contract.json"],
     "watchAssets": true,
     "typeCheck": true
   }

@@ -1,0 +1,5 @@
+{
+  "compilerOptions": {
+    "paths": { "@root": ["./dist"], "@root/*": ["./dist/*"] }
+  }
+}
