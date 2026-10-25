@@ -1,0 +1,43 @@
+---
+title: Operational reports
+description: Inspect measured time series across replicas without confusing publication with delivery.
+---
+
+## Sync health
+
+Open **Sync health** in the administrator dashboard. Choose an hour, day, week or
+30-day window and optionally a replica. Counters compare the selected window with
+the equally sized preceding window. Click a chart point or inspect its table row
+for exact interval values. Times are stored in UTC and displayed in your browser's timezone.
+
+The API records publication attempts, failed outbox drains and authenticated socket
+connections/disconnections in MongoDB minute buckets. Charts use minute buckets for
+one hour/day and hourly buckets for longer windows. Latency histograms merge counts
+across replicas before calculating the p95 bucket upper bound. The finite upper
+bounds are 10, 50, 100, 250, 500, 1,000, 5,000, 15,000 and 60,000 milliseconds.
+A p95 in the overflow bucket is unavailable rather than falsely capped at 60 seconds.
+
+The pending-event count and oldest pending age are sampled once per minute. These
+are shared cluster snapshots even when a replica filter is selected; they are never
+summed once per replica. Hourly charts show the last recorded snapshot in each hour.
+
+### Interpretation and retention
+
+- Publication latency measures MongoDB mutation time to successful publication,
+  including queue delay. With Redis this follows its AOF acknowledgement; without
+  Redis it measures local emit. It is **not acknowledgement from an application client**.
+- Publication attempts can include duplicate event IDs after a worker crash.
+- Failed drain counts include database/lease errors as well as publication errors;
+  they are not a count of uniquely failed events.
+- Metrics are best-effort: a process crash or database outage can lose telemetry
+  even though the transactional data/outbox remains durable. Gaps are not zero traffic.
+- Metrics and snapshots expire after 90 days. No historical traffic is fabricated
+  or backfilled. An idle installation can have no event samples.
+- The administrator-only `GET /api/v1/admin/reports/health` accepts `hours`
+  (`1`, `24`, `168`, `720`), optional ISO `end` (past 60 days), and `replica`.
+  Queries have bounded windows and a database execution timeout.
+
+No separate monitoring service is required. All replicas must share MongoDB and have
+synchronized clocks. Reports contain counts and identifiers, never API-key secrets
+or stored JSON values. The dashboard refreshes each minute and reports errors instead
+of replacing failed reads with zeroes.

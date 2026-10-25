@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch, Link } from "@tanstack/react-router";
 import { useSession } from "./lib/session";
 import { RecordsTable } from "./components/records-table";
+import { Reports } from "./components/reports";
 import { KeyPolicyFields } from "./components/key-policy-fields";
 import { readKeyPolicy } from "./lib/key-policy";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import logo from "../../../assets/logo.svg";
 type Row = Record<string, any>;
 type Page = { items: Row[]; total: number; page: number; pageSize: number };
 const sections = [
+  ["health", "Sync health", "◉"],
   ["overview", "Overview", "◈"],
   ["storage", "Data explorer", "▤"],
   ["keys", "API keys", "⌘"],
@@ -33,6 +35,7 @@ const sections = [
   ["system", "System", "⚙"],
 ];
 const descriptions: Record<string, string> = {
+  health: "Publication latency, pending events and connection trends across your replicas.",
   history:
     "Review retained versions and recover deleted data. Every restore creates a new synchronized change.",
   projects:
@@ -194,7 +197,7 @@ export default function App({ section }: { section: string }) {
         token,
         signal,
       ),
-    enabled: Boolean(token) && section !== "system",
+    enabled: Boolean(token) && !["system", "health"].includes(section),
   });
   const mutation = useMutation({
     mutationFn: (action: () => Promise<void>) => action(),
@@ -662,7 +665,9 @@ export default function App({ section }: { section: string }) {
               </div>
             </>
           )}
-          {section === "system" && overview ? (
+          {section === "health" ? (
+            <Reports kind="health" request={request} sessionId={sessionId} />
+          ) : section === "system" && overview ? (
             <section className="grid gap-5 xl:grid-cols-2">
               <Card className="gap-5 p-6 [&_h2]:font-semibold [&_p]:text-sm [&_p]:leading-7 [&_p]:text-muted-foreground [&_dl>div]:flex [&_dl>div]:flex-wrap [&_dl>div]:justify-between [&_dl>div]:gap-3 [&_dl>div]:border-b [&_dl>div]:py-4 [&_dl]:text-xs [&_dt]:text-muted-foreground">
                 <h2>Installation details</h2>

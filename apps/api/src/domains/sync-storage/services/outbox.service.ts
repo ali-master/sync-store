@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "redis";
 import { InjectDatabase, Database } from "@root/modules/db";
 import { SyncStorageGateway } from "../gateways/sync-storage.gateway";
+import { OperationsService } from "../../analytics/operations.service";
 
 /** A stored event survives process death together with the item mutation that produced it. */
 export interface OutboxEvent {
@@ -37,6 +38,7 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
   constructor(
     @InjectDatabase() private readonly database: Database,
     private readonly gateway: SyncStorageGateway,
+    private readonly operations: OperationsService,
   ) {}
 
   /** Index only pending work; never scan the full storage collection on each poll. */
@@ -82,6 +84,7 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
         if (!document) return;
         const event = document.outbox[0];
         await this.publish(event);
+        void this.operations.published(Number(event.timestamp));
         await this.collection.updateOne(
           { _id: document._id, leaseToken: token, "outbox.0.eventId": event.eventId },
           {
@@ -92,6 +95,7 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
         );
       }
     } catch {
+      void this.operations.record({ publishFailures: 1 });
       this.logger.warn("Outbox delivery failed; lease expiry will retry the pending event");
     }
   }

@@ -19,6 +19,7 @@ import { GetItemQuery } from "../queries/impl/get-item.query";
 import { GetAllItemsQuery } from "../queries/impl/get-all-items.query";
 import { permits } from "../services/access-policy";
 import { socketCorsOrigin } from "../../../cors";
+import { OperationsService } from "../../analytics/operations.service";
 
 interface SyncMessage {
   requestId?: string;
@@ -64,6 +65,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
     private readonly apiKeyGuard: ApiKeyGuard,
+    private readonly operations: OperationsService,
   ) {}
 
   /** Authenticate before Socket.IO exposes the namespace as connected. */
@@ -87,6 +89,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     this.logger.log(`Client connected: ${client.id} (User: ${userId})`);
 
     client.data.connectedAt = Date.now();
+    void this.operations.record({ connections: 1 });
     await client.join(`user:${userId}`);
     await client.join(JSON.stringify([userId, instanceId]));
 
@@ -123,6 +126,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     this.logger.log(`Client disconnected: ${client.id}`);
 
     if (userId && instanceId) {
+      void this.operations.record({ disconnections: 1 });
       // Notify this instance about disconnection
       this.notifyInstanceConnectionStatus(userId, instanceId, "disconnected");
     }

@@ -13,11 +13,13 @@ import { envConfigLoader } from "@root/utils";
 // Enums & Constants
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { AdminModule } from "./domains/admin/admin.module";
+import { OperationsModule } from "./domains/analytics/operations.module";
 // Types
 import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 
 @Module({
   imports: [
+    OperationsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [envConfigLoader],

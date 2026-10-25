@@ -13,13 +13,24 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminService } from "./admin.service";
 import { AdminGuard } from "./admin.guard";
+import { OperationsService } from "../analytics/operations.service";
 
 @ApiTags("Administration")
 @ApiBearerAuth()
 @Controller("admin")
 @UseGuards(AdminGuard)
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly operations: OperationsService,
+  ) {}
+
+  @Get("reports/health")
+  @Header("Cache-Control", "no-store")
+  @ApiOperation({ summary: "Read sampled publication health and previous-period time series" })
+  health(@Query() query: Record<string, string>) {
+    return this.operations.health(query);
+  }
 
   @Post("history/preview")
   @ApiOperation({ summary: "Preview a retained version and current value" })

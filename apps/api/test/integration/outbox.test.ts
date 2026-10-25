@@ -40,7 +40,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("atomic embedded outbox", () => 
         }),
       },
     } as any;
-    const worker = new OutboxService(workerDb, {} as any);
+    const worker = new OutboxService(
+      workerDb,
+      {} as any,
+      { record: async () => {}, published: async () => {} } as any,
+    );
     const write = (key: string, value: unknown) =>
       repository.upsert({
         userId,
