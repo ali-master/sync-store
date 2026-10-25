@@ -1,0 +1,35 @@
+---
+title: Safe retries
+description: Retry writes without duplicating mutations or outbox events.
+---
+
+The SDK assigns a persistent request ID to each queued set, remove, or clear.
+It reuses that ID after a timeout, reconnect, browser reload, or transport switch.
+
+For direct HTTP calls, send an `Idempotency-Key` header on `PUT /api/v1/item/:key`,
+`DELETE /api/v1/item/:key`, and `DELETE /api/v1/clear`. Use a new UUID for each
+new operation and reuse it only when retrying that operation. Socket.IO clients
+send the same identifier in `requestId` on `sync:set`, `sync:remove`, and `sync:clear`.
+
+```sh
+curl -X PUT http://localhost:3000/api/v1/item/preferences \
+  -H 'Content-Type: application/json' \
+  -H 'x-api-key: YOUR_KEY' -H 'x-user-id: alice' -H 'x-instance-id: terminal' \
+  -H 'Idempotency-Key: preferences-update-001' \
+  -d '{"value":{"theme":"dark"}}'
+```
+
+The server stores the original result, mutation and outbox event in one MongoDB
+transaction. A retry returns the original result even if the item has since
+changed. Concurrent requests on different replicas share the same receipt.
+Reusing an ID with a different operation or payload returns HTTP 409 (or a socket
+error). IDs must contain 1–128 ASCII letters, digits, dots, underscores, colons or hyphens.
+
+MongoDB must run as a replica set, including single-node installations. Authentication,
+permissions and quotas are checked on every attempt, including retries. Existing
+HTTP clients without this header keep their previous behavior.
+
+Receipts are retained indefinitely in `mutation_receipts` so an old offline retry
+cannot repeat a destructive operation. Include them in backups. Deleting receipts
+removes the deduplication guarantee for those IDs. Event delivery remains at least
+once; clients still deduplicate events by record ID and version.

@@ -146,6 +146,7 @@ export interface ITransport {
     metadata?: Record<string, any>,
     version?: number,
     timestamp?: number,
+    requestId?: string,
   ): Promise<TransportResponse>;
 
   /**
@@ -162,7 +163,7 @@ export interface ITransport {
    * @param {string} key - The storage key
    * @returns {Promise<TransportResponse>} The operation result
    */
-  removeItem(key: string): Promise<TransportResponse>;
+  removeItem(key: string, requestId?: string): Promise<TransportResponse>;
 
   /**
    * Get all items from the server
@@ -192,7 +193,7 @@ export interface ITransport {
    *
    * @returns {Promise<TransportResponse>} The operation result
    */
-  clear(): Promise<TransportResponse>;
+  clear(requestId?: string): Promise<TransportResponse>;
 
   /**
    * Get server storage information

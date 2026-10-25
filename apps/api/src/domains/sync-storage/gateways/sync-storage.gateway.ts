@@ -19,6 +19,7 @@ import { GetItemQuery } from "../queries/impl/get-item.query";
 import { GetAllItemsQuery } from "../queries/impl/get-all-items.query";
 
 interface SyncMessage {
+  requestId?: string;
   type: "set" | "remove" | "get" | "getAll" | "subscribe" | "unsubscribe";
   key?: string;
   value?: any;
@@ -138,7 +139,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
         throw new WsException("Key and value are required");
       }
 
-      const command = new SetItemCommand(userId, instanceId, key, value, metadata);
+      const command = new SetItemCommand(userId, instanceId, key, value, metadata, data.requestId);
 
       const result = await this.commandBus.execute(command);
 
@@ -174,7 +175,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
         throw new WsException("Key is required");
       }
 
-      const command = new RemoveItemCommand(userId, instanceId, key);
+      const command = new RemoveItemCommand(userId, instanceId, key, data.requestId);
       await this.commandBus.execute(command);
 
       return {
@@ -297,9 +298,12 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
   /** Clear only the authenticated user's records. */
   @SubscribeMessage("sync:clear")
-  async handleClear(@ConnectedSocket() client: Socket): Promise<SyncResponse> {
+  async handleClear(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { requestId?: string } = {},
+  ): Promise<SyncResponse> {
     const { userId, instanceId } = client.data.identity;
-    await this.commandBus.execute(new ClearStorageCommand(userId, instanceId));
+    await this.commandBus.execute(new ClearStorageCommand(userId, instanceId, data.requestId));
     return { type: "response", timestamp: Date.now() };
   }
 

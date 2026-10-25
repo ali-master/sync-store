@@ -9,6 +9,8 @@ export class ClearStorageHandler implements ICommandHandler<ClearStorageCommand>
   async execute(command: ClearStorageCommand): Promise<void> {
     const { userId, instanceId } = command;
 
-    await this.repository.clearAll(userId, instanceId);
+    await this.repository.mutate(userId, command.requestId, { type: "clear" }, () =>
+      this.repository.clearAll(userId, instanceId),
+    );
   }
 }

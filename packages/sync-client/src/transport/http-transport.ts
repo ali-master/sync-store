@@ -95,14 +95,20 @@ export class HttpTransport extends BaseTransport {
     metadata?: Record<string, any>,
     _version?: number,
     _timestamp?: number,
+    requestId = crypto.randomUUID(),
   ): Promise<TransportResponse> {
     const startTime = Date.now();
 
     try {
-      const response = await this.makeRequest("PUT", `/item/${encodeURIComponent(key)}`, {
-        value,
-        metadata,
-      });
+      const response = await this.makeRequest(
+        "PUT",
+        `/item/${encodeURIComponent(key)}`,
+        {
+          value,
+          metadata,
+        },
+        requestId,
+      );
 
       this.trackRequest(startTime, response.success, JSON.stringify(value).length);
 
@@ -139,11 +145,16 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  async removeItem(key: string): Promise<TransportResponse> {
+  async removeItem(key: string, requestId = crypto.randomUUID()): Promise<TransportResponse> {
     const startTime = Date.now();
 
     try {
-      const response = await this.makeRequest("DELETE", `/item/${encodeURIComponent(key)}`);
+      const response = await this.makeRequest(
+        "DELETE",
+        `/item/${encodeURIComponent(key)}`,
+        undefined,
+        requestId,
+      );
 
       this.trackRequest(startTime, response.success);
 
@@ -262,11 +273,11 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  async clear(): Promise<TransportResponse> {
+  async clear(requestId = crypto.randomUUID()): Promise<TransportResponse> {
     const startTime = Date.now();
 
     try {
-      const response = await this.makeRequest("DELETE", "/clear");
+      const response = await this.makeRequest("DELETE", "/clear", undefined, requestId);
 
       this.trackRequest(startTime, response.success);
 
@@ -423,16 +434,18 @@ export class HttpTransport extends BaseTransport {
     method: string,
     path: string,
     body?: any,
+    requestId?: string,
   ): Promise<TransportResponse<T>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.config.timeout ?? 5000);
     try {
       const response = await fetch(this.apiBaseUrl + path, {
         method,
-        headers:
-          body === undefined
-            ? this.defaultHeaders
-            : { ...this.defaultHeaders, "content-type": "application/json" },
+        headers: {
+          ...this.defaultHeaders,
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+          ...(requestId ? { "idempotency-key": requestId } : {}),
+        },
         signal: controller.signal,
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });

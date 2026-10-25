@@ -54,7 +54,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     retry: RetryConfig;
   };
   private localStorage: DataStorage;
-  private syncQueue: Array<{ method: string; args: any[]; timestamp: number }> = [];
+  private syncQueue: Array<{ method: string; args: any[]; timestamp: number; requestId?: string }> =
+    [];
   private readonly connectionInfo: ConnectionInfo;
   private conflictResolver: ConflictResolver;
   private networkManager: NetworkManager;
@@ -873,13 +874,24 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.flushing = (async () => {
       while (this.syncQueue.length && this.isConnected()) {
         const operation = this.syncQueue[0];
+        if (!operation.requestId) {
+          operation.requestId = crypto.randomUUID();
+          this.outbox.setItem("pending", this.syncQueue);
+        }
         const [key, value, metadata, version, timestamp] = operation.args;
         const response =
           operation.method === "clear"
-            ? await this.transport.clear()
+            ? await this.transport.clear(operation.requestId)
             : operation.method === "removeItem"
-              ? await this.transport.removeItem(key)
-              : await this.transport.setItem(key, value, metadata, version, timestamp);
+              ? await this.transport.removeItem(key, operation.requestId)
+              : await this.transport.setItem(
+                  key,
+                  value,
+                  metadata,
+                  version,
+                  timestamp,
+                  operation.requestId,
+                );
         this.unwrap(response);
         const remaining = this.syncQueue.slice(1);
         this.outbox.setItem("pending", remaining);
@@ -918,7 +930,10 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
   /** Persist pending changes before reporting them as queued; never silently truncate writes. */
   private queueSync(method: string, args: any[]): void {
-    const queue = [...this.syncQueue, { method, args, timestamp: Date.now() }];
+    const queue = [
+      ...this.syncQueue,
+      { method, args, timestamp: Date.now(), requestId: crypto.randomUUID() },
+    ];
     this.outbox.setItem("pending", queue);
     this.syncQueue = queue;
   }

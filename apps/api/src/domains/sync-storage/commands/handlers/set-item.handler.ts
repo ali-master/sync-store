@@ -18,6 +18,15 @@ export class SetItemHandler implements ICommandHandler<SetItemCommand> {
   ) {}
 
   async execute(command: SetItemCommand): Promise<StorageItem> {
+    return this.repository.mutate(
+      command.userId,
+      command.requestId,
+      { type: "set", key: command.key, value: command.value, metadata: command.metadata },
+      () => this.apply(command),
+    );
+  }
+
+  private async apply(command: SetItemCommand): Promise<StorageItem> {
     const { userId, instanceId, key, value, metadata } = command;
 
     const existingItem = await this.repository.findByKey(userId, key);

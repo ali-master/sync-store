@@ -268,13 +268,14 @@ export abstract class BaseTransport extends EventEmitter<TransportEvents> implem
     metadata?: Record<string, any>,
     version?: number,
     timestamp?: number,
+    requestId?: string,
   ): Promise<any>;
   abstract getItem(key: string): Promise<any>;
-  abstract removeItem(key: string): Promise<any>;
+  abstract removeItem(key: string, requestId?: string): Promise<any>;
   abstract getAllItems(filter?: any): Promise<any>;
   abstract executeBatch(operations: any[]): Promise<any>;
   abstract getKeys(prefix?: string): Promise<any>;
-  abstract clear(): Promise<any>;
+  abstract clear(requestId?: string): Promise<any>;
   abstract getStorageInfo(): Promise<any>;
   abstract getConflictHistory(itemId: string): Promise<any>;
   abstract getConflictStats(startDate?: Date, endDate?: Date): Promise<any>;

@@ -8,9 +8,10 @@ import {
   HttpCode,
   HttpStatus,
   Query,
+  Headers,
 } from "@nestjs/common";
 import { CommandBus, QueryBus } from "@nestjs/cqrs";
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiHeader } from "@nestjs/swagger";
 import { SetItemCommand } from "../commands/impl/set-item.command";
 import { RemoveItemCommand } from "../commands/impl/remove-item.command";
 import { ClearStorageCommand } from "../commands/impl/clear-storage.command";
@@ -25,6 +26,12 @@ import { getUserId, getInstanceId } from "@root/modules/context/context.storage"
 @ApiTags("Sync Storage")
 @Controller()
 @ApiKeyAuth()
+@ApiHeader({
+  name: "Idempotency-Key",
+  required: false,
+  description:
+    "Stable request ID for retrying set, remove and clear; a different payload with the same ID returns 409.",
+})
 export class SyncStorageController {
   constructor(
     private readonly commandBus: CommandBus,
@@ -69,10 +76,18 @@ export class SyncStorageController {
   async setItem(
     @Param("key") key: string,
     @Body() body: StorageItemDto,
+    @Headers("idempotency-key") requestId?: string,
   ): Promise<StorageResponseDto> {
     const userId = getUserId();
     const instanceId = getInstanceId();
-    const command = new SetItemCommand(userId, instanceId, key, body.value, body.metadata);
+    const command = new SetItemCommand(
+      userId,
+      instanceId,
+      key,
+      body.value,
+      body.metadata,
+      requestId,
+    );
     return await this.commandBus.execute(command);
   }
 
@@ -89,10 +104,13 @@ export class SyncStorageController {
     description: "The key of the item to remove",
     type: String,
   })
-  async removeItem(@Param("key") key: string): Promise<void> {
+  async removeItem(
+    @Param("key") key: string,
+    @Headers("idempotency-key") requestId?: string,
+  ): Promise<void> {
     const userId = getUserId();
     const instanceId = getInstanceId();
-    const command = new RemoveItemCommand(userId, instanceId, key);
+    const command = new RemoveItemCommand(userId, instanceId, key, requestId);
     await this.commandBus.execute(command);
   }
 
@@ -143,10 +161,10 @@ export class SyncStorageController {
     status: 204,
     description: "Storage cleared successfully",
   })
-  async clear(): Promise<void> {
+  async clear(@Headers("idempotency-key") requestId?: string): Promise<void> {
     const userId = getUserId();
     const instanceId = getInstanceId();
-    const command = new ClearStorageCommand(userId, instanceId);
+    const command = new ClearStorageCommand(userId, instanceId, requestId);
     await this.commandBus.execute(command);
   }
 }

@@ -3,6 +3,7 @@ import { InjectDatabase, type Database } from "@root/modules/db";
 import { StorageItem } from "../entities/storage-item.entity";
 import { randomUUID } from "node:crypto";
 import type { Models } from "@root/modules/db/contract.d";
+import { mutationSession } from "../repositories/mutation-context";
 type SyncConflict = Omit<Models.unbound_SyncConflict, "item">;
 
 export enum ConflictResolutionStrategy {
@@ -151,7 +152,7 @@ export class ConflictResolutionService {
   ): Promise<SyncConflict> {
     const db = this.database;
 
-    const conflict = await db.orm.sync_conflicts.create({
+    const data = {
       id: randomUUID(),
       humanReviewed: false,
       resolvedValue: null,
@@ -167,7 +168,17 @@ export class ConflictResolutionService {
       originalValue: conflictData.currentValue,
       conflictingValue: conflictData.newValue,
       status: SyncConflictStatus.PENDING,
-    });
+    };
+    const session = mutationSession.getStore();
+    let conflict: SyncConflict;
+    if (session) {
+      const { id, ...fields } = data;
+      const createdAt = new Date();
+      await db.native
+        .collection<{ _id: string; [key: string]: any }>("sync_conflicts")
+        .insertOne({ _id: id, ...fields, createdAt, updatedAt: createdAt }, { session });
+      conflict = { ...data, createdAt, updatedAt: createdAt } as SyncConflict;
+    } else conflict = await db.orm.sync_conflicts.create(data);
 
     this.logger.log(`Created conflict record ${conflict.id} for item ${itemId}`);
     return conflict;

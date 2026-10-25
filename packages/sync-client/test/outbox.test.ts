@@ -1,6 +1,34 @@
 import { expect, test } from "bun:test";
 import { RemoteStorage } from "../src/remote-storage";
 
+test("an unacknowledged write retains its request ID on retry", async () => {
+  const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
+  const internal = client as any;
+  const ids: string[] = [];
+  const original = internal.transport;
+  internal.transport = {
+    isConnected: () => true,
+    setItem: async (...args: any[]) => {
+      ids.push(args[5]);
+      return { success: ids.length > 1, error: "lost acknowledgement" };
+    },
+    destroy() {},
+    disconnect() {},
+  };
+  try {
+    await expect(client.setItem("key", false)).rejects.toThrow("lost acknowledgement");
+    expect(internal.outbox.getItem("pending")[0].requestId).toBe(ids[0]);
+    await internal.processSyncQueue();
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBe(ids[1]);
+    expect(ids[0]).toBeTruthy();
+    expect(internal.syncQueue).toHaveLength(0);
+  } finally {
+    client.destroy();
+    original.destroy();
+  }
+});
+
 test("outbox duplicates and delayed versions cannot resurrect a removed value", async () => {
   const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
   const internal = client as any;

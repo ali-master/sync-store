@@ -11,6 +11,7 @@
     "guides/client-sdk",
     "guides/react",
     "guides/offline-sync",
+    "guides/idempotency",
     "guides/deployment",
     "---References---",
     "reference/http-api",

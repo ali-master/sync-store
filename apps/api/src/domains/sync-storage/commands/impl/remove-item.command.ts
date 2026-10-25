@@ -3,5 +3,6 @@ export class RemoveItemCommand {
     public readonly userId: string,
     public readonly instanceId: string,
     public readonly key: string,
+    public readonly requestId?: string,
   ) {}
 }

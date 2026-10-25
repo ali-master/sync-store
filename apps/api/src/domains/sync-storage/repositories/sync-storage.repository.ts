@@ -5,6 +5,7 @@ import type { Filter } from "mongodb";
 import { StorageItem } from "../entities/storage-item.entity";
 import { InjectDatabase, Database } from "@root/modules/db";
 import type { Models } from "@root/modules/db/contract.d";
+import { mutationSession, runMutation } from "./mutation-context";
 
 interface StorageData {
   userId: string;
@@ -52,6 +53,21 @@ function appendEvent(type: "sync" | "remove") {
 export class SyncStorageRepository {
   constructor(@InjectDatabase() private readonly database: Database) {}
 
+  /** Share a durable result for retries of the same authenticated operation. */
+  mutate<T>(
+    userId: string,
+    requestId: string | undefined,
+    payload: unknown,
+    work: () => Promise<T>,
+  ) {
+    return runMutation(this.database, userId, requestId, payload, work);
+  }
+
+  private writeOptions() {
+    const session = mutationSession.getStore();
+    return session ? { session } : { writeConcern: { w: "majority" as const, j: true } };
+  }
+
   private get collection() {
     return this.database.native.collection<ItemDocument>("sync_storage_items");
   }
@@ -81,6 +97,14 @@ export class SyncStorageRepository {
   }
 
   async findByKey(userId: string, key: string): Promise<StorageItem | null> {
+    const session = mutationSession.getStore();
+    if (session) {
+      const item = await this.collection.findOne(
+        { userId, key, isDeleted: false },
+        { session, useBigInt64: true },
+      );
+      return item ? this.toEntity({ ...item, id: item._id } as Item) : null;
+    }
     const item = await this.database.orm.sync_storage_items
       .where({ userId, key, isDeleted: false })
       .first();
@@ -131,7 +155,7 @@ export class SyncStorageRepository {
         upsert: true,
         returnDocument: "after",
         useBigInt64: true,
-        writeConcern: { w: "majority", j: true },
+        ...this.writeOptions(),
       },
     );
     if (!document) throw new Error("MongoDB did not return the saved item");
@@ -141,13 +165,13 @@ export class SyncStorageRepository {
 
   async delete(userId: string, key: string, instanceId = "server"): Promise<void> {
     await this.collection.updateOne({ userId, key, isDeleted: false }, this.deletion(instanceId), {
-      writeConcern: { w: "majority", j: true },
+      ...this.writeOptions(),
     });
   }
 
   async clearAll(userId: string, instanceId = "server"): Promise<void> {
     await this.collection.updateMany({ userId, isDeleted: false }, this.deletion(instanceId), {
-      writeConcern: { w: "majority", j: true },
+      ...this.writeOptions(),
     });
   }
 

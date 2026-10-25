@@ -94,6 +94,7 @@ async function bootstrap() {
       origin: "*",
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: [
+        "Idempotency-Key",
         "Content-Type",
         "Authorization",
         "X-API-KEY",

@@ -402,11 +402,12 @@ export class AutoTransport extends BaseTransport {
     metadata?: Record<string, any>,
     version?: number,
     timestamp?: number,
+    requestId?: string,
   ): Promise<TransportResponse> {
     if (!this.activeTransport) {
       return { success: false, error: "No active transport" };
     }
-    return this.activeTransport.setItem(key, value, metadata, version, timestamp);
+    return this.activeTransport.setItem(key, value, metadata, version, timestamp, requestId);
   }
 
   async getItem(key: string): Promise<TransportResponse<StorageItem | null>> {
@@ -416,11 +417,11 @@ export class AutoTransport extends BaseTransport {
     return this.activeTransport.getItem(key);
   }
 
-  async removeItem(key: string): Promise<TransportResponse> {
+  async removeItem(key: string, requestId?: string): Promise<TransportResponse> {
     if (!this.activeTransport) {
       return { success: false, error: "No active transport" };
     }
-    return this.activeTransport.removeItem(key);
+    return this.activeTransport.removeItem(key, requestId);
   }
 
   async getAllItems(filter?: SyncFilter): Promise<TransportResponse<StorageItem[]>> {
@@ -444,11 +445,11 @@ export class AutoTransport extends BaseTransport {
     return this.activeTransport.getKeys(prefix);
   }
 
-  async clear(): Promise<TransportResponse> {
+  async clear(requestId?: string): Promise<TransportResponse> {
     if (!this.activeTransport) {
       return { success: false, error: "No active transport" };
     }
-    return this.activeTransport.clear();
+    return this.activeTransport.clear(requestId);
   }
 
   async getStorageInfo(): Promise<TransportResponse<StorageInfo>> {

@@ -5,5 +5,6 @@ export class SetItemCommand {
     public readonly key: string,
     public readonly value: any,
     public readonly metadata?: Record<string, any>,
+    public readonly requestId?: string,
   ) {}
 }

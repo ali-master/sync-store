@@ -9,6 +9,8 @@ export class RemoveItemHandler implements ICommandHandler<RemoveItemCommand> {
   async execute(command: RemoveItemCommand): Promise<void> {
     const { userId, instanceId, key } = command;
 
-    await this.repository.delete(userId, key, instanceId);
+    await this.repository.mutate(userId, command.requestId, { type: "remove", key }, () =>
+      this.repository.delete(userId, key, instanceId),
+    );
   }
 }

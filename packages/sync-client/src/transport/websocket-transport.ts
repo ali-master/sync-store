@@ -127,8 +127,9 @@ export class WebSocketTransport extends BaseTransport {
     metadata?: Record<string, any>,
     version?: number,
     timestamp?: number,
+    requestId = crypto.randomUUID(),
   ): Promise<TransportResponse> {
-    return this.request("sync:set", { key, value, metadata, version, timestamp });
+    return this.request("sync:set", { key, value, metadata, version, timestamp, requestId });
   }
 
   async getItem(key: string): Promise<TransportResponse<StorageItem | null>> {
@@ -138,8 +139,8 @@ export class WebSocketTransport extends BaseTransport {
       : response;
   }
 
-  removeItem(key: string): Promise<TransportResponse> {
-    return this.request("sync:remove", { key });
+  removeItem(key: string, requestId = crypto.randomUUID()): Promise<TransportResponse> {
+    return this.request("sync:remove", { key, requestId });
   }
 
   async getAllItems(filter?: SyncFilter): Promise<TransportResponse<StorageItem[]>> {
@@ -169,8 +170,8 @@ export class WebSocketTransport extends BaseTransport {
       : { success: false, error: response.error };
   }
 
-  clear(): Promise<TransportResponse> {
-    return this.request("sync:clear");
+  clear(requestId = crypto.randomUUID()): Promise<TransportResponse> {
+    return this.request("sync:clear", { requestId });
   }
 
   /** Batch results retain the original operation even when multiple entries use the same key. */
