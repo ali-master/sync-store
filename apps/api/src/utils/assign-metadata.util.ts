@@ -68,7 +68,7 @@ export async function assignMetadata(
   cls.set("payload", request.body);
   cls.set("apiKey", apiKey);
   cls.set("instanceId", instanceId);
-  cls.set("userId", userId);
+  cls.set("userId", request.storageUserId ?? userId);
 
   // Set new request context fields
   cls.set("userAgent", userAgent);

@@ -12,6 +12,7 @@
     "guides/react",
     "guides/offline-sync",
     "guides/idempotency",
+    "guides/projects",
     "guides/deployment",
     "---References---",
     "reference/http-api",

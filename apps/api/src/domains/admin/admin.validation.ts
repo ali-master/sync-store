@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { validateAccess } from "../sync-storage/services/access-policy";
 
 /** Accept explicit editable key settings, never credentials, scopes or usage counters. */
 export function keySettings(body: unknown): Record<string, any> {
@@ -6,7 +7,9 @@ export function keySettings(body: unknown): Record<string, any> {
     throw new BadRequestException("Expected settings object");
   const output: Record<string, any> = {};
   for (const [field, value] of Object.entries(body)) {
-    if (["name", "description"].includes(field)) {
+    if (field === "access") {
+      output.metadata = JSON.stringify({ access: validateAccess(value) });
+    } else if (["name", "description"].includes(field)) {
       if (typeof value !== "string" || value.length > 250 || (field === "name" && !value.trim()))
         throw new BadRequestException("Invalid " + field);
       output[field] = value.trim();

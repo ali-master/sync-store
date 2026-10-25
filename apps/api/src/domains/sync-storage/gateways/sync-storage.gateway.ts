@@ -17,6 +17,7 @@ import { SetItemCommand } from "../commands/impl/set-item.command";
 import { RemoveItemCommand } from "../commands/impl/remove-item.command";
 import { GetItemQuery } from "../queries/impl/get-item.query";
 import { GetAllItemsQuery } from "../queries/impl/get-all-items.query";
+import { permits } from "../services/access-policy";
 
 interface SyncMessage {
   requestId?: string;
@@ -251,7 +252,9 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
       return {
         type: "response",
-        items,
+        items: client.data.access
+          ? items.filter((item: any) => permits(client.data.access, item.key, true))
+          : items,
         timestamp: Date.now(),
       };
     } catch (error) {
@@ -309,6 +312,21 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
   broadcastToUser(userId: string, event: string, data: any): void {
     this.server.to(`user:${userId}`).emit(event, data);
+  }
+
+  /** Only current authorized recipients become targets in the durable Redis broadcast. */
+  async recipientRooms(userId: string, key: string): Promise<string[]> {
+    const sockets = await this.server.in(`user:${userId}`).fetchSockets();
+    const allowed = await Promise.all(
+      sockets.map(async (socket) =>
+        (await this.apiKeyGuard.canReceive(socket.data, key)) ? socket.id : null,
+      ),
+    );
+    return allowed.filter((id): id is string => id !== null);
+  }
+
+  broadcastToRooms(rooms: string[], event: string, data: unknown): void {
+    if (rooms.length) this.server.to(rooms).emit(event, data);
   }
 
   broadcastToInstance(userId: string, instanceId: string, event: string, data: any): void {

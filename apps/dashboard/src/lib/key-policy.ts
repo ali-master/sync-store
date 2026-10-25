@@ -18,6 +18,18 @@ export function localExpiry(value: string | null) {
 /** Translate human-readable fields into the existing administration API contract. */
 export function readKeyPolicy(data: FormData, previousExpiry: string | null = null) {
   const policy: Record<string, unknown> = {};
+  if (data.has("projectId"))
+    policy.access = {
+      projectId: String(data.get("projectId")),
+      readPrefixes: String(data.get("readPrefixes") ?? "")
+        .split(/\r?\n/)
+        .map((v) => v.trim())
+        .filter(Boolean),
+      writePrefixes: String(data.get("writePrefixes") ?? "")
+        .split(/\r?\n/)
+        .map((v) => v.trim())
+        .filter(Boolean),
+    };
   for (const period of quotaPeriods) {
     const field = period + "Quota";
     const raw = String(data.get(field) ?? "").trim();

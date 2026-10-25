@@ -21,6 +21,12 @@ import { AdminGuard } from "./admin.guard";
 export class AdminController {
   constructor(private readonly admin: AdminService) {}
 
+  @Post("projects")
+  @ApiOperation({ summary: "Create an isolated project namespace" })
+  createProject(@Body() body: unknown, @Req() req: any) {
+    return this.admin.createProject(body, req.apiKey.id);
+  }
+
   @Get("overview")
   @Header("Cache-Control", "no-store")
   @ApiOperation({

@@ -22,6 +22,7 @@ const sections = [
   ["overview", "Overview", "◈"],
   ["storage", "Data explorer", "▤"],
   ["keys", "API keys", "⌘"],
+  ["projects", "Projects", "◫"],
   ["sessions", "Connections", "⇄"],
   ["conflicts", "Conflicts", "⑂"],
   ["quotas", "User quotas", "◴"],
@@ -31,6 +32,8 @@ const sections = [
   ["system", "System", "⚙"],
 ];
 const descriptions: Record<string, string> = {
+  projects:
+    "Isolated application namespaces. Bind API keys to a project to keep its data separate.",
   overview: "Your installation, at a glance. Real data from your connected backend.",
   storage: "Inspect and edit JSON across users. Changes use the live synchronization pipeline.",
   keys: "Issue application credentials and control their access. Secrets are shown only on creation or rotation.",
@@ -47,6 +50,7 @@ const descriptions: Record<string, string> = {
   system: "Connection health, runtime information and current operational boundaries.",
 };
 const columns: Record<string, string[]> = {
+  projects: ["name", "_id", "createdAt"],
   storage: ["key", "userId", "version", "size", "lastModified"],
   keys: ["name", "isActive", "canWrite", "totalCalls", "lastUsedAt"],
   sessions: ["userId", "instanceId", "connectionType", "connectedAt", "disconnectedAt"],
@@ -192,6 +196,20 @@ export default function App({ section }: { section: string }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["console", sessionId] }),
   });
   const overview = overviewQuery.data;
+  const projectsQuery = useQuery<Page>({
+    queryKey: ["console", sessionId, "projects"],
+    queryFn: async () => {
+      const first: Page = await request("resources/projects");
+      const items = [...first.items];
+      for (let page = 2; items.length < first.total; page++) {
+        const next: Page = await request("resources/projects?page=" + page);
+        if (!next.items.length) break;
+        items.push(...next.items);
+      }
+      return { ...first, items };
+    },
+    enabled: Boolean(token) && section === "keys",
+  });
   const records = recordsQuery.data;
   const loading = overviewQuery.isFetching || recordsQuery.isFetching;
   const busy = mutation.isPending;
@@ -505,6 +523,29 @@ export default function App({ section }: { section: string }) {
               </Button>
             )}
           </div>
+          {section === "projects" && (
+            <form
+              className="flex flex-wrap items-end gap-4 rounded-2xl border bg-card p-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const data = new FormData(form);
+                void run(async () => {
+                  await request("projects", "POST", { name: data.get("name") });
+                  form.reset();
+                  setNotice("Project created. Create an API key bound to this project.");
+                });
+              }}
+            >
+              <Label className="min-w-0 flex-1">
+                Project name
+                <Input name="name" required maxLength={100} placeholder="Production workspace" />
+              </Label>
+              <Button type="submit" disabled={busy}>
+                Create project
+              </Button>
+            </form>
+          )}
           {error && (
             <div
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
@@ -899,6 +940,62 @@ export default function App({ section }: { section: string }) {
                         disabled={rootKey || busy}
                       />
                     </Label>
+                    {!rootKey && (
+                      <section className="space-y-4 rounded-2xl border bg-muted/20 p-5">
+                        <h3 className="font-semibold">Project & data access</h3>
+                        <Label>
+                          Project
+                          {!selected._new && (
+                            <input
+                              type="hidden"
+                              name="projectId"
+                              value={
+                                JSON.parse(selected.metadata || "{}").access?.projectId || "default"
+                              }
+                            />
+                          )}
+                          <select
+                            name="projectId"
+                            className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+                            disabled={!selected._new || busy}
+                            defaultValue={
+                              JSON.parse(selected.metadata || "{}").access?.projectId || "default"
+                            }
+                          >
+                            <option value="default">Default (existing data)</option>
+                            {projectsQuery.data?.items.map((project) => (
+                              <option key={project._id} value={project._id}>
+                                {project.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Project binding cannot change after creation. Create projects from the
+                          Projects page.
+                        </p>
+                        {(["readPrefixes", "writePrefixes"] as const).map((field) => (
+                          <Label key={field}>
+                            {field === "readPrefixes"
+                              ? "Readable key prefixes"
+                              : "Writable key prefixes"}
+                            <Textarea
+                              name={field}
+                              rows={3}
+                              placeholder="settings/"
+                              defaultValue={(
+                                JSON.parse(selected.metadata || "{}").access?.[field] || []
+                              ).join("\n")}
+                            />
+                          </Label>
+                        ))}
+                        <p className="text-xs text-muted-foreground">
+                          One literal prefix per line, case sensitive. Empty allows all keys for
+                          that permission. Do not add *. Restricted write keys cannot clear the
+                          entire project.
+                        </p>
+                      </section>
+                    )}
                     <div className="grid grid-cols-2 gap-3 [&_label]:flex-row! [&_label]:items-start!">
                       <Label className="rounded-xl border bg-muted/20 p-4 has-[[data-checked]]:border-primary/40 has-[[data-checked]]:bg-primary/5">
                         <Checkbox

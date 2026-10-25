@@ -9,6 +9,7 @@ import {
   HttpStatus,
   Query,
   Headers,
+  Req,
 } from "@nestjs/common";
 import { CommandBus, QueryBus } from "@nestjs/cqrs";
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiHeader } from "@nestjs/swagger";
@@ -22,6 +23,7 @@ import { StorageItemDto } from "../dto/storage-item.dto";
 import { StorageResponseDto } from "../dto/storage-response.dto";
 import { ApiKeyAuth } from "../decorators/api-key-auth.decorator";
 import { getUserId, getInstanceId } from "@root/modules/context/context.storage";
+import { permits } from "../services/access-policy";
 
 @ApiTags("Sync Storage")
 @Controller()
@@ -127,11 +129,17 @@ export class SyncStorageController {
     description: "Optional prefix to filter items by key",
     type: String,
   })
-  async getAllItems(@Query("prefix") prefix?: string): Promise<StorageResponseDto[]> {
+  async getAllItems(
+    @Query("prefix") prefix?: string,
+    @Req() request?: any,
+  ): Promise<StorageResponseDto[]> {
     const userId = getUserId();
     const instanceId = getInstanceId();
     const query = new GetAllItemsQuery(userId, instanceId, prefix);
-    return await this.queryBus.execute(query);
+    const items = await this.queryBus.execute(query);
+    return request?.access
+      ? items.filter((item: StorageResponseDto) => permits(request.access, item.key, true))
+      : items;
   }
 
   @Get("keys")
@@ -147,11 +155,14 @@ export class SyncStorageController {
     description: "Optional prefix to filter items by key",
     type: String,
   })
-  async getKeys(@Query("prefix") prefix?: string): Promise<string[]> {
+  async getKeys(@Query("prefix") prefix?: string, @Req() request?: any): Promise<string[]> {
     const userId = getUserId();
     const instanceId = getInstanceId();
     const query = new GetKeysQuery(userId, instanceId, prefix);
-    return await this.queryBus.execute(query);
+    const keys = await this.queryBus.execute(query);
+    return request?.access
+      ? keys.filter((key: string) => permits(request.access, key, true))
+      : keys;
   }
 
   @Delete("clear")

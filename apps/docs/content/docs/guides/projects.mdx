@@ -1,0 +1,70 @@
+---
+title: Projects and scoped keys
+description: Separate application data and limit credentials to literal key prefixes.
+---
+
+## Create a project
+
+Open **Dashboard → Projects**, enter a name, and choose **Create project**.
+Then open **API keys → Create API key** and select that project. A key belongs to
+exactly one project; its binding cannot be edited. Create another key to switch projects.
+The installation administrator can inspect all projects and must remain private.
+
+Existing keys and data belong to **Default**. Creating a project does not move or delete
+existing data. Projects isolate the same `userId` and storage key from one another,
+including receipts, conflicts and live synchronization. Internal user identifiers for
+new projects use a reserved `project:` namespace; clients cannot supply that prefix.
+
+## Restrict keys
+
+Enter literal prefixes, one per line, under **Readable key prefixes** and
+**Writable key prefixes**. For example `settings/` permits `settings/theme`.
+Prefixes are case sensitive; do not append `*`. An empty list means unrestricted
+paths for that permission. The Read/Write switches still control whether the
+permission is enabled at all.
+
+Direct item access is rejected outside the permitted prefixes. Item/key lists are
+filtered, and live events are delivered only to currently authorized readers.
+Disabling or rotating a credential prevents future event dispatch to its old sessions.
+Events already dispatched cannot be recalled.
+
+Keys with write-prefix restrictions cannot use `clear`; delete permitted items
+individually. Conflict administration requires unrestricted key access. These restrictions
+apply to both HTTP and Socket.IO. A project's users still need application authentication:
+an API key does not prove ownership of a client-supplied user ID.
+
+## SDK configuration
+
+Use the project's API key as usual. The server derives the project from the credential;
+there is no client header that can select another project. Set a distinct local cache
+`namespace` for each project and backend when reusing the same browser:
+
+```ts
+const store = new RemoteStorage({
+  serverUrl: 'https://sync.example.com',
+  apiKey: projectKey,
+  userId: authenticatedUserId,
+  namespace: 'production-project',
+});
+```
+
+Do not share a local cache namespace between credentials with different permissions.
+Server-side restrictions cannot erase data already downloaded to a browser.
+
+## Administration API
+
+`POST /api/v1/admin/projects` accepts `{ "name": "Production" }`.
+`GET /api/v1/admin/resources/projects` lists projects with pagination.
+Key creation and updates accept an `access` object:
+
+```json
+{
+  "projectId": "PROJECT_ID",
+  "readPrefixes": ["settings/"],
+  "writePrefixes": ["orders/"]
+}
+```
+
+Send this object as the `access` field alongside the other API-key settings.
+Use `default` for existing data. Projects cannot be deleted through the dashboard,
+preventing accidental orphaning of keys and stored data.

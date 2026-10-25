@@ -15,8 +15,10 @@ import {
 } from "../sync-storage/services/conflict-resolution.service";
 import { BOOTSTRAP_KEY_ID } from "./bootstrap-key";
 import { identifier, keySettings } from "./admin.validation";
+import { accessPolicy } from "../sync-storage/services/access-policy";
 
 export const resources = {
+  projects: "projects",
   keys: "api_keys",
   storage: "sync_storage_items",
   sessions: "sync_sessions",
@@ -121,7 +123,7 @@ export class AdminService {
     if (query.q) {
       const q = identifier(query.q, "search").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const fields =
-        resource === "keys"
+        resource === "keys" || resource === "projects"
           ? ["name", "_id"]
           : ["userId", "key", "instanceId", "_id", "action", "status"];
       filter.$or = fields.map((field) => ({ [field]: { $regex: q, $options: "i" } }));
@@ -166,6 +168,7 @@ export class AdminService {
   /** Issue an application key and reveal its secret only in this response. */
   async createKey(body: unknown, actor: string) {
     const settings = keySettings(body);
+    await this.requireProject(accessPolicy(settings).projectId);
     if (!settings.name) throw new BadRequestException("Name is required");
     const key = "ss_" + randomBytes(32).toString("hex");
     const row = await this.db.orm.api_keys.create({
@@ -184,13 +187,34 @@ export class AdminService {
       throw new ConflictException(
         "The installation administrator cannot be disabled or restricted here",
       );
-    if (!(await this.db.orm.api_keys.where({ id }).first()))
-      throw new NotFoundException("Key not found");
-    await this.db.orm.api_keys
-      .where({ id })
-      .update({ ...keySettings(body), updatedAt: new Date() });
+    const previous = await this.db.orm.api_keys.where({ id }).first();
+    if (!previous) throw new NotFoundException("Key not found");
+    const settings = keySettings(body);
+    if (settings.metadata && accessPolicy(settings).projectId !== accessPolicy(previous).projectId)
+      throw new BadRequestException("Project binding is immutable; create a new API key");
+    await this.db.orm.api_keys.where({ id }).update({ ...settings, updatedAt: new Date() });
     await this.audit(actor, "admin.key.update", id);
     return { updated: true };
+  }
+
+  /** Create an isolated application namespace without moving existing data. */
+  async createProject(body: any, actor: string) {
+    const name = identifier(body?.name, "project name").trim();
+    if (name.length > 100) throw new BadRequestException("Project name is too long");
+    const project = { _id: randomUUID(), name, createdAt: new Date() };
+    await this.db.native
+      .collection<{ _id: string; name: string; createdAt: Date }>("projects")
+      .insertOne(project);
+    await this.audit(actor, "admin.project.create", project._id);
+    return project;
+  }
+
+  private async requireProject(id: string) {
+    if (
+      id !== "default" &&
+      !(await this.db.native.collection<{ _id: string }>("projects").findOne({ _id: id }))
+    )
+      throw new BadRequestException("Project does not exist");
   }
 
   /** Rotate credentials explicitly; existing clients must switch to the new secret. */

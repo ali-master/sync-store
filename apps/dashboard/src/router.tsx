@@ -23,6 +23,7 @@ const sections = [
   "overview",
   "storage",
   "keys",
+  "projects",
   "sessions",
   "conflicts",
   "quotas",

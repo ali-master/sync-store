@@ -12,6 +12,9 @@ import { BlockList, isIP } from "node:net";
 import { InjectDatabase, type Database } from "@root/modules/db";
 import { quotaConsumption } from "../services/quota-window";
 import { socketProxyIdentity } from "@root/trusted-proxy";
+import { createHash } from "node:crypto";
+import { accessPolicy, permits, projectUser } from "../services/access-policy";
+import { isContextActive, setContext } from "@root/modules/context/context.storage";
 // import * as geoip from 'maxmind'; // TODO: Add GeoIP dependency if needed
 
 interface ApiKeyRestrictions {
@@ -64,7 +67,7 @@ export class ApiKeyGuard implements CanActivate {
   /** Apply the same API-key restrictions to socket connections and each storage operation. */
   async authorizeSocket(client: Socket, method = "GET", body: any = {}): Promise<boolean> {
     const auth = client.handshake.auth;
-    const userId = client.data.identity?.userId ?? auth.userId ?? client.handshake.query.userId;
+    const userId = auth.userId ?? client.handshake.query.userId;
     const instanceId =
       client.data.identity?.instanceId ?? auth.instanceId ?? client.handshake.query.instanceId;
     if (typeof userId !== "string" || !userId || typeof instanceId !== "string" || !instanceId) {
@@ -93,7 +96,14 @@ export class ApiKeyGuard implements CanActivate {
       socket: { remoteAddress: client.handshake.address },
     } as unknown as Request;
     await this.authorize(request);
-    client.data.identity = { userId, instanceId };
+    const record = (request as any).apiKey;
+    client.data.identity = {
+      userId: projectUser(accessPolicy(record).projectId, userId),
+      instanceId,
+    };
+    client.data.apiKeyId = record.id;
+    client.data.credentialHash = createHash("sha256").update(apiKey).digest("hex");
+    client.data.access = accessPolicy(record);
     return true;
   }
 
@@ -137,6 +147,25 @@ export class ApiKeyGuard implements CanActivate {
 
     // Parse restrictions
     const restrictions = this.parseRestrictions(apiKeyRecord);
+    const policy = accessPolicy(apiKeyRecord);
+    const scopedUser = projectUser(policy.projectId, userId);
+    const key = request.params?.key ?? request.body?.key;
+    if (typeof key === "string" && !permits(policy, key, reading))
+      throw new ForbiddenException("Key is outside this API key's permitted prefixes");
+    if (
+      Array.isArray(request.body?.keys) &&
+      request.body.keys.some(
+        (key: unknown) => typeof key !== "string" || (key !== "*" && !permits(policy, key, true)),
+      )
+    )
+      throw new ForbiddenException("Subscription is outside permitted prefixes");
+    if (!key && !reading && policy.writePrefixes.length)
+      throw new ForbiddenException("Bulk operations require unrestricted write access");
+    if (
+      request.url?.includes("/conflicts") &&
+      (policy.readPrefixes.length || policy.writePrefixes.length)
+    )
+      throw new ForbiddenException("Conflict administration requires unrestricted key access");
 
     // Validate all restrictions
     await this.validateRestrictions(request, restrictions, apiKeyRecord.id);
@@ -148,8 +177,25 @@ export class ApiKeyGuard implements CanActivate {
 
     // Store API key info in request context
     (request as any).apiKey = apiKeyRecord;
+    (request as any).access = policy;
+    (request as any).storageUserId = scopedUser;
+    if (isContextActive()) setContext("userId", scopedUser);
 
     return true;
+  }
+
+  /** Recheck current credentials and read policy before dispatching a queued event. */
+  async canReceive(data: any, key: string): Promise<boolean> {
+    if (!data.apiKeyId || !data.credentialHash) return false;
+    const record = await this.database.orm.api_keys.where({ id: data.apiKeyId }).first();
+    return Boolean(
+      record &&
+      record.isActive &&
+      record.canRead &&
+      (!record.expiresAt || record.expiresAt > new Date()) &&
+      createHash("sha256").update(record.key).digest("hex") === data.credentialHash &&
+      permits(accessPolicy(record), key, true),
+    );
   }
 
   private extractApiKey(request: Request): string | null {
