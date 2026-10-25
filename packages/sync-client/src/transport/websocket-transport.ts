@@ -31,6 +31,7 @@ export class WebSocketTransport extends BaseTransport {
         userId: this.config.userId,
         instanceId: this.config.instanceId,
         apiKey: this.config.apiKey,
+        branch: this.config.branch ?? "main",
       },
       timeout: this.config.timeout ?? 5000,
       reconnection: this.config.reconnection !== false,

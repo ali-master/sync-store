@@ -38,6 +38,7 @@ export class HttpTransport extends BaseTransport {
     // Setup default headers based on server API requirements
     this.defaultHeaders = {
       "x-api-key": config.apiKey || "",
+      "x-branch": config.branch ?? "main",
       "x-user-id": config.userId,
       "x-instance-id": config.instanceId,
     };
@@ -294,6 +295,16 @@ export class HttpTransport extends BaseTransport {
 
   async getStorageInfo(): Promise<TransportResponse<StorageInfo>> {
     return { success: false, error: "Server storage information is not supported" };
+  }
+
+  /** Branch operations use HTTP even when live updates use Socket.IO. */
+  versioning(path: string, body?: unknown, requestId?: string): Promise<TransportResponse<any>> {
+    return this.makeRequest(
+      body === undefined ? "GET" : "POST",
+      "/versioning/" + path,
+      body,
+      requestId,
+    );
   }
 
   /** Read retained versions without assuming the live item still exists. */

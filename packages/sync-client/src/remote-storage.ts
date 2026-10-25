@@ -123,13 +123,17 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       ...config,
     };
 
+    const cacheNamespace =
+      !config.branch || config.branch === "main"
+        ? (config.namespace ?? "sync")
+        : `${config.namespace ?? "sync"}:branch:${config.branch}`;
     this.transport = createTransport({
       ...this.config,
       mode: (config.mode ?? TransportMode.AUTO) as TransportMode,
     });
     this.historyTransport = new HttpTransport({ ...this.config, mode: TransportMode.HTTP });
     this.outbox = new DataStorage({
-      namespace: `${config.namespace ?? "sync"}:outbox:${config.userId}`,
+      namespace: `${cacheNamespace}:outbox:${config.userId}`,
       maxSize: 10 * 1024 * 1024,
     });
     this.syncQueue = this.outbox.getItem<typeof this.syncQueue>("pending") ?? [];
@@ -150,7 +154,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
     // Initialize components
     this.localStorage = new DataStorage({
-      namespace: `${this.config.namespace ?? "sync"}:${this.config.userId}`,
+      namespace: `${cacheNamespace}:${this.config.userId}`,
       maxSize: this.config.storage?.maxSize ?? 10 * 1024 * 1024,
       compressionEnabled: this.config.storage?.compressionEnabled ?? false,
       encryptionKey: this.config.storage?.encryptionKey,
@@ -717,6 +721,44 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   /** Fetch retained versions over HTTP even when live synchronization uses WebSocket. */
   async getHistory(key: string, before?: string) {
     return this.unwrap(await this.historyTransport.getHistory(key, before));
+  }
+
+  /** List branch heads in this tenant, project and user namespace. */
+  async getBranches() {
+    return this.unwrap(await this.historyTransport.versioning("branches"));
+  }
+  /** Fork a committed snapshot; branch names cannot overwrite an existing branch. */
+  async createBranch(name: string, commitId: string) {
+    return this.unwrap(await this.historyTransport.versioning("branches", { name, commitId }));
+  }
+  async getCommits(before?: string) {
+    return this.unwrap(
+      await this.historyTransport.versioning(
+        "commits" + (before ? "?before=" + encodeURIComponent(before) : ""),
+      ),
+    );
+  }
+  async getCommit(id: string) {
+    return this.unwrap(await this.historyTransport.versioning("commits/" + encodeURIComponent(id)));
+  }
+  async getCommitTimeline() {
+    return this.unwrap(await this.historyTransport.versioning("timeline"));
+  }
+  /** expectedHead prevents silently checkpointing a concurrently changed tree. */
+  async commit(message: string, expectedHead: string | null, requestId: string) {
+    return this.unwrap(
+      await this.historyTransport.versioning("commits", { message, expectedHead }, requestId),
+    );
+  }
+  /** Online whole-tree restore; retain requestId for retries after an uncertain response. */
+  async restoreCommit(id: string, message: string, expectedHead: string | null, requestId: string) {
+    return this.unwrap(
+      await this.historyTransport.versioning(
+        "commits/" + encodeURIComponent(id) + "/restore",
+        { message, expectedHead },
+        requestId,
+      ),
+    );
   }
 
   /** Preview the target version and current revision; restore requires both read and write access. */

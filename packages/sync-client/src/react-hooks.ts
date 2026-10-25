@@ -79,6 +79,7 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
       config.apiKey,
       config.mode,
       config.namespace,
+      config.branch,
     ],
   );
   const lifecycle = useRef({ storage, generation: 0 });
@@ -524,6 +525,7 @@ export interface UseRemoteStorageOptions {
   apiKey?: string;
   mode?: RemoteStorageConfig["mode"];
   namespace?: string;
+  branch?: string;
   serverUrl?: string;
   instanceId?: string;
   autoConnect?: boolean;
@@ -541,6 +543,7 @@ export function useRemoteStorage(userId: string, options?: UseRemoteStorageOptio
     apiKey: options?.apiKey,
     mode: options?.mode,
     namespace: options?.namespace,
+    branch: options?.branch,
   };
 
   const result = useSyncStore({ config, autoConnect: config.autoConnect });

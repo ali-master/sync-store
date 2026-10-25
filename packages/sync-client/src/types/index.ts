@@ -12,6 +12,8 @@ export interface RemoteStorageConfig {
   userId: string;
   instanceId?: string;
   apiKey?: string;
+  /** Fixed branch for this client. Create another client to switch branches. */
+  branch?: string;
   autoConnect?: boolean;
   reconnection?: boolean;
   timeout?: number;

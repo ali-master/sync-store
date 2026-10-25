@@ -33,6 +33,8 @@ export interface TransportConfig {
   userId: string;
   instanceId: string;
   apiKey?: string;
+  /** Fixed branch for this client. Create another client to switch branches. */
+  branch?: string;
   timeout?: number;
   reconnection?: boolean;
   retry?: {

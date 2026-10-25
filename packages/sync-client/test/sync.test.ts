@@ -80,7 +80,10 @@ function fixture(basePath = "/api/v1") {
 describe("storage synchronization", () => {
   test("HTTP accepts an explicit API base path with a trailing slash", async () => {
     const f = fixture("/custom/api");
-    const client = new RemoteStorage({ ...f.config, serverUrl: `${f.config.serverUrl}/custom/api/` });
+    const client = new RemoteStorage({
+      ...f.config,
+      serverUrl: `${f.config.serverUrl}/custom/api/`,
+    });
     resources.push(client);
     await client.connect();
     await client.setItem("custom", 42);
@@ -169,4 +172,39 @@ describe("storage synchronization", () => {
     expect(() => storage.setItem("another", "x".repeat(200))).toThrow();
     expect(storage.getItem("key")).toBe("replacement");
   });
+});
+
+test("branch clients send fixed HTTP identity and partition caches without changing main", async () => {
+  const user = "branch-user",
+    namespace = "tenant-project";
+  const server = Bun.serve({
+    port: 0,
+    fetch(req) {
+      return Response.json({
+        requestId: "test",
+        payload: { branch: req.headers.get("x-branch"), path: new URL(req.url).pathname },
+      });
+    },
+  });
+  servers.push(server);
+  const main = new RemoteStorage({
+    userId: user,
+    namespace,
+    autoConnect: false,
+    serverUrl: server.url.toString(),
+  });
+  resources.push(main);
+  const feature = new RemoteStorage({
+    userId: user,
+    namespace,
+    branch: "feature/a",
+    autoConnect: false,
+    serverUrl: server.url.toString(),
+  });
+  resources.push(feature);
+  expect((main as any).outbox.namespace).toBe("tenant-project:outbox:branch-user");
+  expect((feature as any).outbox.namespace).not.toBe((main as any).outbox.namespace);
+  expect((feature as any).localStorage.namespace).not.toBe((main as any).localStorage.namespace);
+  expect((await feature.getBranches()).branch).toBe("feature/a");
+  expect((await main.getBranches()).branch).toBe("main");
 });
