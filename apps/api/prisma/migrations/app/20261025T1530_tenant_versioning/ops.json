@@ -1,0 +1,1678 @@
+[
+  {
+    "id": "collection.projects.create",
+    "label": "Create collection projects",
+    "operationClass": "additive",
+    "precheck": [],
+    "execute": [
+      {
+        "description": "create collection projects",
+        "command": {
+          "kind": "createCollection",
+          "collection": "projects"
+        }
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "collection.projects.collMod",
+    "label": "Modify collection projects",
+    "operationClass": "widening",
+    "precheck": [
+      {
+        "description": "collection projects exists",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "projects"
+        },
+        "expect": "exists",
+        "object": "collection \"projects\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "modify projects",
+        "command": {
+          "kind": "collMod",
+          "collection": "projects",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "string"
+                },
+                "createdAt": {
+                  "bsonType": "date"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "tenantId": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "_id",
+                "createdAt",
+                "name"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "validator applied on projects",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "projects"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationLevel",
+              "op": "$eq",
+              "value": "strict"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationAction",
+              "op": "$eq",
+              "value": "error"
+            },
+            {
+              "kind": "field",
+              "field": "options.validator.$jsonSchema",
+              "op": "$eq",
+              "value": {
+                "additionalProperties": false,
+                "bsonType": "object",
+                "properties": {
+                  "_id": {
+                    "bsonType": "string"
+                  },
+                  "createdAt": {
+                    "bsonType": "date"
+                  },
+                  "name": {
+                    "bsonType": "string"
+                  },
+                  "tenantId": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  }
+                },
+                "required": [
+                  "_id",
+                  "createdAt",
+                  "name"
+                ]
+              }
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "collection.tenants.create",
+    "label": "Create collection tenants",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "collection tenants does not exist",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "tenants"
+        },
+        "expect": "notExists",
+        "object": "collection \"tenants\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create collection tenants",
+        "command": {
+          "kind": "createCollection",
+          "collection": "tenants",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "string"
+                },
+                "createdAt": {
+                  "bsonType": "date"
+                },
+                "isActive": {
+                  "bsonType": "bool"
+                },
+                "name": {
+                  "bsonType": "string"
+                }
+              },
+              "required": [
+                "_id",
+                "createdAt",
+                "isActive",
+                "name"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "collection.version_blobs.create",
+    "label": "Create collection version_blobs",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "collection version_blobs does not exist",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "version_blobs"
+        },
+        "expect": "notExists",
+        "object": "collection \"version_blobs\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create collection version_blobs",
+        "command": {
+          "kind": "createCollection",
+          "collection": "version_blobs",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "string"
+                },
+                "metadata": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "owner": {
+                  "bsonType": "string"
+                },
+                "value": {
+                  "bsonType": "string"
+                }
+              },
+              "required": [
+                "_id",
+                "owner",
+                "value"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "collection.version_branches.create",
+    "label": "Create collection version_branches",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "collection version_branches does not exist",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "version_branches"
+        },
+        "expect": "notExists",
+        "object": "collection \"version_branches\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create collection version_branches",
+        "command": {
+          "kind": "createCollection",
+          "collection": "version_branches",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "string"
+                },
+                "createdAt": {
+                  "bsonType": "date"
+                },
+                "head": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "owner": {
+                  "bsonType": "string"
+                }
+              },
+              "required": [
+                "_id",
+                "createdAt",
+                "name",
+                "owner"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "collection.version_commits.create",
+    "label": "Create collection version_commits",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "collection version_commits does not exist",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "version_commits"
+        },
+        "expect": "notExists",
+        "object": "collection \"version_commits\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create collection version_commits",
+        "command": {
+          "kind": "createCollection",
+          "collection": "version_commits",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "string"
+                },
+                "branch": {
+                  "bsonType": "string"
+                },
+                "createdAt": {
+                  "bsonType": "date"
+                },
+                "message": {
+                  "bsonType": "string"
+                },
+                "owner": {
+                  "bsonType": "string"
+                },
+                "parent": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "projected": {
+                  "bsonType": "bool"
+                },
+                "tree": {
+                  "bsonType": "string"
+                }
+              },
+              "required": [
+                "_id",
+                "branch",
+                "createdAt",
+                "message",
+                "owner",
+                "projected",
+                "tree"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "index.api_keys.create(tenantId:1,createdAt:1,_id:1)",
+    "label": "Create index on api_keys (tenantId:1, createdAt:1, _id:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on api_keys",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "api_keys"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "tenantId": 1,
+            "createdAt": 1,
+            "_id": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { tenantId: 1, createdAt: 1, _id: 1 } in \"api_keys\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on api_keys",
+        "command": {
+          "kind": "createIndex",
+          "collection": "api_keys",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "tenantId"
+            },
+            {
+              "direction": 1,
+              "field": "createdAt"
+            },
+            {
+              "direction": 1,
+              "field": "_id"
+            }
+          ],
+          "name": "tenantId_1_createdAt_1__id_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on api_keys",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "api_keys"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "tenantId": 1,
+                "createdAt": 1,
+                "_id": 1
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "unique",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "index.projects.create(tenantId:1,createdAt:1,_id:1)",
+    "label": "Create index on projects (tenantId:1, createdAt:1, _id:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on projects",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "projects"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "tenantId": 1,
+            "createdAt": 1,
+            "_id": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { tenantId: 1, createdAt: 1, _id: 1 } in \"projects\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on projects",
+        "command": {
+          "kind": "createIndex",
+          "collection": "projects",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "tenantId"
+            },
+            {
+              "direction": 1,
+              "field": "createdAt"
+            },
+            {
+              "direction": 1,
+              "field": "_id"
+            }
+          ],
+          "name": "tenantId_1_createdAt_1__id_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on projects",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "projects"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "tenantId": 1,
+                "createdAt": 1,
+                "_id": 1
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "unique",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "index.tenants.create(createdAt:1,_id:1)",
+    "label": "Create index on tenants (createdAt:1, _id:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on tenants",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "tenants"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "createdAt": 1,
+            "_id": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { createdAt: 1, _id: 1 } in \"tenants\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on tenants",
+        "command": {
+          "kind": "createIndex",
+          "collection": "tenants",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "createdAt"
+            },
+            {
+              "direction": 1,
+              "field": "_id"
+            }
+          ],
+          "name": "createdAt_1__id_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on tenants",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "tenants"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "createdAt": 1,
+                "_id": 1
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "unique",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "index.version_branches.create(owner:1,name:1)",
+    "label": "Create index on version_branches (owner:1, name:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on version_branches",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "version_branches"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "owner": 1,
+            "name": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { owner: 1, name: 1 } in \"version_branches\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on version_branches",
+        "command": {
+          "kind": "createIndex",
+          "collection": "version_branches",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "owner"
+            },
+            {
+              "direction": 1,
+              "field": "name"
+            }
+          ],
+          "unique": true,
+          "name": "owner_1_name_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on version_branches",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "version_branches"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "owner": 1,
+                "name": 1
+              }
+            },
+            {
+              "kind": "field",
+              "field": "unique",
+              "op": "$eq",
+              "value": true
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "index.version_commits.create(owner:1,branch:1,createdAt:1,_id:1)",
+    "label": "Create index on version_commits (owner:1, branch:1, createdAt:1, _id:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on version_commits",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "version_commits"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "owner": 1,
+            "branch": 1,
+            "createdAt": 1,
+            "_id": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { owner: 1, branch: 1, createdAt: 1, _id: 1 } in \"version_commits\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on version_commits",
+        "command": {
+          "kind": "createIndex",
+          "collection": "version_commits",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "owner"
+            },
+            {
+              "direction": 1,
+              "field": "branch"
+            },
+            {
+              "direction": 1,
+              "field": "createdAt"
+            },
+            {
+              "direction": 1,
+              "field": "_id"
+            }
+          ],
+          "name": "owner_1_branch_1_createdAt_1__id_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on version_commits",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "version_commits"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "owner": 1,
+                "branch": 1,
+                "createdAt": 1,
+                "_id": 1
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "unique",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "index.version_commits.create(projected:1,createdAt:1)",
+    "label": "Create index on version_commits (projected:1, createdAt:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on version_commits",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "version_commits"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "projected": 1,
+            "createdAt": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { projected: 1, createdAt: 1 } in \"version_commits\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on version_commits",
+        "command": {
+          "kind": "createIndex",
+          "collection": "version_commits",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "projected"
+            },
+            {
+              "direction": 1,
+              "field": "createdAt"
+            }
+          ],
+          "name": "projected_1_createdAt_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on version_commits",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "version_commits"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "projected": 1,
+                "createdAt": 1
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "unique",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "validator.api_keys.update",
+    "label": "Update validator on api_keys (added: tenantId)",
+    "operationClass": "widening",
+    "precheck": [
+      {
+        "description": "collection api_keys exists",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "api_keys"
+        },
+        "expect": "exists",
+        "object": "collection \"api_keys\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "modify api_keys",
+        "command": {
+          "kind": "collMod",
+          "collection": "api_keys",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "string"
+                },
+                "alertThresholds": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "allowedMethods": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "allowedUserAgents": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "avgResponseTimeMs": {
+                  "bsonType": "int"
+                },
+                "blockedUserAgents": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "canRead": {
+                  "bsonType": "bool"
+                },
+                "canWrite": {
+                  "bsonType": "bool"
+                },
+                "countryRestrictions": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "createdAt": {
+                  "bsonType": "date"
+                },
+                "currentDailyUsage": {
+                  "bsonType": "int"
+                },
+                "currentHourUsage": {
+                  "bsonType": "int"
+                },
+                "currentMinuteUsage": {
+                  "bsonType": "int"
+                },
+                "currentMonthlyUsage": {
+                  "bsonType": "int"
+                },
+                "dailyQuota": {
+                  "bsonType": [
+                    "null",
+                    "int"
+                  ]
+                },
+                "description": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "enableAnalytics": {
+                  "bsonType": "bool"
+                },
+                "expiresAt": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "failedCalls": {
+                  "bsonType": "int"
+                },
+                "hourQuota": {
+                  "bsonType": [
+                    "null",
+                    "int"
+                  ]
+                },
+                "ipRestrictions": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "isActive": {
+                  "bsonType": "bool"
+                },
+                "key": {
+                  "bsonType": "string"
+                },
+                "lastFailedAt": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "lastFailureReason": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "lastQuotaResetAt": {
+                  "bsonType": "date"
+                },
+                "lastSecurityViolation": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "lastUsedAt": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "metadata": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "minuteQuota": {
+                  "bsonType": [
+                    "null",
+                    "int"
+                  ]
+                },
+                "monthlyQuota": {
+                  "bsonType": [
+                    "null",
+                    "int"
+                  ]
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "originRestrictions": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "p95ResponseTimeMs": {
+                  "bsonType": "int"
+                },
+                "p99ResponseTimeMs": {
+                  "bsonType": "int"
+                },
+                "quotaWindow_day": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "quotaWindow_hour": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "quotaWindow_minute": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "quotaWindow_month": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "rateLimitPerSecond": {
+                  "bsonType": [
+                    "null",
+                    "int"
+                  ]
+                },
+                "requireHttps": {
+                  "bsonType": "bool"
+                },
+                "restrictionMode": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "scopes": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "securityViolations": {
+                  "bsonType": "int"
+                },
+                "successfulCalls": {
+                  "bsonType": "int"
+                },
+                "tenantId": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "totalCalls": {
+                  "bsonType": "int"
+                },
+                "updatedAt": {
+                  "bsonType": "date"
+                },
+                "webhookEvents": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "webhookUrl": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "websiteOrigins": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "_id",
+                "avgResponseTimeMs",
+                "canRead",
+                "canWrite",
+                "createdAt",
+                "currentDailyUsage",
+                "currentHourUsage",
+                "currentMinuteUsage",
+                "currentMonthlyUsage",
+                "enableAnalytics",
+                "failedCalls",
+                "isActive",
+                "key",
+                "lastQuotaResetAt",
+                "name",
+                "p95ResponseTimeMs",
+                "p99ResponseTimeMs",
+                "requireHttps",
+                "securityViolations",
+                "successfulCalls",
+                "totalCalls",
+                "updatedAt"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "validator applied on api_keys",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "api_keys"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationLevel",
+              "op": "$eq",
+              "value": "strict"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationAction",
+              "op": "$eq",
+              "value": "error"
+            },
+            {
+              "kind": "field",
+              "field": "options.validator.$jsonSchema",
+              "op": "$eq",
+              "value": {
+                "additionalProperties": false,
+                "bsonType": "object",
+                "properties": {
+                  "_id": {
+                    "bsonType": "string"
+                  },
+                  "alertThresholds": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "allowedMethods": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "allowedUserAgents": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "avgResponseTimeMs": {
+                    "bsonType": "int"
+                  },
+                  "blockedUserAgents": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "canRead": {
+                    "bsonType": "bool"
+                  },
+                  "canWrite": {
+                    "bsonType": "bool"
+                  },
+                  "countryRestrictions": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "createdAt": {
+                    "bsonType": "date"
+                  },
+                  "currentDailyUsage": {
+                    "bsonType": "int"
+                  },
+                  "currentHourUsage": {
+                    "bsonType": "int"
+                  },
+                  "currentMinuteUsage": {
+                    "bsonType": "int"
+                  },
+                  "currentMonthlyUsage": {
+                    "bsonType": "int"
+                  },
+                  "dailyQuota": {
+                    "bsonType": [
+                      "null",
+                      "int"
+                    ]
+                  },
+                  "description": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "enableAnalytics": {
+                    "bsonType": "bool"
+                  },
+                  "expiresAt": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "failedCalls": {
+                    "bsonType": "int"
+                  },
+                  "hourQuota": {
+                    "bsonType": [
+                      "null",
+                      "int"
+                    ]
+                  },
+                  "ipRestrictions": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "isActive": {
+                    "bsonType": "bool"
+                  },
+                  "key": {
+                    "bsonType": "string"
+                  },
+                  "lastFailedAt": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "lastFailureReason": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "lastQuotaResetAt": {
+                    "bsonType": "date"
+                  },
+                  "lastSecurityViolation": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "lastUsedAt": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "metadata": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "minuteQuota": {
+                    "bsonType": [
+                      "null",
+                      "int"
+                    ]
+                  },
+                  "monthlyQuota": {
+                    "bsonType": [
+                      "null",
+                      "int"
+                    ]
+                  },
+                  "name": {
+                    "bsonType": "string"
+                  },
+                  "originRestrictions": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "p95ResponseTimeMs": {
+                    "bsonType": "int"
+                  },
+                  "p99ResponseTimeMs": {
+                    "bsonType": "int"
+                  },
+                  "quotaWindow_day": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "quotaWindow_hour": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "quotaWindow_minute": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "quotaWindow_month": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "rateLimitPerSecond": {
+                    "bsonType": [
+                      "null",
+                      "int"
+                    ]
+                  },
+                  "requireHttps": {
+                    "bsonType": "bool"
+                  },
+                  "restrictionMode": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "scopes": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "securityViolations": {
+                    "bsonType": "int"
+                  },
+                  "successfulCalls": {
+                    "bsonType": "int"
+                  },
+                  "tenantId": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "totalCalls": {
+                    "bsonType": "int"
+                  },
+                  "updatedAt": {
+                    "bsonType": "date"
+                  },
+                  "webhookEvents": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "webhookUrl": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "websiteOrigins": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  }
+                },
+                "required": [
+                  "_id",
+                  "avgResponseTimeMs",
+                  "canRead",
+                  "canWrite",
+                  "createdAt",
+                  "currentDailyUsage",
+                  "currentHourUsage",
+                  "currentMinuteUsage",
+                  "currentMonthlyUsage",
+                  "enableAnalytics",
+                  "failedCalls",
+                  "isActive",
+                  "key",
+                  "lastQuotaResetAt",
+                  "name",
+                  "p95ResponseTimeMs",
+                  "p99ResponseTimeMs",
+                  "requireHttps",
+                  "securityViolations",
+                  "successfulCalls",
+                  "totalCalls",
+                  "updatedAt"
+                ]
+              }
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  }
+]

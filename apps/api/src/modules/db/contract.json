@@ -8,6 +8,10 @@
       "model": "ApiKey",
       "namespace": "__unbound__"
     },
+    "projects": {
+      "model": "Project",
+      "namespace": "__unbound__"
+    },
     "sync_analytics": {
       "model": "SyncAnalytics",
       "namespace": "__unbound__"
@@ -34,6 +38,22 @@
     },
     "sync_storage_items": {
       "model": "SyncStorageItem",
+      "namespace": "__unbound__"
+    },
+    "tenants": {
+      "model": "Tenant",
+      "namespace": "__unbound__"
+    },
+    "version_blobs": {
+      "model": "VersionBlob",
+      "namespace": "__unbound__"
+    },
+    "version_branches": {
+      "model": "VersionBranch",
+      "namespace": "__unbound__"
+    },
+    "version_commits": {
+      "model": "VersionCommit",
       "namespace": "__unbound__"
     }
   },
@@ -358,6 +378,13 @@
                   "kind": "scalar"
                 }
               },
+              "tenantId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
               "totalCalls": {
                 "nullable": false,
                 "type": {
@@ -533,6 +560,9 @@
                 "successfulCalls": {
                   "field": "successfulCalls"
                 },
+                "tenantId": {
+                  "field": "tenantId"
+                },
                 "totalCalls": {
                   "field": "totalCalls"
                 },
@@ -547,6 +577,56 @@
                 },
                 "websiteOrigins": {
                   "field": "websiteOrigins"
+                }
+              }
+            }
+          },
+          "Project": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "tenantId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "projects",
+              "fields": {
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "tenantId": {
+                  "field": "tenantId"
                 }
               }
             }
@@ -2015,6 +2095,256 @@
                 }
               }
             }
+          },
+          "Tenant": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "isActive": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tenants",
+              "fields": {
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "isActive": {
+                  "field": "isActive"
+                },
+                "name": {
+                  "field": "name"
+                }
+              }
+            }
+          },
+          "VersionBlob": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "metadata": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "owner": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "version_blobs",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "metadata": {
+                  "field": "metadata"
+                },
+                "owner": {
+                  "field": "owner"
+                },
+                "value": {
+                  "field": "value"
+                }
+              }
+            }
+          },
+          "VersionBranch": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "head": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "owner": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "version_branches",
+              "fields": {
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "head": {
+                  "field": "head"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "owner": {
+                  "field": "owner"
+                }
+              }
+            }
+          },
+          "VersionCommit": {
+            "fields": {
+              "branch": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "message": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "owner": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "parent": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "projected": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "tree": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "version_commits",
+              "fields": {
+                "branch": {
+                  "field": "branch"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "message": {
+                  "field": "message"
+                },
+                "owner": {
+                  "field": "owner"
+                },
+                "parent": {
+                  "field": "parent"
+                },
+                "projected": {
+                  "field": "projected"
+                },
+                "tree": {
+                  "field": "tree"
+                }
+              }
+            }
           }
         }
       }
@@ -2036,6 +2366,23 @@
                   ],
                   "kind": "mongo-index",
                   "unique": true
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "tenantId"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "createdAt"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "_id"
+                    }
+                  ],
+                  "kind": "mongo-index"
                 },
                 {
                   "keys": [
@@ -2272,6 +2619,12 @@
                     "successfulCalls": {
                       "bsonType": "int"
                     },
+                    "tenantId": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "totalCalls": {
                       "bsonType": "int"
                     },
@@ -2320,6 +2673,59 @@
                     "successfulCalls",
                     "totalCalls",
                     "updatedAt"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "projects": {
+              "indexes": [
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "tenantId"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "createdAt"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "_id"
+                    }
+                  ],
+                  "kind": "mongo-index"
+                }
+              ],
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "string"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "name": {
+                      "bsonType": "string"
+                    },
+                    "tenantId": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "createdAt",
+                    "name"
                   ]
                 },
                 "kind": "mongo-validator",
@@ -3262,6 +3668,23 @@
                     }
                   ],
                   "kind": "mongo-index"
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "userId"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "isDeleted"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "key"
+                    }
+                  ],
+                  "kind": "mongo-index"
                 }
               ],
               "kind": "mongo-collection",
@@ -3376,6 +3799,227 @@
                 "validationAction": "error",
                 "validationLevel": "strict"
               }
+            },
+            "tenants": {
+              "indexes": [
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "createdAt"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "_id"
+                    }
+                  ],
+                  "kind": "mongo-index"
+                }
+              ],
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "string"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "isActive": {
+                      "bsonType": "bool"
+                    },
+                    "name": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "createdAt",
+                    "isActive",
+                    "name"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "version_blobs": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "string"
+                    },
+                    "metadata": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "owner": {
+                      "bsonType": "string"
+                    },
+                    "value": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "owner",
+                    "value"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "version_branches": {
+              "indexes": [
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "owner"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "name"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "unique": true
+                }
+              ],
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "string"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "head": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "name": {
+                      "bsonType": "string"
+                    },
+                    "owner": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "createdAt",
+                    "name",
+                    "owner"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "version_commits": {
+              "indexes": [
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "owner"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "branch"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "createdAt"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "_id"
+                    }
+                  ],
+                  "kind": "mongo-index"
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "projected"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "createdAt"
+                    }
+                  ],
+                  "kind": "mongo-index"
+                }
+              ],
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "string"
+                    },
+                    "branch": {
+                      "bsonType": "string"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "message": {
+                      "bsonType": "string"
+                    },
+                    "owner": {
+                      "bsonType": "string"
+                    },
+                    "parent": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "projected": {
+                      "bsonType": "bool"
+                    },
+                    "tree": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "branch",
+                    "createdAt",
+                    "message",
+                    "owner",
+                    "projected",
+                    "tree"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
             }
           }
         },
@@ -3383,10 +4027,10 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "1a95af5d2ab1116e455eb6ae0cf76584b2914d5967617d2e06134a9b6e013d10"
+    "storageHash": "922f2f4a6ca1bdb756f67e35e7a16c99832ed21c005b9dcb30d9b1c2960585d4"
   },
   "execution": {
-    "executionHash": "e94835c56434cbd3853e0872fdd0dbeabf0c6f628951e33e600f23880d008422",
+    "executionHash": "c261b9688a1e2ddf9f6dbf1bae0c1978f193703bc6effb506da4936a42d13bb2",
     "mutations": {
       "defaults": [
         {
@@ -3423,6 +4067,17 @@
           "ref": {
             "entry": "api_keys",
             "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "projects",
+            "field": "createdAt",
             "namespace": "__unbound__"
           }
         },
@@ -3537,6 +4192,17 @@
           "ref": {
             "entry": "sync_storage_items",
             "field": "lastModified",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "tenants",
+            "field": "createdAt",
             "namespace": "__unbound__"
           }
         }

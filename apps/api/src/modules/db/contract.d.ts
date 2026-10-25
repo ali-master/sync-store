@@ -22,9 +22,9 @@ import type {
 } from '@prisma/orm-mongo/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'1a95af5d2ab1116e455eb6ae0cf76584b2914d5967617d2e06134a9b6e013d10'>;
+  StorageHashBase<'922f2f4a6ca1bdb756f67e35e7a16c99832ed21c005b9dcb30d9b1c2960585d4'>;
 export type ExecutionHash =
-  ExecutionHashBase<'e94835c56434cbd3853e0872fdd0dbeabf0c6f628951e33e600f23880d008422'>;
+  ExecutionHashBase<'c261b9688a1e2ddf9f6dbf1bae0c1978f193703bc6effb506da4936a42d13bb2'>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
 
@@ -95,11 +95,19 @@ export namespace Models {
     scopes: FieldOutputTypes['__unbound__']['ApiKey']['scopes'];
     securityViolations: FieldOutputTypes['__unbound__']['ApiKey']['securityViolations'];
     successfulCalls: FieldOutputTypes['__unbound__']['ApiKey']['successfulCalls'];
+    tenantId: FieldOutputTypes['__unbound__']['ApiKey']['tenantId'];
     totalCalls: FieldOutputTypes['__unbound__']['ApiKey']['totalCalls'];
     updatedAt: FieldOutputTypes['__unbound__']['ApiKey']['updatedAt'];
     webhookEvents: FieldOutputTypes['__unbound__']['ApiKey']['webhookEvents'];
     webhookUrl: FieldOutputTypes['__unbound__']['ApiKey']['webhookUrl'];
     websiteOrigins: FieldOutputTypes['__unbound__']['ApiKey']['websiteOrigins'];
+    readonly [RelationKeys]?: never;
+  };
+  export type unbound_Project = {
+    createdAt: FieldOutputTypes['__unbound__']['Project']['createdAt'];
+    id: FieldOutputTypes['__unbound__']['Project']['id'];
+    name: FieldOutputTypes['__unbound__']['Project']['name'];
+    tenantId: FieldOutputTypes['__unbound__']['Project']['tenantId'];
     readonly [RelationKeys]?: never;
   };
   export type unbound_SyncAnalytics = {
@@ -260,11 +268,45 @@ export namespace Models {
     conflicts: unbound_SyncConflict[];
     readonly [RelationKeys]?: 'audits' | 'conflicts';
   };
+  export type unbound_Tenant = {
+    createdAt: FieldOutputTypes['__unbound__']['Tenant']['createdAt'];
+    id: FieldOutputTypes['__unbound__']['Tenant']['id'];
+    isActive: FieldOutputTypes['__unbound__']['Tenant']['isActive'];
+    name: FieldOutputTypes['__unbound__']['Tenant']['name'];
+    readonly [RelationKeys]?: never;
+  };
+  export type unbound_VersionBlob = {
+    id: FieldOutputTypes['__unbound__']['VersionBlob']['id'];
+    metadata: FieldOutputTypes['__unbound__']['VersionBlob']['metadata'];
+    owner: FieldOutputTypes['__unbound__']['VersionBlob']['owner'];
+    value: FieldOutputTypes['__unbound__']['VersionBlob']['value'];
+    readonly [RelationKeys]?: never;
+  };
+  export type unbound_VersionBranch = {
+    createdAt: FieldOutputTypes['__unbound__']['VersionBranch']['createdAt'];
+    head: FieldOutputTypes['__unbound__']['VersionBranch']['head'];
+    id: FieldOutputTypes['__unbound__']['VersionBranch']['id'];
+    name: FieldOutputTypes['__unbound__']['VersionBranch']['name'];
+    owner: FieldOutputTypes['__unbound__']['VersionBranch']['owner'];
+    readonly [RelationKeys]?: never;
+  };
+  export type unbound_VersionCommit = {
+    branch: FieldOutputTypes['__unbound__']['VersionCommit']['branch'];
+    createdAt: FieldOutputTypes['__unbound__']['VersionCommit']['createdAt'];
+    id: FieldOutputTypes['__unbound__']['VersionCommit']['id'];
+    message: FieldOutputTypes['__unbound__']['VersionCommit']['message'];
+    owner: FieldOutputTypes['__unbound__']['VersionCommit']['owner'];
+    parent: FieldOutputTypes['__unbound__']['VersionCommit']['parent'];
+    projected: FieldOutputTypes['__unbound__']['VersionCommit']['projected'];
+    tree: FieldOutputTypes['__unbound__']['VersionCommit']['tree'];
+    readonly [RelationKeys]?: never;
+  };
 }
 
 export declare const models: {
   __unbound__: {
     ApiKey: Models.unbound_ApiKey;
+    Project: Models.unbound_Project;
     SyncAnalytics: Models.unbound_SyncAnalytics;
     SyncArchive: Models.unbound_SyncArchive;
     SyncAudit: Models.unbound_SyncAudit;
@@ -272,6 +314,10 @@ export declare const models: {
     SyncQuota: Models.unbound_SyncQuota;
     SyncSession: Models.unbound_SyncSession;
     SyncStorageItem: Models.unbound_SyncStorageItem;
+    Tenant: Models.unbound_Tenant;
+    VersionBlob: Models.unbound_VersionBlob;
+    VersionBranch: Models.unbound_VersionBranch;
+    VersionCommit: Models.unbound_VersionCommit;
   };
 };
 
@@ -291,6 +337,14 @@ type ContractBase = Omit<
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'key' }];
                   readonly kind: 'mongo-index';
                   readonly unique: true;
+                },
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'tenantId' },
+                    { readonly direction: 1; readonly field: 'createdAt' },
+                    { readonly direction: 1; readonly field: '_id' },
+                  ];
+                  readonly kind: 'mongo-index';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'isActive' }];
@@ -356,6 +410,7 @@ type ContractBase = Omit<
                     readonly scopes: { readonly bsonType: readonly ['null', 'string'] };
                     readonly securityViolations: { readonly bsonType: 'int' };
                     readonly successfulCalls: { readonly bsonType: 'int' };
+                    readonly tenantId: { readonly bsonType: readonly ['null', 'string'] };
                     readonly totalCalls: { readonly bsonType: 'int' };
                     readonly updatedAt: { readonly bsonType: 'date' };
                     readonly webhookEvents: { readonly bsonType: readonly ['null', 'string'] };
@@ -386,6 +441,35 @@ type ContractBase = Omit<
                     'totalCalls',
                     'updatedAt',
                   ];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
+            readonly projects: {
+              readonly indexes: readonly [
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'tenantId' },
+                    { readonly direction: 1; readonly field: 'createdAt' },
+                    { readonly direction: 1; readonly field: '_id' },
+                  ];
+                  readonly kind: 'mongo-index';
+                },
+              ];
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'string' };
+                    readonly createdAt: { readonly bsonType: 'date' };
+                    readonly name: { readonly bsonType: 'string' };
+                    readonly tenantId: { readonly bsonType: readonly ['null', 'string'] };
+                  };
+                  readonly required: readonly ['_id', 'createdAt', 'name'];
                 };
                 readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
@@ -853,6 +937,14 @@ type ContractBase = Omit<
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'priority' }];
                   readonly kind: 'mongo-index';
                 },
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'userId' },
+                    { readonly direction: 1; readonly field: 'isDeleted' },
+                    { readonly direction: 1; readonly field: 'key' },
+                  ];
+                  readonly kind: 'mongo-index';
+                },
               ];
               readonly kind: 'mongo-collection';
               readonly validator: {
@@ -910,6 +1002,132 @@ type ContractBase = Omit<
                 readonly validationLevel: 'strict';
               };
             };
+            readonly tenants: {
+              readonly indexes: readonly [
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'createdAt' },
+                    { readonly direction: 1; readonly field: '_id' },
+                  ];
+                  readonly kind: 'mongo-index';
+                },
+              ];
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'string' };
+                    readonly createdAt: { readonly bsonType: 'date' };
+                    readonly isActive: { readonly bsonType: 'bool' };
+                    readonly name: { readonly bsonType: 'string' };
+                  };
+                  readonly required: readonly ['_id', 'createdAt', 'isActive', 'name'];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
+            readonly version_blobs: {
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'string' };
+                    readonly metadata: { readonly bsonType: readonly ['null', 'string'] };
+                    readonly owner: { readonly bsonType: 'string' };
+                    readonly value: { readonly bsonType: 'string' };
+                  };
+                  readonly required: readonly ['_id', 'owner', 'value'];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
+            readonly version_branches: {
+              readonly indexes: readonly [
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'owner' },
+                    { readonly direction: 1; readonly field: 'name' },
+                  ];
+                  readonly kind: 'mongo-index';
+                  readonly unique: true;
+                },
+              ];
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'string' };
+                    readonly createdAt: { readonly bsonType: 'date' };
+                    readonly head: { readonly bsonType: readonly ['null', 'string'] };
+                    readonly name: { readonly bsonType: 'string' };
+                    readonly owner: { readonly bsonType: 'string' };
+                  };
+                  readonly required: readonly ['_id', 'createdAt', 'name', 'owner'];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
+            readonly version_commits: {
+              readonly indexes: readonly [
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'owner' },
+                    { readonly direction: 1; readonly field: 'branch' },
+                    { readonly direction: 1; readonly field: 'createdAt' },
+                    { readonly direction: 1; readonly field: '_id' },
+                  ];
+                  readonly kind: 'mongo-index';
+                },
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'projected' },
+                    { readonly direction: 1; readonly field: 'createdAt' },
+                  ];
+                  readonly kind: 'mongo-index';
+                },
+              ];
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'string' };
+                    readonly branch: { readonly bsonType: 'string' };
+                    readonly createdAt: { readonly bsonType: 'date' };
+                    readonly message: { readonly bsonType: 'string' };
+                    readonly owner: { readonly bsonType: 'string' };
+                    readonly parent: { readonly bsonType: readonly ['null', 'string'] };
+                    readonly projected: { readonly bsonType: 'bool' };
+                    readonly tree: { readonly bsonType: 'string' };
+                  };
+                  readonly required: readonly [
+                    '_id',
+                    'branch',
+                    'createdAt',
+                    'message',
+                    'owner',
+                    'projected',
+                    'tree',
+                  ];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
           };
         };
       };
@@ -924,6 +1142,10 @@ type ContractBase = Omit<
     readonly api_keys: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'ApiKey';
+    };
+    readonly projects: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'Project';
     };
     readonly sync_analytics: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -952,6 +1174,19 @@ type ContractBase = Omit<
     readonly sync_storage_items: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'SyncStorageItem';
+    };
+    readonly tenants: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Tenant' };
+    readonly version_blobs: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'VersionBlob';
+    };
+    readonly version_branches: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'VersionBranch';
+    };
+    readonly version_commits: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'VersionCommit';
     };
   };
   readonly domain: {
@@ -1140,6 +1375,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
               };
+              readonly tenantId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
               readonly totalCalls: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
@@ -1210,11 +1449,42 @@ type ContractBase = Omit<
                 readonly scopes: { readonly field: 'scopes' };
                 readonly securityViolations: { readonly field: 'securityViolations' };
                 readonly successfulCalls: { readonly field: 'successfulCalls' };
+                readonly tenantId: { readonly field: 'tenantId' };
                 readonly totalCalls: { readonly field: 'totalCalls' };
                 readonly updatedAt: { readonly field: 'updatedAt' };
                 readonly webhookEvents: { readonly field: 'webhookEvents' };
                 readonly webhookUrl: { readonly field: 'webhookUrl' };
                 readonly websiteOrigins: { readonly field: 'websiteOrigins' };
+              };
+            };
+          };
+          readonly Project: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly tenantId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'projects';
+              readonly fields: {
+                readonly createdAt: { readonly field: 'createdAt' };
+                readonly id: { readonly field: '_id' };
+                readonly name: { readonly field: 'name' };
+                readonly tenantId: { readonly field: 'tenantId' };
               };
             };
           };
@@ -2002,6 +2272,151 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly Tenant: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly isActive: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'tenants';
+              readonly fields: {
+                readonly createdAt: { readonly field: 'createdAt' };
+                readonly id: { readonly field: '_id' };
+                readonly isActive: { readonly field: 'isActive' };
+                readonly name: { readonly field: 'name' };
+              };
+            };
+          };
+          readonly VersionBlob: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly metadata: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly owner: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly value: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'version_blobs';
+              readonly fields: {
+                readonly id: { readonly field: '_id' };
+                readonly metadata: { readonly field: 'metadata' };
+                readonly owner: { readonly field: 'owner' };
+                readonly value: { readonly field: 'value' };
+              };
+            };
+          };
+          readonly VersionBranch: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
+              };
+              readonly head: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly owner: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'version_branches';
+              readonly fields: {
+                readonly createdAt: { readonly field: 'createdAt' };
+                readonly head: { readonly field: 'head' };
+                readonly id: { readonly field: '_id' };
+                readonly name: { readonly field: 'name' };
+                readonly owner: { readonly field: 'owner' };
+              };
+            };
+          };
+          readonly VersionCommit: {
+            readonly fields: {
+              readonly branch: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly message: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly owner: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly parent: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly projected: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
+              };
+              readonly tree: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'version_commits';
+              readonly fields: {
+                readonly branch: { readonly field: 'branch' };
+                readonly createdAt: { readonly field: 'createdAt' };
+                readonly id: { readonly field: '_id' };
+                readonly message: { readonly field: 'message' };
+                readonly owner: { readonly field: 'owner' };
+                readonly parent: { readonly field: 'parent' };
+                readonly projected: { readonly field: 'projected' };
+                readonly tree: { readonly field: 'tree' };
+              };
+            };
+          };
         };
       };
     };
@@ -2034,6 +2449,14 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'api_keys';
             readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'projects';
+            readonly field: 'createdAt';
             readonly namespace: '__unbound__';
           };
         },
@@ -2115,6 +2538,14 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'sync_storage_items';
             readonly field: 'lastModified';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'tenants';
+            readonly field: 'createdAt';
             readonly namespace: '__unbound__';
           };
         },

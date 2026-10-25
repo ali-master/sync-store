@@ -56,7 +56,20 @@ export class Database implements OnModuleInit, OnApplicationShutdown {
   }
 
   /** Runs server-side analytics without loading all tenant data into memory. */
-  aggregate<T extends Document>(collection: string, pipeline: Document[]): Promise<T[]> {
-    return this.native.collection(collection).aggregate<T>(pipeline).toArray();
+  async aggregate<T extends Document>(collection: string, pipeline: Document[]): Promise<T[]> {
+    if (Object.hasOwn(contractJson.roots, collection)) {
+      const plan = this.prisma.raw
+        .collection(collection as keyof Contract["roots"])
+        .aggregate<T>(pipeline)
+        .build();
+      return (await this.prisma.runtime())
+        .query(plan, { signal: AbortSignal.timeout(10000) })
+        .toArray();
+    }
+    // Operational projections and time-series collections have no Prisma contract model.
+    return this.native
+      .collection(collection)
+      .aggregate<T>(pipeline, { maxTimeMS: 10000 })
+      .toArray();
   }
 }

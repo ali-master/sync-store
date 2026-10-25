@@ -1,6 +1,8 @@
 // use prisma-8
 
 model ApiKey {
+  tenantId String?
+  @@index([tenantId, createdAt, id])
   id         String    @id @map("_id")
   name       String
   key        String    @unique
@@ -119,6 +121,7 @@ model SyncStorageItem {
   @@index([isDeleted])
   @@index([ttl])
   @@index([priority])
+  @@index([userId, isDeleted, key])
   @@map("sync_storage_items")
 }
 
@@ -352,3 +355,49 @@ model SyncArchive {
   @@map("sync_archives")
 }
 
+
+model Tenant {
+  id String @id @map("_id")
+  name String
+  isActive Bool
+  createdAt Date @onCreate(now())
+  @@index([createdAt, id])
+  @@map("tenants")
+}
+model Project {
+  id String @id @map("_id")
+  tenantId String?
+  name String
+  createdAt Date @onCreate(now())
+  @@index([tenantId, createdAt, id])
+  @@map("projects")
+}
+model VersionBranch {
+  id String @id @map("_id")
+  owner String
+  name String
+  head String?
+  createdAt Date
+  @@unique([owner, name])
+  @@map("version_branches")
+}
+model VersionCommit {
+  id String @id @map("_id")
+  owner String
+  branch String
+  parent String?
+  tree String
+  message String
+  createdAt Date
+  projected Bool
+  @@index([owner, branch, createdAt, id])
+  @@index([projected, createdAt])
+  @@map("version_commits")
+}
+model VersionBlob {
+  id String @id @map("_id")
+  owner String
+  value String
+  metadata String?
+  @@map("version_blobs")
+}
