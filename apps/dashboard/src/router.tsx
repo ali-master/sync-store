@@ -27,6 +27,8 @@ const sections = [
   "storage",
   "keys",
   "projects",
+  "tenants",
+  "versioning",
   "history",
   "sessions",
   "conflicts",

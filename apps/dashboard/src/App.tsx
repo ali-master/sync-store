@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch, Link } from "@tanstack/react-router";
 import { useSession } from "./lib/session";
 import { RecordsTable } from "./components/records-table";
+import { Versioning } from "./components/versioning";
 import { Reports } from "./components/reports";
 import { KeyPolicyFields } from "./components/key-policy-fields";
 import { readKeyPolicy } from "./lib/key-policy";
@@ -26,6 +27,8 @@ const sections = [
   ["overview", "Overview", "◈"],
   ["storage", "Data explorer", "▤"],
   ["keys", "API keys", "⌘"],
+  ["tenants", "Tenants", "◎"],
+  ["versioning", "Branches & commits", "⑂"],
   ["projects", "Projects", "◫"],
   ["history", "Version history", "↶"],
   ["sessions", "Connections", "⇄"],
@@ -37,6 +40,9 @@ const sections = [
   ["system", "System", "⚙"],
 ];
 const descriptions: Record<string, string> = {
+  tenants:
+    "Separate customer workspaces, each with its own administrator, projects, data and reports.",
+  versioning: "Branch your data, inspect immutable commits and restore a complete snapshot safely.",
   changes:
     "Track data changes, retained history and storage growth. Save report views and export CSV.",
   usage: "Request trends, top consumers and live quota forecasts for each project and API key.",
@@ -61,6 +67,7 @@ const descriptions: Record<string, string> = {
   system: "Connection health, runtime information and current operational boundaries.",
 };
 const columns: Record<string, string[]> = {
+  tenants: ["name", "_id", "isActive", "createdAt"],
   history: ["key", "userId", "version", "isDeleted", "lastModified", "expiresAt"],
   projects: ["name", "_id", "createdAt"],
   storage: ["key", "userId", "version", "size", "lastModified"],
@@ -202,7 +209,8 @@ export default function App({ section }: { section: string }) {
         token,
         signal,
       ),
-    enabled: Boolean(token) && !["system", "health", "usage", "changes"].includes(section),
+    enabled:
+      Boolean(token) && !["system", "health", "usage", "changes", "versioning"].includes(section),
   });
   const mutation = useMutation({
     mutationFn: (action: () => Promise<void>) => action(),
@@ -377,6 +385,7 @@ export default function App({ section }: { section: string }) {
           <Button type="submit" variant="default" disabled={busy}>
             {busy ? "Connecting…" : "Open console →"}
           </Button>
+
           {error && (
             <p
               role="alert"
@@ -425,7 +434,7 @@ export default function App({ section }: { section: string }) {
           S
         </span>
         <div>
-          <b>Your installation</b>
+          <b>{overview?.tenantId ? "Tenant workspace" : "Your installation"}</b>
           <small>{overview?.database || "Connecting…"}</small>
         </div>
         <span className="inline-block size-1.5 shrink-0 rounded-full bg-emerald-500" />
@@ -434,28 +443,30 @@ export default function App({ section }: { section: string }) {
         WORKSPACE
       </p>
       <nav aria-label="Console navigation">
-        {sections.map(([id, label, icon], i) => (
-          <div key={id}>
-            {i === 6 && (
-              <p className="mb-3 mt-6 px-3 text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
-                OBSERVABILITY
-              </p>
-            )}
-            <Link
-              to={id === "overview" ? "/" : "/" + id}
-              search={{ page: 1, q: "" }}
-              disabled={busy}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
-              aria-current={section === id ? "page" : undefined}
-            >
-              <span aria-hidden="true">{icon}</span>
-              {label}
-              {id === "conflicts" && overview && overview.counts.conflicts > 0 && (
-                <em>{overview.counts.conflicts}</em>
+        {sections
+          .filter(([id]) => id !== "tenants" || overview?.tenantId === null)
+          .map(([id, label, icon], i) => (
+            <div key={id}>
+              {i === 6 && (
+                <p className="mb-3 mt-6 px-3 text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
+                  OBSERVABILITY
+                </p>
               )}
-            </Link>
-          </div>
-        ))}
+              <Link
+                to={id === "overview" ? "/" : "/" + id}
+                search={{ page: 1, q: "" }}
+                disabled={busy}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+                aria-current={section === id ? "page" : undefined}
+              >
+                <span aria-hidden="true">{icon}</span>
+                {label}
+                {id === "conflicts" && overview && overview.counts.conflicts > 0 && (
+                  <em>{overview.counts.conflicts}</em>
+                )}
+              </Link>
+            </div>
+          ))}
       </nav>
       <div className="mt-auto space-y-5 pt-12 text-xs [&>a]:text-muted-foreground [&>div]:flex [&>div]:items-center [&>div]:gap-3 [&>div]:border-t [&>div]:pt-5 [&_b]:block [&_small]:mt-1 [&_small]:block [&_small]:text-[10px] [&_small]:text-muted-foreground">
         <a href="/api/docs" target="_blank" rel="noreferrer">
@@ -466,8 +477,8 @@ export default function App({ section }: { section: string }) {
             AD
           </span>
           <div>
-            <b>Administrator</b>
-            <small>Installation access</small>
+            <b>{overview?.tenantId ? "Tenant administrator" : "Administrator"}</b>
+            <small>{overview?.tenantId ? "Tenant access" : "Installation access"}</small>
           </div>
           <Button variant="outline" onClick={logout} disabled={busy} aria-label="Sign out">
             ↗
@@ -537,7 +548,7 @@ export default function App({ section }: { section: string }) {
               </Button>
             )}
           </div>
-          {section === "projects" && (
+          {(section === "projects" || (section === "tenants" && overview?.tenantId === null)) && (
             <form
               className="flex flex-wrap items-end gap-4 rounded-2xl border bg-card p-5"
               onSubmit={(event) => {
@@ -545,18 +556,26 @@ export default function App({ section }: { section: string }) {
                 const form = event.currentTarget;
                 const data = new FormData(form);
                 void run(async () => {
-                  await request("projects", "POST", { name: data.get("name") });
+                  const created = await request(section, "POST", { name: data.get("name") });
+                  if (created.key) {
+                    setSecret(created.key);
+                    setSelected(created);
+                  }
                   form.reset();
-                  setNotice("Project created. Create an API key bound to this project.");
+                  setNotice(
+                    section === "tenants"
+                      ? "Tenant created. Save its administrator key and use it to sign in to the tenant workspace."
+                      : "Project created. Create an API key bound to this project.",
+                  );
                 });
               }}
             >
               <Label className="min-w-0 flex-1">
-                Project name
+                {section === "tenants" ? "Tenant name" : "Project name"}
                 <Input name="name" required maxLength={100} placeholder="Production workspace" />
               </Label>
               <Button type="submit" disabled={busy}>
-                Create project
+                Create {section === "tenants" ? "tenant" : "project"}
               </Button>
             </form>
           )}
@@ -670,7 +689,9 @@ export default function App({ section }: { section: string }) {
               </div>
             </>
           )}
-          {["health", "usage", "changes"].includes(section) ? (
+          {section === "versioning" ? (
+            <Versioning request={request} sessionId={sessionId} tenantId={overview?.tenantId} />
+          ) : ["health", "usage", "changes"].includes(section) ? (
             <Reports kind={section} request={request} sessionId={sessionId} />
           ) : section === "system" && overview ? (
             <section className="grid gap-5 xl:grid-cols-2">
@@ -816,6 +837,25 @@ export default function App({ section }: { section: string }) {
               >
                 {error}
               </p>
+            )}
+            {section === "tenants" && selected && (
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() =>
+                  setConfirm({
+                    text: `${selected.isActive ? "Suspend" : "Resume"} ${selected.name}? This affects every credential in this tenant.`,
+                    run: async () => {
+                      await request("tenants/" + selected._id, "PATCH", {
+                        isActive: !selected.isActive,
+                      });
+                      setSelected(null);
+                    },
+                  })
+                }
+              >
+                {selected.isActive ? "Suspend" : "Resume"} tenant
+              </Button>
             )}
             {secret ? (
               <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-5 [&_h3]:font-semibold [&_p]:text-sm [&_p]:leading-6 [&_p]:text-muted-foreground [&_textarea]:min-h-24 [&_textarea]:font-mono [&_textarea]:text-xs">
