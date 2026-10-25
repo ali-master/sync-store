@@ -12,6 +12,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost) {
+    if (host.getType() === "ws") {
+      const message =
+        exception instanceof HttpException ? exception.message : "Storage request failed";
+      const response = { type: "error", error: message, timestamp: Date.now() };
+      const ack = host.getArgs()[2];
+      if (typeof ack === "function") ack(response);
+      else host.switchToWs().getClient().emit("exception", response);
+      return;
+    }
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<FastifyReply>();
     const request = ctx.getRequest<FastifyRequest>();

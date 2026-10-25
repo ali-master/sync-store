@@ -23,6 +23,7 @@ export class ResponseSerializerInterceptor<T> implements NestInterceptor<T> {
    * @param next {CallHandler}
    */
   intercept(context: ExecutionContext, next: CallHandler) {
+    if (context.getType() !== "http") return next.handle();
     /**
      * 1. Capture start time in high resolution before the handler executes.
      *    Using hrtime() so we can compute total processing time.
@@ -57,7 +58,7 @@ export class ResponseSerializerInterceptor<T> implements NestInterceptor<T> {
 
         // Insert the request trace header
         const requestId = getTraceId();
-        res.headers[TRACE_ID_TOKEN_HEADER] = requestId;
+        res.header(TRACE_ID_TOKEN_HEADER, requestId);
 
         const contentType = res.getHeaders()["content-type"] as string;
         /**
@@ -71,7 +72,7 @@ export class ResponseSerializerInterceptor<T> implements NestInterceptor<T> {
         /**
          * 4. Optionally apply the serializer DTO (if any).
          */
-        const payload = body || {};
+        const payload = body;
         const ResponsePayloadDto =
           this.reflector.get("SERIALIZER_DTO", context.getHandler()) ?? false;
 

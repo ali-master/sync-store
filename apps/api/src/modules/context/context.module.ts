@@ -15,7 +15,7 @@ import { APP_INTERCEPTOR } from "@nestjs/core";
 import { TRACE_ID_TOKEN_HEADER } from "@root/constants";
 // Types
 import type { Type } from "@nestjs/common";
-import type { ClsModuleProxyProviderOptions } from "nestjs-cls/dist/src/lib/proxy-provider/proxy-provider.interfaces";
+import type { ClsModuleProxyProviderOptions } from "nestjs-cls";
 
 @Global()
 @Module({
@@ -29,6 +29,7 @@ import type { ClsModuleProxyProviderOptions } from "nestjs-cls/dist/src/lib/prox
         interceptor: {
           mount: true,
           idGenerator: (ctx) => {
+            if (ctx.getType() !== "http") return createUniqueId();
             const req = ctx.switchToHttp().getRequest();
             const requestId = req.headers[TRACE_ID_TOKEN_HEADER] ?? createUniqueId();
             req.headers[TRACE_ID_TOKEN_HEADER] = requestId;

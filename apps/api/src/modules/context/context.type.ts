@@ -1,7 +1,6 @@
 // Types
 import type { Dictionary, getRequestDeviceInfo } from "@usex/utils";
-import type { ClsStore } from "nestjs-cls/dist/src/lib/cls.options";
-import type { RecursiveKeyOf } from "nestjs-cls/dist/src/types/recursive-key-of.type";
+import type { ClsStore, ClsService } from "nestjs-cls";
 
 export interface AppContext<P = any> extends ClsStore {
   readonly payload: P;
@@ -51,4 +50,4 @@ export interface AppContext<P = any> extends ClsStore {
   readonly timestamp: string;
 }
 
-export type ContextStorage<T = any> = RecursiveKeyOf<AppContext<T>>;
+export type ContextStorage<T = any> = Parameters<ClsService<AppContext<T>>["has"]>[0];

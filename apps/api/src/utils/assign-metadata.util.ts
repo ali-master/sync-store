@@ -16,14 +16,10 @@ export async function assignMetadata(
   context: ExecutionContext,
   fromGuard = false,
 ) {
+  if (!fromGuard && context.getType() !== "http") return;
   const request = fromGuard ? context : context.switchToHttp().getRequest();
   if (request.url.includes("api/v1/metrics") || request.url.includes("api/v1/health-check")) {
     return {};
-  }
-
-  let accessToken = getHeader(request.headers, "authorization");
-  if (accessToken && accessToken.startsWith("Bearer ")) {
-    accessToken = accessToken.substring(7);
   }
 
   // API Key

@@ -12,7 +12,7 @@ export const validationPipeOptions: ValidationPipeOptions = {
   transform: true,
   forbidNonWhitelisted: true,
   forbidUnknownValues: true,
-  validateCustomDecorators: true,
+  validateCustomDecorators: false,
   stopAtFirstError: true,
   skipNullProperties: false,
   skipUndefinedProperties: false,
