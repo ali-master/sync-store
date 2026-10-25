@@ -1,0 +1,13 @@
+# Compose 2.24.4+ supports !reset. Use together with compose.yml.
+services:
+  api:
+    ports: !reset []
+  proxy:
+    image: nginx:stable-alpine
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    volumes:
+      - ./docker/nginx/scale.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    restart: unless-stopped
