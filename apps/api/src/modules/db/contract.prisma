@@ -1,0 +1,354 @@
+// use prisma-8
+
+model ApiKey {
+  id         String    @id @map("_id")
+  name       String
+  key        String    @unique
+  isActive   Bool   
+  expiresAt  Date?
+  lastUsedAt Date?
+  createdAt  Date  @onCreate(now())
+  updatedAt  Date  @onCreate(now()) @onUpdate(now())
+
+  // Description and metadata
+  description String? 
+  metadata    String?  
+
+  // Basic Permissions
+  canRead  Bool 
+  canWrite Bool 
+
+  // Scopes - what resources the key can access
+  scopes String?   // Array of scope strings
+
+  // IP and Country Access Restrictions
+  ipRestrictions      String?   // Array of IP addresses or CIDR ranges
+  countryRestrictions String?   // Array of country codes (ISO 3166-1 alpha-2)
+  restrictionMode     String?  // "allow" or "deny"
+
+  // Quota Management (multiple time periods)
+  minuteQuota  Int32? // Requests per minute
+  hourQuota    Int32? // Requests per hour
+  dailyQuota   Int32? // Requests per day
+  monthlyQuota Int32? // Requests per month
+
+  // Current usage counters (these reset based on time periods)
+  currentMinuteUsage  Int32      
+  currentHourUsage    Int32      
+  currentDailyUsage   Int32      
+  currentMonthlyUsage Int32      
+  lastQuotaResetAt    Date @onCreate(now())
+  quotaWindow_minute Date?
+  quotaWindow_hour Date?
+  quotaWindow_day Date?
+  quotaWindow_month Date?
+
+  // Origin and Website Restrictions
+  originRestrictions String?   // Array of OriginRestriction objects
+  websiteOrigins     String?   // Array of allowed origins/domains
+
+  // Security and Rate Limiting
+  rateLimitPerSecond Int32?     // Rate limit per second
+  allowedUserAgents  String?   // Array of allowed user agent patterns
+  blockedUserAgents  String?   // Array of blocked user agent patterns
+  requireHttps       Bool  // Require HTTPS for all requests
+  allowedMethods     String?   // Array of allowed HTTP methods
+
+  // Analytics and Monitoring
+  enableAnalytics Bool 
+  alertThresholds String?   // AlertThreshold object
+  webhookUrl      String?  // Webhook URL for notifications
+  webhookEvents   String?   // Array of events that trigger webhooks
+
+  // Usage statistics
+  totalCalls        Int32       
+  successfulCalls   Int32       
+  failedCalls       Int32       
+  lastFailedAt      Date?
+  lastFailureReason String?
+
+  // Performance metrics
+  avgResponseTimeMs Int32 
+  p95ResponseTimeMs Int32 
+  p99ResponseTimeMs Int32 
+
+  // Security metrics
+  securityViolations    Int32       
+  lastSecurityViolation Date?
+
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("api_keys")
+}
+// Sync Storage Models with Advanced Features
+
+// Core storage item model
+model SyncStorageItem {
+  id           String   @id @map("_id")
+  userId       String
+  instanceId   String
+  key          String
+  value        String    // JSON serialized value
+  metadata     String?   // JSON serialized metadata
+  version      Int32      
+  timestamp    Int64
+  lastModified Date @onCreate(now())
+  isDeleted    Bool  
+  // Pending immutable events are committed atomically with this item.
+  outbox       Json?
+  leaseToken   String?
+  leaseUntil   Date?
+
+  // Advanced features
+  size            Int32        // Size in bytes for quota management
+  compressionType String? // gzip, lz4, etc.
+  encryptionType  String? // AES-256, ChaCha20, etc.
+  tags            String?    // JSON array of tags for organization
+  ttl             Date? // Time to live for automatic cleanup
+  priority        Int32        // Priority for conflict resolution
+
+  // Relationships
+  conflicts SyncConflict[]
+  audits    SyncAudit[]
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([instanceId])
+  @@index([timestamp])
+  @@index([lastModified])
+  @@index([isDeleted])
+  @@index([ttl])
+  @@index([priority])
+  @@map("sync_storage_items")
+}
+
+// User session and instance tracking
+model SyncSession {
+  id             String    @id @map("_id")
+  userId         String
+  instanceId     String
+  socketId       String?
+  connectionType String     // websocket, sse, polling
+  connectedAt    Date  @onCreate(now())
+  lastActivity   Date  @onCreate(now())
+  disconnectedAt Date?
+
+  // Connection metadata
+  userAgent String?
+  ipAddress String?
+  country   String?
+  city      String?
+  device    String?  // JSON serialized device info
+
+  // Feature flags for this session
+  features String?  // JSON array of enabled features
+
+  // Performance metrics
+  latencyMs       Int32 
+  packetsReceived Int32 
+  packetsSent     Int32 
+
+  @@unique([userId, instanceId, socketId])
+  @@index([userId])
+  @@index([instanceId])
+  @@index([connectedAt])
+  @@index([lastActivity])
+  @@index([ipAddress])
+  @@map("sync_sessions")
+}
+
+// Smart conflict resolution and history
+model SyncConflict {
+  id                 String @id @map("_id")
+  itemId             String
+  userId             String
+  conflictType       String // concurrent_update, version_mismatch, schema_change
+  resolutionStrategy String // last_write_wins, merge, manual, ai_assisted
+  status             String  // pending, resolved, escalated
+
+  // Conflict data
+  originalValue    String   // JSON
+  conflictingValue String   // JSON
+  resolvedValue    String?  // JSON
+  resolutionReason String?
+
+  // Auto-resolution metadata
+  confidence    Double? // AI confidence score (0.0 - 1.0)
+  aiModel       String? // Model used for resolution
+  humanReviewed Bool 
+
+  createdAt  Date  @onCreate(now())
+  resolvedAt Date?
+
+  // Relationships
+  item SyncStorageItem @relation(fields: [itemId], references: [id])
+
+  @@index([itemId])
+  @@index([userId])
+  @@index([status])
+  @@index([conflictType])
+  @@index([createdAt])
+  @@map("sync_conflicts")
+}
+
+model SyncAudit {
+  id         String  @id @map("_id")
+  itemId     String?
+  userId     String
+  instanceId String?
+  action     String // create, update, delete, read, sync, conflict
+
+  // Change tracking
+  oldValue   String?  // JSON
+  newValue   String?  // JSON
+  changeSize Int32      // Size of change in bytes
+
+  // Context
+  ipAddress String?
+  userAgent String?
+  country   String?
+  sessionId String?
+
+  // Performance metrics
+  executionTimeMs  Int32    
+  memoryUsageMb    Double? 
+  networkLatencyMs Int32?   
+
+  // Metadata
+  metadata String?  // JSON
+  tags     String?  // JSON array
+
+  createdAt Date @onCreate(now())
+
+  // Relationships
+  item SyncStorageItem? @relation(fields: [itemId], references: [id])
+
+  @@index([userId])
+  @@index([instanceId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("sync_audits")
+}
+
+// User and instance quota management
+model SyncQuota {
+  id     String @id @map("_id")
+  userId String @unique
+
+  // Storage quotas
+  maxStorageBytes     Int64  // 100MB default
+  currentStorageBytes Int64 
+  maxItems            Int32    
+  currentItems        Int32    
+
+  // Rate limiting quotas
+  requestsPerMinute Int32 
+  requestsPerHour   Int32 
+  requestsPerDay    Int32 
+
+  // Advanced quotas
+  maxInstancesPerUser   Int32 
+  maxConflictsPerHour   Int32 
+  maxAuditRetentionDays Int32 
+
+  // Current usage counters
+  currentMinuteRequests Int32 
+  currentHourRequests   Int32 
+  currentDailyRequests  Int32 
+
+  // Feature limits
+  aiResolutionEnabled  Bool 
+  encryptionEnabled    Bool 
+  compressionEnabled   Bool 
+  priorityQueueEnabled Bool 
+
+  lastResetAt Date @onCreate(now())
+  createdAt   Date @onCreate(now())
+  updatedAt   Date @onCreate(now()) @onUpdate(now())
+
+  @@map("sync_quotas")
+}
+
+// Advanced analytics and insights
+model SyncAnalytics {
+  id     String   @id @map("_id")
+  userId String
+  date   Date // Daily aggregation
+
+  // Usage metrics
+  totalOperations  Int32 
+  readOperations   Int32 
+  writeOperations  Int32 
+  deleteOperations Int32 
+  syncOperations   Int32 
+
+  // Performance metrics
+  avgResponseTimeMs Double 
+  p50ResponseTimeMs Int32   
+  p90ResponseTimeMs Int32   
+  p99ResponseTimeMs Int32   
+
+  // Storage metrics
+  storageUsedBytes Int64 
+  itemCount        Int32    
+  avgItemSizeBytes Int32    
+
+  // Conflict metrics
+  conflictsGenerated Int32   
+  conflictsResolved  Int32   
+  autoResolutionRate Double 
+
+  // Session metrics
+  activeSessions         Int32    
+  peakConcurrentSessions Int32    
+  avgSessionDurationMs   Int64 
+
+  // Error metrics
+  errorRate   Double 
+  timeoutRate Double 
+
+  // Advanced insights
+  dataHotspots           String?  // JSON array of most accessed keys
+  userBehaviorPatterns   String?  // JSON object with patterns
+  performanceBottlenecks String?  // JSON object with bottlenecks
+
+  createdAt Date @onCreate(now())
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("sync_analytics")
+}
+
+// Smart data lifecycle management
+model SyncArchive {
+  id             String  @id @map("_id")
+  userId         String
+  originalItemId String
+  key            String
+  value          String   // Compressed/encrypted data
+  metadata       String?  // JSON
+
+  // Archive metadata
+  archiveReason    String // ttl_expired, user_inactive, storage_quota, manual
+  originalSize     Int32    
+  compressedSize   Int32    
+  compressionRatio Double  
+
+  // Timestamps
+  originalCreatedAt Date
+  archivedAt        Date  @onCreate(now())
+  expiresAt         Date? // When to delete from archive
+
+  // Retrieval info
+  retrievalCount  Int32       
+  lastRetrievedAt Date?
+
+  @@index([userId])
+  @@index([key])
+  @@index([archivedAt])
+  @@index([expiresAt])
+  @@map("sync_archives")
+}
+

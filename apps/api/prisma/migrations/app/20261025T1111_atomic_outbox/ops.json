@@ -1,0 +1,285 @@
+[
+  {
+    "id": "validator.sync_storage_items.update",
+    "label": "Update validator on sync_storage_items (added: leaseToken, leaseUntil, outbox)",
+    "operationClass": "widening",
+    "precheck": [
+      {
+        "description": "collection sync_storage_items exists",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "sync_storage_items"
+        },
+        "expect": "exists",
+        "object": "collection \"sync_storage_items\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "modify sync_storage_items",
+        "command": {
+          "kind": "collMod",
+          "collection": "sync_storage_items",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "string"
+                },
+                "compressionType": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "encryptionType": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "instanceId": {
+                  "bsonType": "string"
+                },
+                "isDeleted": {
+                  "bsonType": "bool"
+                },
+                "key": {
+                  "bsonType": "string"
+                },
+                "lastModified": {
+                  "bsonType": "date"
+                },
+                "leaseToken": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "leaseUntil": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "metadata": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "outbox": {
+                  "bsonType": [
+                    "object",
+                    "array",
+                    "string",
+                    "double",
+                    "int",
+                    "long",
+                    "bool",
+                    "null"
+                  ]
+                },
+                "priority": {
+                  "bsonType": "int"
+                },
+                "size": {
+                  "bsonType": "int"
+                },
+                "tags": {
+                  "bsonType": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "timestamp": {
+                  "bsonType": "long"
+                },
+                "ttl": {
+                  "bsonType": [
+                    "null",
+                    "date"
+                  ]
+                },
+                "userId": {
+                  "bsonType": "string"
+                },
+                "value": {
+                  "bsonType": "string"
+                },
+                "version": {
+                  "bsonType": "int"
+                }
+              },
+              "required": [
+                "_id",
+                "instanceId",
+                "isDeleted",
+                "key",
+                "lastModified",
+                "priority",
+                "size",
+                "timestamp",
+                "userId",
+                "value",
+                "version"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "validator applied on sync_storage_items",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "sync_storage_items"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationLevel",
+              "op": "$eq",
+              "value": "strict"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationAction",
+              "op": "$eq",
+              "value": "error"
+            },
+            {
+              "kind": "field",
+              "field": "options.validator.$jsonSchema",
+              "op": "$eq",
+              "value": {
+                "additionalProperties": false,
+                "bsonType": "object",
+                "properties": {
+                  "_id": {
+                    "bsonType": "string"
+                  },
+                  "compressionType": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "encryptionType": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "instanceId": {
+                    "bsonType": "string"
+                  },
+                  "isDeleted": {
+                    "bsonType": "bool"
+                  },
+                  "key": {
+                    "bsonType": "string"
+                  },
+                  "lastModified": {
+                    "bsonType": "date"
+                  },
+                  "leaseToken": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "leaseUntil": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "metadata": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "outbox": {
+                    "bsonType": [
+                      "object",
+                      "array",
+                      "string",
+                      "double",
+                      "int",
+                      "long",
+                      "bool",
+                      "null"
+                    ]
+                  },
+                  "priority": {
+                    "bsonType": "int"
+                  },
+                  "size": {
+                    "bsonType": "int"
+                  },
+                  "tags": {
+                    "bsonType": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "timestamp": {
+                    "bsonType": "long"
+                  },
+                  "ttl": {
+                    "bsonType": [
+                      "null",
+                      "date"
+                    ]
+                  },
+                  "userId": {
+                    "bsonType": "string"
+                  },
+                  "value": {
+                    "bsonType": "string"
+                  },
+                  "version": {
+                    "bsonType": "int"
+                  }
+                },
+                "required": [
+                  "_id",
+                  "instanceId",
+                  "isDeleted",
+                  "key",
+                  "lastModified",
+                  "priority",
+                  "size",
+                  "timestamp",
+                  "userId",
+                  "value",
+                  "version"
+                ]
+              }
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  }
+]

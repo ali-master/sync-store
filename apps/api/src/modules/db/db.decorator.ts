@@ -1,3 +1,5 @@
-import { InjectTransactionHost } from "@nestjs-cls/transactional";
+import { Inject } from "@nestjs/common";
+import { Database } from "./db.client";
 
-export const InjectDbTransactor = () => InjectTransactionHost();
+/** Injects the shared database connection. */
+export const InjectDatabase = () => Inject(Database);
