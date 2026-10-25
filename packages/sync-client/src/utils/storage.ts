@@ -52,6 +52,10 @@ export class DataStorage {
       cleanupInterval?: number;
     } = {},
   ) {
+    if (options.encryptionKey)
+      throw new Error(
+        "Client-side encryption is not implemented; do not store secrets in this cache",
+      );
     this.storage =
       options.storage ||
       (typeof localStorage !== "undefined" ? localStorage : this.createMemoryStorage());
@@ -255,7 +259,7 @@ export class DataStorage {
    * Check if item exists
    */
   hasItem(key: string): boolean {
-    return this.getItem(key) !== null;
+    return this.getItemWithMetadata(key) !== null;
   }
 
   /**
@@ -395,42 +399,14 @@ export class DataStorage {
     return btoa(result);
   }
 
-  private enforceStorageLimit(_key: string, itemSize: number): void {
-    if (itemSize > this.maxSize) {
-      throw new Error(`Item too large: ${itemSize} bytes exceeds limit of ${this.maxSize} bytes`);
+  /** Reject quota overflow without evicting unsynchronized data or the previous outbox. */
+  private enforceStorageLimit(key: string, itemSize: number): void {
+    let total = 0;
+    for (const storedKey of this.getAllKeys()) {
+      if (storedKey !== key)
+        total += new Blob([this.storage.getItem(this.getNamespacedKey(storedKey)) ?? ""]).size;
     }
-
-    const currentSize = this.getStats().totalSize;
-    const availableSpace = this.maxSize - currentSize;
-
-    if (itemSize > availableSpace) {
-      // Free up space using LRU strategy
-      this.freeUpSpace(itemSize - availableSpace);
-    }
-  }
-
-  private freeUpSpace(bytesNeeded: number): void {
-    const keys = this.getAllKeys();
-    const items = keys
-      .map((key) => ({
-        key,
-        item: this.getItemWithMetadata(key),
-      }))
-      .filter(({ item }) => item !== null)
-      .sort((a, b) => a.item!.metadata.timestamp - b.item!.metadata.timestamp);
-
-    let freedBytes = 0;
-    let removedCount = 0;
-
-    for (const { key, item } of items) {
-      if (freedBytes >= bytesNeeded) break;
-
-      this.removeItem(key);
-      freedBytes += item!.metadata.size;
-      removedCount++;
-    }
-
-    this.logger.info(`Freed ${freedBytes} bytes by removing ${removedCount} items`);
+    if (total + itemSize > this.maxSize) throw new Error("Storage quota exceeded");
   }
 
   private startCleanupInterval(intervalMs: number): void {
@@ -447,7 +423,9 @@ export class DataStorage {
       setItem: (key: string, value: string) => storage.set(key, value),
       removeItem: (key: string) => storage.delete(key),
       clear: () => storage.clear(),
-      length: storage.size,
+      get length() {
+        return storage.size;
+      },
       key: (index: number) => Array.from(storage.keys())[index] || null,
     } as Storage;
   }

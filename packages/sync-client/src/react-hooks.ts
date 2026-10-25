@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import type {
   RemoteStorageConfig,
   StorageItem,
@@ -32,7 +32,7 @@ export interface SyncStoreHookResult {
   getItem: (key: string) => any;
   setItem: (key: string, value: any, metadata?: Record<string, any>) => Promise<void>;
   removeItem: (key: string) => Promise<void>;
-  clear: () => void;
+  clear: () => Promise<void>;
   getAllKeys: () => string[];
   getAllItems: () => Promise<StorageItem[]>;
 
@@ -71,9 +71,17 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
 
   // Create storage instance (only once) - use stable config reference
   const storage = useMemo(
-    () => new RemoteStorage(config),
-    [config.userId, config.serverUrl, config.instanceId],
+    () => new RemoteStorage({ ...config, autoConnect: false }),
+    [
+      config.userId,
+      config.serverUrl,
+      config.instanceId,
+      config.apiKey,
+      config.mode,
+      config.namespace,
+    ],
   );
+  const lifecycle = useRef({ storage, generation: 0 });
 
   // State
   const [isConnected, setIsConnected] = useState(false);
@@ -164,12 +172,14 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
 
   // Cleanup on unmount
   useEffect(() => {
+    const generation = lifecycle.current.generation + 1;
+    lifecycle.current = { storage, generation };
     return () => {
-      // Disconnect properly before destroy to avoid lingering connections
-      if (storage.isConnected()) {
-        storage.disconnect();
-      }
-      storage.destroy();
+      // React StrictMode replays effects synchronously; only dispose after the final release.
+      queueMicrotask(() => {
+        if (lifecycle.current.storage !== storage || lifecycle.current.generation === generation)
+          storage.destroy();
+      });
     };
   }, [storage]);
 
@@ -473,7 +483,9 @@ export function useBatchOperations(storage: RemoteStorage) {
  * Hook for offline/online state management
  */
 export function useOfflineSupport(storage: RemoteStorage) {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine,
+  );
   const [queuedOperations] = useState(0);
 
   useEffect(() => {
@@ -496,16 +508,6 @@ export function useOfflineSupport(storage: RemoteStorage) {
     };
   }, [storage]);
 
-  // Monitor sync queue (this would require exposing queue size from RemoteStorage)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // This is a placeholder - you'd need to expose queue size from RemoteStorage
-      // setQueuedOperations(storage.getSyncQueueSize());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [storage]);
-
   return {
     isOnline,
     queuedOperations,
@@ -519,6 +521,9 @@ export function useOfflineSupport(storage: RemoteStorage) {
  * @deprecated Use useSyncStore instead
  */
 export interface UseRemoteStorageOptions {
+  apiKey?: string;
+  mode?: RemoteStorageConfig["mode"];
+  namespace?: string;
   serverUrl?: string;
   instanceId?: string;
   autoConnect?: boolean;
@@ -533,9 +538,12 @@ export function useRemoteStorage(userId: string, options?: UseRemoteStorageOptio
     serverUrl: options?.serverUrl || "http://localhost:3000",
     instanceId: options?.instanceId,
     autoConnect: options?.autoConnect ?? true,
+    apiKey: options?.apiKey,
+    mode: options?.mode,
+    namespace: options?.namespace,
   };
 
-  const result = useSyncStore({ config });
+  const result = useSyncStore({ config, autoConnect: config.autoConnect });
 
   return {
     storage: result.storage,

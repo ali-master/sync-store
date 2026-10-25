@@ -1,5 +1,5 @@
 import { BaseTransport } from "./base-transport";
-import { retry, withTimeout } from "../utils/retry";
+
 import type { TransportConfig, TransportResponse, StorageInfo } from "./types";
 import { TransportState, TransportMode } from "./types";
 import type { StorageItem, SyncFilter, BatchOperation, BatchResult, SyncEvent } from "../types";
@@ -15,55 +15,31 @@ import type { StorageItem, SyncFilter, BatchOperation, BatchResult, SyncEvent } 
  * @class HttpTransport
  * @extends {BaseTransport}
  */
+/** HTTP storage operations with bounded requests and per-key subscription polling. */
 export class HttpTransport extends BaseTransport {
-  /**
-   * Base URL for API endpoints
-   * @private
-   */
   private apiBaseUrl: string;
 
-  /**
-   * Default headers for all requests
-   * @private
-   */
   private defaultHeaders: Record<string, string>;
 
-  /**
-   * Polling interval for simulated real-time updates
-   * @private
-   */
   private pollingInterval?: NodeJS.Timeout;
 
-  /**
-   * Subscribed keys for polling
-   * @private
-   */
   private subscribedKeys = new Set<string>();
 
-  /**
-   * Last sync timestamp for polling optimization
-   * @private
-   */
-  private lastSyncTimestamp = 0;
+  private snapshots = new Map<string, string>();
+  private polling = false;
 
-  /**
-   * Creates a new HTTP transport instance
-   *
-   * @param {TransportConfig} config - Transport configuration
-   */
   constructor(config: TransportConfig) {
     super(config, "HTTP");
 
     // Construct API base URL
     const url = new URL(config.serverUrl);
-    this.apiBaseUrl = `${url.protocol}//${url.host}/sync-storage`;
+    this.apiBaseUrl = `${url.origin}${url.pathname.replace(/\/$/, "") || "/api/v1"}`;
 
     // Setup default headers based on server API requirements
     this.defaultHeaders = {
-      "Content-Type": "application/json",
-      "api-key": config.apiKey || "",
-      "user-id": config.userId,
-      "instance-id": config.instanceId,
+      "x-api-key": config.apiKey || "",
+      "x-user-id": config.userId,
+      "x-instance-id": config.instanceId,
     };
 
     this.logger.info("HTTP transport initialized", {
@@ -72,12 +48,6 @@ export class HttpTransport extends BaseTransport {
     });
   }
 
-  /**
-   * Connect to the server (validates connection)
-   *
-   * @returns {Promise<void>}
-   * @throws {Error} If connection validation fails
-   */
   async connect(): Promise<void> {
     if (this.isConnected()) {
       this.logger.debug("Already connected");
@@ -112,9 +82,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Disconnect from the server
-   */
   disconnect(): void {
     this.stopPolling();
     this.setState(TransportState.DISCONNECTED);
@@ -122,16 +89,6 @@ export class HttpTransport extends BaseTransport {
     this.logger.info("Disconnected from server");
   }
 
-  /**
-   * Set an item on the server
-   *
-   * @param {string} key - Storage key
-   * @param {any} value - Value to store
-   * @param {Record<string, any>} [metadata] - Optional metadata
-   * @param {number} [version] - Optional version
-   * @param {number} [timestamp] - Optional timestamp
-   * @returns {Promise<TransportResponse>}
-   */
   async setItem(
     key: string,
     value: any,
@@ -160,12 +117,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Get an item from the server
-   *
-   * @param {string} key - Storage key
-   * @returns {Promise<TransportResponse<StorageItem | null>>}
-   */
   async getItem(key: string): Promise<TransportResponse<StorageItem | null>> {
     const startTime = Date.now();
 
@@ -188,12 +139,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Remove an item from the server
-   *
-   * @param {string} key - Storage key
-   * @returns {Promise<TransportResponse>}
-   */
   async removeItem(key: string): Promise<TransportResponse> {
     const startTime = Date.now();
 
@@ -213,20 +158,18 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Get all items from the server
-   *
-   * @param {SyncFilter} [filter] - Optional filter
-   * @returns {Promise<TransportResponse<StorageItem[]>>}
-   */
   async getAllItems(filter?: SyncFilter): Promise<TransportResponse<StorageItem[]>> {
     const startTime = Date.now();
 
     try {
-      const queryParams = filter?.includePatterns?.[0]
-        ? `?prefix=${encodeURIComponent(filter.includePatterns[0])}`
-        : "";
-      const response = await this.makeRequest<StorageItem[]>("GET", `/items${queryParams}`);
+      const response = await this.makeRequest<StorageItem[]>("GET", "/items");
+      if (response.success && filter)
+        response.data = response.data?.filter(
+          (item) =>
+            (!filter.includePatterns?.length ||
+              filter.includePatterns.some((pattern) => new RegExp(pattern).test(item.key))) &&
+            !filter.excludePatterns?.some((pattern) => new RegExp(pattern).test(item.key)),
+        );
 
       this.trackRequest(startTime, response.success);
 
@@ -241,12 +184,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Execute batch operations
-   *
-   * @param {BatchOperation[]} operations - Operations to execute
-   * @returns {Promise<TransportResponse<BatchResult>>}
-   */
   async executeBatch(operations: BatchOperation[]): Promise<TransportResponse<BatchResult>> {
     const startTime = Date.now();
 
@@ -280,9 +217,9 @@ export class HttpTransport extends BaseTransport {
       const response = {
         success: true,
         data: {
-          success: true,
-          operations: results.map((r) => ({
-            operation: operations.find((op) => op.key === r.key) || operations[0],
+          success: results.every((result) => result.success),
+          operations: results.map((r, index) => ({
+            operation: operations[index],
             success: r.success,
             error: r.error,
             result: r.data,
@@ -305,12 +242,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Get all storage keys
-   *
-   * @param {string} [prefix] - Optional prefix filter
-   * @returns {Promise<TransportResponse<string[]>>}
-   */
   async getKeys(prefix?: string): Promise<TransportResponse<string[]>> {
     const startTime = Date.now();
 
@@ -331,11 +262,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Clear all storage for the user
-   *
-   * @returns {Promise<TransportResponse>}
-   */
   async clear(): Promise<TransportResponse> {
     const startTime = Date.now();
 
@@ -355,56 +281,10 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Get server storage information
-   *
-   * @returns {Promise<TransportResponse<StorageInfo>>}
-   */
   async getStorageInfo(): Promise<TransportResponse<StorageInfo>> {
-    const startTime = Date.now();
-
-    try {
-      // Storage info endpoint doesn't exist in server, simulate with available data
-      const keysResponse = await this.makeRequest<string[]>("GET", "/keys");
-
-      if (!keysResponse.success) {
-        return {
-          success: false,
-          error: keysResponse.error || "Failed to get storage info",
-        };
-      }
-
-      const response = {
-        success: true,
-        data: {
-          usagePercentage: 0, // Cannot determine from available endpoints
-          totalSize: 0, // Cannot determine from available endpoints
-          usedSize: 0, // Cannot determine from available endpoints
-          itemCount: keysResponse.data?.length || 0,
-          maxItemSize: 0, // Cannot determine from available endpoints
-          quotaRemaining: 0, // Cannot determine from available endpoints
-        } as StorageInfo,
-      };
-
-      this.trackRequest(startTime, response.success);
-
-      if (response.success) {
-        this.logger.debug("Storage info retrieved", response.data);
-      }
-
-      return response;
-    } catch (error) {
-      this.trackRequest(startTime, false);
-      throw error;
-    }
+    return { success: false, error: "Server storage information is not supported" };
   }
 
-  /**
-   * Get conflict history for a storage item
-   *
-   * @param {string} itemId - The item ID to get conflict history for
-   * @returns {Promise<TransportResponse>}
-   */
   async getConflictHistory(itemId: string): Promise<TransportResponse> {
     const startTime = Date.now();
 
@@ -427,13 +307,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Get conflict statistics for the current user
-   *
-   * @param {Date} [startDate] - Start date for statistics
-   * @param {Date} [endDate] - End date for statistics
-   * @returns {Promise<TransportResponse>}
-   */
   async getConflictStats(startDate?: Date, endDate?: Date): Promise<TransportResponse> {
     const startTime = Date.now();
 
@@ -461,13 +334,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Resolve a specific conflict
-   *
-   * @param {string} conflictId - The conflict ID to resolve
-   * @param {any} resolveDto - The resolution strategy and options
-   * @returns {Promise<TransportResponse>}
-   */
   async resolveConflict(conflictId: string, resolveDto: any): Promise<TransportResponse> {
     const startTime = Date.now();
 
@@ -491,12 +357,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Analyze potential conflicts for given data
-   *
-   * @param {any} data - The data to analyze for conflicts
-   * @returns {Promise<TransportResponse>}
-   */
   async analyzeConflict(data: any): Promise<TransportResponse> {
     const startTime = Date.now();
 
@@ -516,11 +376,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Get available conflict resolution strategies
-   *
-   * @returns {Promise<TransportResponse>}
-   */
   async getConflictStrategies(): Promise<TransportResponse> {
     const startTime = Date.now();
 
@@ -540,12 +395,6 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Subscribe to keys (starts polling in HTTP mode)
-   *
-   * @param {string[]} keys - Keys to subscribe to
-   * @returns {Promise<void>}
-   */
   async subscribe(keys: string[]): Promise<void> {
     keys.forEach((key) => this.subscribedKeys.add(key));
 
@@ -556,12 +405,6 @@ export class HttpTransport extends BaseTransport {
     this.logger.debug(`Subscribed to ${keys.length} keys (polling mode)`);
   }
 
-  /**
-   * Unsubscribe from keys
-   *
-   * @param {string[]} keys - Keys to unsubscribe from
-   * @returns {Promise<void>}
-   */
   async unsubscribe(keys: string[]): Promise<void> {
     keys.forEach((key) => this.subscribedKeys.delete(key));
 
@@ -572,92 +415,53 @@ export class HttpTransport extends BaseTransport {
     this.logger.debug(`Unsubscribed from ${keys.length} keys`);
   }
 
-  /**
-   * Get transport type
-   *
-   * @returns {TransportMode}
-   */
   getType(): TransportMode {
     return TransportMode.HTTP;
   }
 
-  /**
-   * Make an HTTP request with retry logic
-   *
-   * @private
-   * @template T
-   * @param {string} method - HTTP method
-   * @param {string} path - API path
-   * @param {any} [body] - Request body
-   * @returns {Promise<TransportResponse<T>>}
-   */
   private async makeRequest<T = any>(
     method: string,
     path: string,
     body?: any,
   ): Promise<TransportResponse<T>> {
-    const url = `${this.apiBaseUrl}${path}`;
-
-    const executeRequest = async (): Promise<TransportResponse<T>> => {
-      const options: RequestInit = {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.config.timeout ?? 5000);
+    try {
+      const response = await fetch(this.apiBaseUrl + path, {
         method,
-        headers: this.defaultHeaders,
-        ...(body && { body: JSON.stringify(body) }),
-      };
-
-      try {
-        const response = await withTimeout(fetch(url, options), this.config.timeout || 5000);
-
-        const contentType = response.headers.get("content-type");
-        const isJson = contentType?.includes("application/json");
-
-        if (response.ok) {
-          const data = isJson ? await response.json() : null;
-          return {
-            success: true,
-            data: data as T,
-            metadata: {
-              status: response.status,
-              headers: this.headersToObject(response.headers),
-            },
-          };
-        } else {
-          const error = isJson ? await response.json() : await response.text();
-
-          return {
-            success: false,
-            error: typeof error === "string" ? error : error.message || "Request failed",
-            metadata: {
-              status: response.status,
-              headers: this.headersToObject(response.headers),
-            },
-          };
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-
-        this.logger.error(`Request failed: ${method} ${path}`, { error: errorMessage });
-
-        return {
-          success: false,
-          error: errorMessage,
-        };
+        headers:
+          body === undefined
+            ? this.defaultHeaders
+            : { ...this.defaultHeaders, "content-type": "application/json" },
+        signal: controller.signal,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : undefined;
+      if (response.status === 404 && method === "GET" && path.startsWith("/item/")) {
+        return { success: true, data: null as T };
       }
-    };
-
-    // Apply retry logic if configured
-    if (this.config.retry && this.config.retry.maxAttempts > 1) {
-      return retry(executeRequest, this.config.retry);
+      return response.ok
+        ? {
+            success: true,
+            data:
+              data && typeof data === "object" && "payload" in data && "requestId" in data
+                ? data.payload
+                : data,
+            metadata: { status: response.status },
+          }
+        : {
+            success: false,
+            error: data?.message ?? `HTTP ${response.status}`,
+            metadata: { status: response.status },
+          };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      clearTimeout(timer);
     }
-
-    return executeRequest();
   }
 
-  /**
-   * Start polling for updates
-   *
-   * @private
-   */
   private startPolling(): void {
     if (this.pollingInterval) {
       return;
@@ -672,11 +476,6 @@ export class HttpTransport extends BaseTransport {
     this.logger.debug(`Started polling every ${pollInterval}ms`);
   }
 
-  /**
-   * Stop polling for updates
-   *
-   * @private
-   */
   private stopPolling(): void {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
@@ -685,86 +484,37 @@ export class HttpTransport extends BaseTransport {
     }
   }
 
-  /**
-   * Poll for updates on subscribed keys
-   *
-   * @private
-   */
   private async pollForUpdates(): Promise<void> {
-    if (!this.isConnected() || this.subscribedKeys.size === 0) {
-      return;
-    }
-
+    if (this.polling || !this.isConnected() || !this.subscribedKeys.size) return;
+    this.polling = true;
     try {
-      // Server doesn't have updates endpoint, poll individual keys for changes
-      const events: SyncEvent[] = [];
-
-      for (const key of this.subscribedKeys) {
-        try {
-          const itemResponse = await this.makeRequest<StorageItem>(
-            "GET",
-            `/item/${encodeURIComponent(key)}`,
-          );
-
-          if (
-            itemResponse.success &&
-            itemResponse.data &&
-            (itemResponse.data.timestamp || 0) > this.lastSyncTimestamp
-          ) {
-            events.push({
-              type: "sync",
-              key,
-              value: itemResponse.data.value,
-              metadata: itemResponse.data.metadata,
-              timestamp: itemResponse.data.timestamp || Date.now(),
-              version: itemResponse.data.version || 1,
-              source: "remote" as const,
-              instanceId: this.config.instanceId,
-            });
-          }
-        } catch {
-          // Ignore individual key errors during polling
-        }
+      const response = await this.getAllItems();
+      if (!response.success || !this.isConnected()) return;
+      const items = new Map((response.data ?? []).map((item) => [item.key, item]));
+      const keys = this.subscribedKeys.has("*")
+        ? new Set([...items.keys(), ...this.snapshots.keys()])
+        : this.subscribedKeys;
+      for (const key of keys) {
+        const item = items.get(key);
+        const signature = JSON.stringify(item ?? null);
+        if (this.snapshots.get(key) === signature) continue;
+        this.snapshots.set(key, signature);
+        const event: SyncEvent = {
+          type: item ? "sync" : "remove",
+          key,
+          value: item?.value,
+          metadata: item?.metadata,
+          version: item?.version,
+          timestamp: item?.timestamp ?? Date.now(),
+          source: "remote",
+        };
+        void this.emit(item ? "sync:update" : "sync:remove", event);
       }
-
-      const response = { success: true, data: events };
-
-      if (response.success && response.data && response.data.length > 0) {
-        response.data.forEach((event) => {
-          if (event.type === "sync") {
-            this.emit("sync:update", event);
-          } else if (event.type === "remove") {
-            this.emit("sync:remove", event);
-          }
-
-          this.lastSyncTimestamp = Math.max(this.lastSyncTimestamp, event.timestamp);
-        });
-
-        this.logger.debug(`Polled ${response.data.length} updates`);
-      }
-    } catch (error) {
-      this.logger.warn("Polling failed", { error });
+    } finally {
+      this.polling = false;
     }
   }
 
-  /**
-   * Convert Headers object to plain object
-   *
-   * @private
-   * @param {Headers} headers - Headers object
-   * @returns {Record<string, string>} Plain object with header key-value pairs
-   */
-  private headersToObject(headers: Headers): Record<string, string> {
-    const result: Record<string, string> = {};
-    headers.forEach((value, key) => {
-      result[key] = value;
-    });
-    return result;
-  }
-
-  /**
-   * Destroy transport and cleanup
-   */
   destroy(): void {
     this.stopPolling();
     super.destroy();

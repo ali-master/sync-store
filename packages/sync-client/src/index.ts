@@ -6,7 +6,14 @@ export { RemoteStorage };
 export type { RemoteStorageConfig, StorageItem, SyncEvent, StorageEventType };
 
 // React hooks
-export { useRemoteStorage, useStorageItem, useStorageKeys, useStorageLength } from "./react-hooks";
+export {
+  useSyncStore,
+  useSyncValue,
+  useRemoteStorage,
+  useStorageItem,
+  useStorageKeys,
+  useStorageLength,
+} from "./react-hooks";
 export type { UseRemoteStorageOptions } from "./react-hooks";
 
 // Transport layer exports

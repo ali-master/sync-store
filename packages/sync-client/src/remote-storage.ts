@@ -1,4 +1,9 @@
-import { io, Socket } from "socket.io-client";
+import {
+  createTransport,
+  TransportMode,
+  type ITransport,
+  type TransportResponse,
+} from "./transport";
 import type {
   RemoteStorageConfig,
   StorageItem,
@@ -19,8 +24,8 @@ import { NetworkManager } from "./core/network-manager";
 import { Analytics } from "./core/analytics";
 import { DataStorage } from "./utils/storage";
 import { Logger } from "./utils/logger";
-import { retry, retryConfigs, withTimeout } from "./utils/retry";
-import { generateInstanceId, generateUniqueId } from "./utils/base";
+import { retryConfigs } from "./utils/retry";
+import { generateInstanceId } from "./utils/base";
 
 interface RemoteStorageEvents {
   change: ChangeEvent;
@@ -36,7 +41,10 @@ interface RemoteStorageEvents {
 }
 
 export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
-  private socket: Socket | null = null;
+  private transport: ITransport;
+  private connecting?: Promise<void>;
+  private flushing?: Promise<void>;
+  private outbox: DataStorage;
   private readonly config: RemoteStorageConfig & {
     serverUrl: string;
     instanceId: string;
@@ -55,6 +63,10 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   private subscriptions = new Set<string>();
   private syncFilter?: SyncFilter;
   private syncInProgress = new Map<string, Promise<any>>();
+  private remoteVersions = new Map<
+    string,
+    { recordId: string; version: number; timestamp: number }
+  >();
 
   constructor(config: RemoteStorageConfig) {
     super();
@@ -108,6 +120,16 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       ...config,
     };
 
+    this.transport = createTransport({
+      ...this.config,
+      mode: (config.mode ?? TransportMode.AUTO) as TransportMode,
+    });
+    this.outbox = new DataStorage({
+      namespace: `${config.namespace ?? "sync"}:outbox:${config.userId}`,
+      maxSize: 10 * 1024 * 1024,
+    });
+    this.syncQueue = this.outbox.getItem<typeof this.syncQueue>("pending") ?? [];
+
     // Initialize logger
     this.logger = new Logger("RemoteStorage");
     this.logger.info("Initializing RemoteStorage", {
@@ -127,6 +149,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       namespace: `${this.config.namespace ?? "sync"}:${this.config.userId}`,
       maxSize: this.config.storage?.maxSize ?? 10 * 1024 * 1024,
       compressionEnabled: this.config.storage?.compressionEnabled ?? false,
+      encryptionKey: this.config.storage?.encryptionKey,
       autoCleanup: true,
     });
 
@@ -149,10 +172,32 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
     // Set up event listeners
     this.setupEventListeners();
+    this.transport.on("connect", () => this.handleConnect());
+    this.transport.on("disconnect", ({ reason }) =>
+      this.handleDisconnect(reason ?? "Disconnected"),
+    );
+    this.transport.on("error", (error) => this.handleConnectionError(error));
+    this.transport.on("sync:update", (event) => {
+      void this.handleRemoteUpdate(event).catch((error) => this.handleConnectionError(error));
+    });
+    this.transport.on("sync:remove", (event) => {
+      void this.handleRemoteRemove(event);
+    });
+    this.transport.on("sync:conflict", (event) => {
+      void this.handleConflict(event).catch((error) => this.handleConnectionError(error));
+    });
+    this.transport.on("pending-updates", (events) => {
+      void this.handlePendingUpdates(events).catch((error) => this.handleConnectionError(error));
+    });
+    this.transport.on("reconnect", () => {
+      void this.processSyncQueue()
+        .then(() => this.syncLocalStorageItems())
+        .catch((error) => this.handleConnectionError(error));
+    });
 
     // Auto-connect if enabled
     if (this.config.autoConnect) {
-      void this.connect();
+      void this.connect().catch((error) => this.handleConnectionError(error));
     }
 
     this.logger.info("RemoteStorage initialized successfully");
@@ -162,108 +207,19 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    * Connect to the remote server
    */
   async connect(): Promise<void> {
-    if (this.socket?.connected) {
-      this.logger.debug("Already connected");
-      return;
-    }
-
-    // If there's an existing socket that's not connected, clean it up first
-    if (this.socket && !this.socket.connected) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-
-    this.logger.info("Connecting to server", { serverUrl: this.config.serverUrl });
-    this.connectionInfo.state = ConnectionState.CONNECTING;
-    this.analytics.track("connection_attempt");
-
-    const connectWithRetry = retry(() => this.establishConnection(), this.config.retry);
-
-    try {
-      await connectWithRetry;
-      this.logger.info("Successfully connected to server");
-    } catch (error) {
-      this.logger.error("Failed to connect after retries", { error });
-      this.connectionInfo.state = ConnectionState.ERROR;
-      this.connectionInfo.error = error instanceof Error ? error.message : String(error);
-      this.analytics.trackError("connection", error as Error);
-      throw error;
-    }
-  }
-
-  /**
-   * Establish socket connection
-   */
-  private establishConnection(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.socket = io(`${this.config.serverUrl}/sync`, {
-          query: {
-            userId: this.config.userId,
-            instanceId: this.config.instanceId,
-            apiKey: this.config.apiKey,
-          },
-          timeout: this.config.timeout,
-          reconnection: this.config.reconnection,
-          forceNew: true,
-        });
-
-        const timeoutId = setTimeout(() => {
-          reject(new Error("Connection timeout"));
-        }, this.config.timeout);
-
-        this.socket.on("connect", () => {
-          clearTimeout(timeoutId);
-          this.handleConnect();
-          resolve();
-        });
-
-        this.socket.on("connect_error", (error) => {
-          clearTimeout(timeoutId);
-          this.handleConnectionError(error);
-          reject(error);
-        });
-
-        this.setupSocketListeners();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * Set up socket event listeners
-   */
-  private setupSocketListeners(): void {
-    if (!this.socket) return;
-
-    this.socket.on("sync:update", (data: SyncEvent) => {
-      void this.handleRemoteUpdate(data);
-    });
-
-    this.socket.on("sync:remove", (data: SyncEvent) => {
-      void this.handleRemoteRemove(data);
-    });
-
-    this.socket.on("sync:conflict", (conflictData: ConflictData) => {
-      void this.handleConflict(conflictData);
-    });
-
-    this.socket.on("pending-updates", (updates: SyncEvent[]) => {
-      void this.handlePendingUpdates(updates);
-    });
-
-    this.socket.on("disconnect", (reason) => {
-      this.handleDisconnect(reason);
-    });
-
-    this.socket.on("reconnect", () => {
-      this.handleReconnect();
-    });
-
-    this.socket.on("error", (error) => {
-      this.handleSocketError(error);
-    });
+    if (this.connecting) return this.connecting;
+    if (this.isConnected()) return;
+    this.connecting = this.transport
+      .connect()
+      .then(async () => {
+        await this.processSyncQueue();
+        await this.syncLocalStorageItems();
+        await this.transport.subscribe([...this.subscriptions]);
+      })
+      .finally(() => {
+        this.connecting = undefined;
+      });
+    return this.connecting;
   }
 
   /**
@@ -275,7 +231,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.logger.debug(`Setting item: ${key}`);
 
     // Check if sync is already in progress for this key
-    if (this.syncInProgress.has(key)) {
+    while (this.syncInProgress.has(key)) {
       await this.syncInProgress.get(key);
     }
 
@@ -313,7 +269,10 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       syncMetadata: true,
     };
 
-    this.localStorage.setItem(key, value, { metadata: customMetadata });
+    this.localStorage.setItem(key, value, {
+      metadata: customMetadata,
+      ttl: metadata?.ttl ?? this.config.storage?.ttl,
+    });
 
     // Emit local change event
     void this.emit("change", {
@@ -325,21 +284,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       metadata,
     });
 
-    // Sync to remote if connected
-    if (this.isConnected()) {
-      try {
-        await withTimeout(
-          this.syncToRemote("set", key, value, metadata, version, timestamp),
-          this.config.timeout,
-        );
-      } catch (error) {
-        this.logger.warn(`Failed to sync to remote: ${key}`, { error });
-        this.queueSync("setItem", [key, value, metadata]);
-        this.analytics.trackError("sync", error as Error, { operation: "set", key });
-      }
-    } else {
-      this.queueSync("setItem", [key, value, metadata]);
-    }
+    this.queueSync("setItem", [key, value, metadata, version, timestamp]);
+    if (this.isConnected()) await this.processSyncQueue();
   }
 
   /**
@@ -374,6 +320,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.logger.debug(`Removing item: ${key}`);
 
     const oldValue = this.getItem(key);
+    this.queueSync("removeItem", [key]);
     this.localStorage.removeItem(key);
 
     // Emit local change event
@@ -385,18 +332,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       timestamp: Date.now(),
     });
 
-    // Sync to remote if connected
-    if (this.isConnected()) {
-      try {
-        await withTimeout(this.syncToRemote("remove", key), this.config.timeout);
-      } catch (error) {
-        this.logger.warn(`Failed to sync removal to remote: ${key}`, { error });
-        this.queueSync("removeItem", [key]);
-        this.analytics.trackError("sync", error as Error, { operation: "remove", key });
-      }
-    } else {
-      this.queueSync("removeItem", [key]);
-    }
+    if (this.isConnected()) await this.processSyncQueue();
 
     const duration = performance.now() - startTime;
     this.analytics.trackSync("sync:remove", duration, true);
@@ -405,9 +341,11 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   /**
    * Clear all items
    */
-  clear(): void {
+  async clear(): Promise<void> {
     const keys = this.getAllKeys();
+    this.queueSync("clear", []);
     this.localStorage.clear();
+    if (this.isConnected()) await this.processSyncQueue();
 
     // Emit change events for each cleared key
     keys.forEach((key) => {
@@ -429,8 +367,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   getAllKeys(): string[] {
     return this.localStorage.getAllKeys().filter((key) => {
       try {
-        const stored = this.localStorage.getItem(key);
-        return stored !== null;
+        return this.localStorage.hasItem(key);
       } catch {
         return false;
       }
@@ -667,13 +604,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   async subscribe(keys: string[]): Promise<void> {
     keys.forEach((key) => this.subscriptions.add(key));
 
-    if (this.isConnected() && this.socket) {
-      this.socket.emit("sync:subscribe", {
-        keys,
-        userId: this.config.userId,
-        instanceId: this.config.instanceId,
-      });
-    }
+    if (this.isConnected()) await this.transport.subscribe(keys);
 
     this.analytics.track("subscribed", { keysCount: keys.length });
   }
@@ -684,12 +615,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   async unsubscribe(keys: string[]): Promise<void> {
     keys.forEach((key) => this.subscriptions.delete(key));
 
-    if (this.isConnected() && this.socket) {
-      this.socket.emit("sync:unsubscribe", {
-        keys,
-        userId: this.config.userId,
-      });
-    }
+    if (this.isConnected()) await this.transport.unsubscribe(keys);
 
     this.analytics.track("unsubscribed", { keysCount: keys.length });
   }
@@ -724,7 +650,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    * Check if connected
    */
   isConnected(): boolean {
-    return this.socket?.connected === true;
+    return this.transport.isConnected();
   }
 
   /**
@@ -734,8 +660,10 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     if (this.isConnected()) return;
 
     return new Promise((resolve, reject) => {
+      timeout ??= this.config.timeout;
       const timeoutId = timeout
         ? setTimeout(() => {
+            cleanup();
             reject(new Error("Connection timeout"));
           }, timeout)
         : undefined;
@@ -765,10 +693,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    * Disconnect from server
    */
   disconnect(): void {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    this.transport.disconnect();
     this.connectionInfo.state = ConnectionState.DISCONNECTED;
     this.analytics.track("disconnected");
   }
@@ -809,12 +734,6 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.connectionInfo.connectedAt = Date.now();
     this.connectionInfo.reconnectAttempts = 0;
 
-    // Process existing sync queue first
-    void this.processSyncQueue();
-
-    // Then sync any local storage items that haven't been synced yet
-    void this.syncLocalStorageItems();
-
     void this.emit("connect", {});
     this.analytics.track("connected");
   }
@@ -824,24 +743,10 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.connectionInfo.state = ConnectionState.DISCONNECTED;
 
     // Only emit disconnect if we were actually connected before
-    if (this.socket) {
+    if (this.transport) {
       void this.emit("disconnect", {});
       this.analytics.track("disconnected", { reason });
     }
-  }
-
-  private handleReconnect(): void {
-    this.connectionInfo.state = ConnectionState.CONNECTED;
-    this.connectionInfo.reconnectAttempts = 0;
-
-    // Process existing sync queue first
-    void this.processSyncQueue();
-
-    // Then sync any local storage items that haven't been synced yet
-    void this.syncLocalStorageItems();
-
-    void this.emit("reconnect", {});
-    this.analytics.track("reconnected");
   }
 
   private handleConnectionError(error: any): void {
@@ -857,48 +762,16 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.analytics.trackError("connection", error);
   }
 
-  private handleSocketError(error: any): void {
-    void this.emit("error", {
-      type: "socket",
-      message: "Socket error",
-      error,
-    });
-
-    this.analytics.trackError("socket", error);
-  }
-
   private async handleRemoteUpdate(data: SyncEvent): Promise<void> {
-    if (!data.key || data.value === undefined) return;
+    if (!data.key || data.value === undefined || this.hasPendingKey(data.key)) return;
 
     // Check if this should be filtered
     if (this.syncFilter && !this.shouldSyncKey(data.key)) {
       return;
     }
+    if (this.obsoleteEvent(data)) return;
 
     const currentValue = this.getItem(data.key);
-
-    // Check for conflicts
-    if (currentValue !== null && JSON.stringify(currentValue) !== JSON.stringify(data.value)) {
-      if (this.config.conflict?.autoResolve ?? true) {
-        await this.resolveConflictAutomatically(data.key, currentValue, data.value, data);
-      } else {
-        const conflictData: ConflictData = {
-          id: generateUniqueId(),
-          key: data.key,
-          localValue: currentValue,
-          remoteValue: data.value,
-          localVersion: this.getCurrentVersion(data.key),
-          remoteVersion: data.version || 1,
-          localTimestamp: Date.now(),
-          remoteTimestamp: data.timestamp,
-          conflictType: "concurrent_update",
-          metadata: data.metadata,
-        };
-
-        void this.emit("conflict", conflictData);
-        return;
-      }
-    }
 
     // Apply remote update - let DataStorage handle metadata wrapping
     const customMetadata = {
@@ -922,7 +795,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   }
 
   private async handleRemoteRemove(data: SyncEvent): Promise<void> {
-    if (!data.key) return;
+    if (!data.key || this.hasPendingKey(data.key)) return;
+    if (this.obsoleteEvent(data)) return;
 
     const oldValue = this.getItem(data.key);
     this.localStorage.removeItem(data.key);
@@ -935,6 +809,25 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       source: "remote",
       timestamp: data.timestamp,
     });
+  }
+
+  /** At-least-once outbox retries must not roll back a newer value or resurrect a deletion. */
+  private obsoleteEvent(data: SyncEvent): boolean {
+    if (!data.key || !data.recordId || data.version === undefined) return false;
+    const previous = this.remoteVersions.get(data.key);
+    if (
+      previous &&
+      (previous.recordId === data.recordId
+        ? previous.version >= data.version
+        : previous.timestamp > data.timestamp)
+    )
+      return true;
+    this.remoteVersions.set(data.key, {
+      recordId: data.recordId,
+      version: data.version,
+      timestamp: data.timestamp,
+    });
+    return false;
   }
 
   private async handleConflict(conflictData: ConflictData): Promise<void> {
@@ -974,328 +867,87 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.analytics.track("pending_updates_processed", { count: updates.length });
   }
 
-  private async resolveConflictAutomatically(
-    key: string,
-    localValue: any,
-    remoteValue: any,
-    syncEvent: SyncEvent,
-  ): Promise<void> {
-    const conflictData: ConflictData = {
-      id: generateUniqueId(),
-      key,
-      localValue,
-      remoteValue,
-      localVersion: this.getCurrentVersion(key),
-      remoteVersion: syncEvent.version || 1,
-      localTimestamp: Date.now(),
-      remoteTimestamp: syncEvent.timestamp,
-      conflictType: "concurrent_update",
-      metadata: syncEvent.metadata,
-    };
-
-    const resolution = await this.conflictResolver.resolve(
-      conflictData,
-      this.config.conflict?.strategy ?? ConflictStrategy.LAST_WRITE_WINS,
-    );
-
-    if (resolution.success && resolution.resolvedValue !== undefined) {
-      const customMetadata = {
-        ...(syncEvent.metadata || {}),
-        timestamp: Date.now(),
-        version: Math.max(conflictData.localVersion, conflictData.remoteVersion) + 1,
-        syncMetadata: true,
-      };
-
-      this.localStorage.setItem(key, resolution.resolvedValue, { metadata: customMetadata });
-
-      this.analytics.track("conflict_auto_resolved", {
-        strategy: resolution.strategy,
-        confidence: resolution.confidence,
-      });
-    }
-  }
-
+  /** Keep failed operations in order; only acknowledged writes leave the durable outbox. */
   private async processSyncQueue(): Promise<void> {
-    if (this.syncQueue.length === 0) return;
-
-    const queue = [...this.syncQueue];
-    this.syncQueue = [];
-
-    for (const { method, args } of queue) {
-      try {
-        switch (method) {
-          case "setItem":
-            await this.setItem(args[0], args[1], args[2]);
-            break;
-          case "removeItem":
-            await this.removeItem(args[0]);
-            break;
-        }
-      } catch (error) {
-        this.logger.error(`Failed to process queued sync: ${method}`, { error, args });
-        // Re-queue failed operations
-        this.queueSync(method, args);
+    if (this.flushing) return this.flushing;
+    this.flushing = (async () => {
+      while (this.syncQueue.length && this.isConnected()) {
+        const operation = this.syncQueue[0];
+        const [key, value, metadata, version, timestamp] = operation.args;
+        const response =
+          operation.method === "clear"
+            ? await this.transport.clear()
+            : operation.method === "removeItem"
+              ? await this.transport.removeItem(key)
+              : await this.transport.setItem(key, value, metadata, version, timestamp);
+        this.unwrap(response);
+        const remaining = this.syncQueue.slice(1);
+        this.outbox.setItem("pending", remaining);
+        this.syncQueue = remaining;
       }
-    }
+    })().finally(() => {
+      this.flushing = undefined;
+    });
+    return this.flushing;
   }
 
-  /**
-   * Sync local storage items to remote server on connection
-   */
+  /** Refresh cached server data without uploading stale cache entries or resurrecting deletions. */
   private async syncLocalStorageItems(): Promise<void> {
-    try {
-      this.logger.debug("Starting initial bidirectional sync");
-
-      // First, get latest data from server
-      let serverItems: StorageItem[] = [];
-      try {
-        serverItems = await this.getRemoteItems();
-        this.logger.debug(`Retrieved ${serverItems.length} items from server`);
-      } catch (error) {
-        this.logger.warn("Failed to retrieve items from server during initial sync", { error });
+    const items = await this.getRemoteItems();
+    for (const item of items) {
+      await this.handleRemoteUpdate({
+        ...item,
+        recordId: item.id,
+        type: "sync",
+        source: "remote",
+        timestamp: item.timestamp ?? Date.now(),
+      });
+    }
+    const keys = new Set(items.map((item) => item.key));
+    for (const key of this.getAllKeys()) {
+      if (!keys.has(key) && !this.hasPendingKey(key) && this.shouldSyncKey(key)) {
+        await this.handleRemoteRemove({
+          key,
+          type: "remove",
+          source: "remote",
+          timestamp: Date.now(),
+        });
       }
-
-      // Get all keys from local storage
-      const localKeys = this.getAllKeys();
-      this.logger.debug(`Found ${localKeys.length} local items to sync`);
-
-      // Create a map of server items for quick lookup
-      const serverItemMap = new Map(serverItems.map((item) => [item.key, item]));
-
-      // Sync local items to server (with conflict resolution)
-      const uploadResults = await Promise.allSettled(
-        localKeys.map(async (key) => {
-          try {
-            const localValue = this.localStorage.getItem(key);
-            const localMetadata = this.localStorage.getItemMetadata(key);
-
-            if (localValue !== null && localMetadata?.syncMetadata) {
-              const serverItem = serverItemMap.get(key);
-              const {
-                timestamp: localTimestamp,
-                version: localVersion,
-                syncMetadata: _syncMetadata,
-                ...userMetadata
-              } = localMetadata;
-
-              // Conflict resolution: compare timestamps
-              if (serverItem && serverItem.timestamp && serverItem.timestamp > localTimestamp) {
-                // Server item is newer, update local
-                this.logger.debug(`Server version newer for key ${key}, updating local`);
-                await this.handleRemoteUpdate({
-                  type: "sync",
-                  key: serverItem.key,
-                  value: serverItem.value,
-                  metadata: serverItem.metadata,
-                  timestamp: serverItem.timestamp || Date.now(),
-                  version: serverItem.version,
-                  source: "remote",
-                });
-              } else {
-                // Local is newer or same, sync to server
-                this.logger.debug(`Local version newer/same for key ${key}, syncing to server`);
-                await this.syncToRemote(
-                  "set",
-                  key,
-                  localValue,
-                  userMetadata,
-                  localVersion,
-                  localTimestamp,
-                );
-              }
-
-              // Remove from server map (processed)
-              serverItemMap.delete(key);
-            }
-          } catch (error) {
-            this.logger.error(`Failed to sync local item: ${key}`, { error });
-            throw error;
-          }
-        }),
-      );
-
-      // Download remaining server items that don't exist locally
-      const downloadResults = await Promise.allSettled(
-        Array.from(serverItemMap.values()).map(async (serverItem) => {
-          try {
-            this.logger.debug(`Downloading new server item: ${serverItem.key}`);
-            await this.handleRemoteUpdate({
-              type: "sync",
-              key: serverItem.key,
-              value: serverItem.value,
-              metadata: serverItem.metadata,
-              timestamp: serverItem.timestamp || Date.now(),
-              version: serverItem.version,
-              source: "remote",
-            });
-          } catch (error) {
-            this.logger.error(`Failed to download server item: ${serverItem.key}`, { error });
-            throw error;
-          }
-        }),
-      );
-
-      // Log sync results
-      const uploadSucceeded = uploadResults.filter(
-        (result) => result.status === "fulfilled",
-      ).length;
-      const uploadFailed = uploadResults.filter((result) => result.status === "rejected").length;
-      const downloadSucceeded = downloadResults.filter(
-        (result) => result.status === "fulfilled",
-      ).length;
-      const downloadFailed = downloadResults.filter(
-        (result) => result.status === "rejected",
-      ).length;
-
-      this.logger.info(
-        `Initial sync completed - Upload: ${uploadSucceeded}/${localKeys.length}, Download: ${downloadSucceeded}/${serverItemMap.size}`,
-      );
-
-      this.analytics.track("initial_sync_completed", {
-        uploadSucceeded,
-        uploadFailed,
-        downloadSucceeded,
-        downloadFailed,
-        totalLocal: localKeys.length,
-        totalServer: serverItems.length,
-      });
-
-      // Emit sync complete event
-      void this.emit("sync", {
-        type: "initial_sync",
-        keys: [...localKeys, ...Array.from(serverItemMap.keys())],
-        uploadSucceeded,
-        uploadFailed,
-        downloadSucceeded,
-        downloadFailed,
-        timestamp: Date.now(),
-        source: "local",
-      });
-    } catch (error) {
-      this.logger.error("Failed to sync local storage items", { error });
-      this.analytics.trackError("initial_sync", error as Error);
     }
   }
 
+  /** Persist pending changes before reporting them as queued; never silently truncate writes. */
   private queueSync(method: string, args: any[]): void {
-    this.syncQueue.push({
-      method,
-      args,
-      timestamp: Date.now(),
-    });
-
-    // Prevent queue from growing too large
-    if (this.syncQueue.length > 1000) {
-      this.syncQueue = this.syncQueue.slice(-500); // Keep latest 500
-      this.logger.warn("Sync queue was truncated due to size");
-    }
+    const queue = [...this.syncQueue, { method, args, timestamp: Date.now() }];
+    this.outbox.setItem("pending", queue);
+    this.syncQueue = queue;
   }
 
-  private async syncToRemote(
-    operation: string,
-    key: string,
-    value?: any,
-    metadata?: Record<string, any>,
-    version?: number,
-    timestamp?: number,
-  ): Promise<void> {
-    if (!this.socket) throw new Error("Not connected");
+  /** Protect locally pending values from older remote events. */
+  private hasPendingKey(key: string): boolean {
+    return this.syncQueue.some(
+      (operation) => operation.method === "clear" || operation.args[0] === key,
+    );
+  }
 
-    return new Promise((resolve, reject) => {
-      const eventData = {
-        type: operation,
-        key,
-        value,
-        metadata,
-        userId: this.config.userId,
-        instanceId: this.config.instanceId,
-        version,
-        timestamp: timestamp || Date.now(),
-      };
-
-      this.socket!.emit(`sync:${operation}`, eventData, (response: any) => {
-        if (response?.type === "error") {
-          reject(new Error(response.error));
-        } else {
-          resolve();
-        }
-      });
-    });
+  /** Surface transport failures instead of treating rejected requests as successful writes. */
+  private unwrap<T>(response: TransportResponse<T>): T {
+    if (!response.success) throw new Error(response.error ?? "Sync request failed");
+    return response.data as T;
   }
 
   private async getRemoteItems(): Promise<StorageItem[]> {
-    if (!this.socket) throw new Error("Not connected");
-
-    return new Promise((resolve, reject) => {
-      this.socket!.emit(
-        "sync:getAll",
-        {
-          userId: this.config.userId,
-          instanceId: this.config.instanceId,
-          filter: this.syncFilter,
-        },
-        (response: any) => {
-          if (response?.type === "error") {
-            reject(new Error(response.error));
-          } else {
-            resolve(response.items || []);
-          }
-        },
-      );
-    });
+    return this.unwrap(await this.transport.getAllItems()).filter((item) =>
+      this.shouldSyncKey(item.key),
+    );
   }
 
-  /**
-   * Get a single item from the remote server
-   */
   private async getRemoteItem(key: string): Promise<StorageItem | null> {
-    if (!this.socket) throw new Error("Not connected");
-
-    return new Promise((resolve, reject) => {
-      this.socket!.emit(
-        "sync:get",
-        {
-          key,
-          userId: this.config.userId,
-          instanceId: this.config.instanceId,
-        },
-        (response: any) => {
-          if (response?.type === "error") {
-            reject(new Error(response.error));
-          } else {
-            resolve(response.item || null);
-          }
-        },
-      );
-    });
+    return this.unwrap(await this.transport.getItem(key));
   }
 
-  /**
-   * Get server storage information
-   */
-  private async getServerStorageInfo(): Promise<{
-    usagePercentage: number;
-    totalSize: number;
-    usedSize: number;
-  } | null> {
-    if (!this.socket) throw new Error("Not connected");
-
-    return new Promise((resolve, reject) => {
-      this.socket!.emit(
-        "sync:storageInfo",
-        {
-          userId: this.config.userId,
-          instanceId: this.config.instanceId,
-        },
-        (response: any) => {
-          if (response?.type === "error") {
-            reject(new Error(response.error));
-          } else {
-            resolve(response.storageInfo || null);
-          }
-        },
-      );
-    });
+  private async getServerStorageInfo() {
+    return this.unwrap(await this.transport.getStorageInfo());
   }
 
   private shouldSyncKey(key: string): boolean {
@@ -1358,6 +1010,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    */
   destroy(): void {
     this.disconnect();
+    this.transport.destroy();
+    this.outbox.destroy();
     this.networkManager.destroy();
     this.analytics.destroy();
     this.localStorage.destroy();

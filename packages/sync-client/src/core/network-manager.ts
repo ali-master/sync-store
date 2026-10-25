@@ -8,6 +8,8 @@ export class NetworkManager extends EventEmitter<{
   "state-change": ConnectionState;
   "reconnect-attempt": { attempt: number; delay: number };
 }> {
+  private readonly onOnline = this.handleOnline.bind(this);
+  private readonly onOffline = this.handleOffline.bind(this);
   private currentState = ConnectionState.DISCONNECTED;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -28,8 +30,8 @@ export class NetworkManager extends EventEmitter<{
 
     // Listen for browser online/offline events
     if (typeof window !== "undefined") {
-      window.addEventListener("online", this.handleOnline.bind(this));
-      window.addEventListener("offline", this.handleOffline.bind(this));
+      window.addEventListener("online", this.onOnline);
+      window.addEventListener("offline", this.onOffline);
     }
   }
 
@@ -155,8 +157,8 @@ export class NetworkManager extends EventEmitter<{
     this.clearReconnectTimeout();
 
     if (typeof window !== "undefined") {
-      window.removeEventListener("online", this.handleOnline.bind(this));
-      window.removeEventListener("offline", this.handleOffline.bind(this));
+      window.removeEventListener("online", this.onOnline);
+      window.removeEventListener("offline", this.onOffline);
     }
 
     this.removeAllListeners();

@@ -1,6 +1,7 @@
 // Core types and interfaces for the sync-client library
 
 export interface RemoteStorageConfig {
+  mode?: import("../transport/types").TransportMode | "http" | "websocket" | "auto";
   /**
    * Storage namespace
    *
@@ -111,6 +112,7 @@ export enum SyncMode {
 
 // Data structures
 export interface StorageItem<T = any> {
+  id?: string;
   key: string;
   value: T;
   metadata?: Record<string, any>;
@@ -135,6 +137,8 @@ export interface ConflictData<T = any> {
 }
 
 export interface SyncEvent<T = any> {
+  eventId?: string;
+  recordId?: string;
   type: "sync" | "remove" | "clear" | "conflict" | "batch" | "initial_sync";
   key?: string;
   value?: T;

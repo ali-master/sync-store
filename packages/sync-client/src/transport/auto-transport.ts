@@ -40,6 +40,7 @@ export class AutoTransport extends BaseTransport {
    * @private
    */
   private activeTransport: ITransport | null = null;
+  private readonly subscriptions = new Set<string>();
 
   /**
    * Logger for auto transport
@@ -101,6 +102,7 @@ export class AutoTransport extends BaseTransport {
       "sync:remove",
       "sync:conflict",
       "pending-updates",
+      "reconnect",
     ];
 
     [this.primaryTransport, this.fallbackTransport].forEach((transport) => {
@@ -173,7 +175,9 @@ export class AutoTransport extends BaseTransport {
           primaryError: (primaryError as Error).message,
           fallbackError: (fallbackError as Error).message,
         });
-        throw new Error("Failed to connect with both WebSocket and HTTP transports");
+        throw new Error("Failed to connect with both WebSocket and HTTP transports", {
+          cause: fallbackError,
+        });
       }
     }
   }
@@ -196,6 +200,7 @@ export class AutoTransport extends BaseTransport {
     await this.fallbackTransport!.connect();
 
     this.activeTransport = this.fallbackTransport;
+    await this.activeTransport!.subscribe([...this.subscriptions]);
     this.setState(TransportState.CONNECTED);
     this.emit("connect", undefined);
 
@@ -246,6 +251,9 @@ export class AutoTransport extends BaseTransport {
       // Successfully connected to primary, switch over
       const oldTransport = this.activeTransport;
       this.activeTransport = this.primaryTransport;
+
+      await this.activeTransport!.subscribe([...this.subscriptions]);
+      this.emit("reconnect", { attempt: 0 });
 
       // Disconnect from fallback
       if (oldTransport) {
@@ -319,9 +327,9 @@ export class AutoTransport extends BaseTransport {
       this.primaryRetryTimer = undefined;
     }
 
-    if (this.activeTransport) {
-      this.activeTransport.disconnect();
-    }
+    this.activeTransport = null;
+    this.primaryTransport?.disconnect();
+    this.fallbackTransport?.disconnect();
 
     this.setState(TransportState.DISCONNECTED);
     this.autoLogger.info("Disconnected");
@@ -486,6 +494,7 @@ export class AutoTransport extends BaseTransport {
   }
 
   async subscribe(keys: string[]): Promise<void> {
+    keys.forEach((key) => this.subscriptions.add(key));
     if (!this.activeTransport) {
       throw new Error("No active transport");
     }
@@ -493,6 +502,7 @@ export class AutoTransport extends BaseTransport {
   }
 
   async unsubscribe(keys: string[]): Promise<void> {
+    keys.forEach((key) => this.subscriptions.delete(key));
     if (!this.activeTransport) {
       throw new Error("No active transport");
     }
@@ -503,6 +513,7 @@ export class AutoTransport extends BaseTransport {
    * Destroy transport and cleanup
    */
   destroy(): void {
+    this.disconnect();
     if (this.primaryRetryTimer) {
       clearTimeout(this.primaryRetryTimer);
     }
