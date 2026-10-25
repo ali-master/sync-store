@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { corsOptions } from "./cors";
 import { proxyTrust } from "./trusted-proxy";
 // Modules
 import { AppModule } from "@root/app.module";
@@ -91,7 +92,7 @@ async function bootstrap() {
       defaultVersion: "1",
     });
     app.enableCors({
-      origin: "*",
+      ...corsOptions(),
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: [
         "Idempotency-Key",
@@ -112,7 +113,6 @@ async function bootstrap() {
         "X-User-Id",
         "X-Instance-Id",
       ],
-      credentials: true,
       maxAge: 3600,
     });
 

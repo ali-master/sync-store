@@ -58,18 +58,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("version history and restore", (
       ).rejects.toThrow("abort");
       expect(await repo.history("user", "theme")).toHaveLength(5);
       const time = new Date();
-      await native
-        .collection<{ _id: string; [key: string]: any }>("storage_history")
-        .insertMany(
-          Array.from({ length: 65 }, (_, index) => ({
-            _id: `page:${index + 1}`,
-            userId: "user",
-            key: "page",
-            version: index + 1,
-            lastModified: time,
-            expiresAt: new Date(Date.now() + 60000),
-          })),
-        );
+      await native.collection<{ _id: string; [key: string]: any }>("storage_history").insertMany(
+        Array.from({ length: 65 }, (_, index) => ({
+          _id: `page:${index + 1}`,
+          userId: "user",
+          key: "page",
+          version: index + 1,
+          lastModified: time,
+          expiresAt: new Date(Date.now() + 60000),
+        })),
+      );
       const first = await repo.history("user", "page");
       const second = await repo.history("user", "page", first.at(-1)!._id);
       expect([...first, ...second].map((row) => row.version)).toEqual(

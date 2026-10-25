@@ -28,6 +28,19 @@ Use `DATABASE_URL` to select the MongoDB database. Distributed outbox delivery r
 
 ## Client options used in the supported flow
 
+### Browser origins
+
+`CORS_ALLOWED_ORIGINS` accepts comma-separated exact origins, for example
+`https://app.example.com,https://docs.example.com`. Include the documentation origin
+when using its playground. Docker Compose forwards this variable to every API replica.
+The default `*` intentionally permits public SDK access. Browser cookies and other
+ambient credentials are not enabled; clients authenticate explicitly using API-key headers
+or Socket.IO authentication. `CORS_ORIGIN` and `CORS_CREDENTIALS` are not supported settings.
+
+The same origin list configures HTTP and Socket.IO CORS responses. CORS is a browser
+response policy, not authentication or a WebSocket firewall: API-key permissions and
+website restrictions still apply. Use an explicit list for a private installation.
+
 | Option        | Purpose                                                               |
 | ------------- | --------------------------------------------------------------------- |
 | `serverUrl`   | API origin; defaults to local port 3000.                              |

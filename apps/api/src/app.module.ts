@@ -66,8 +66,7 @@ import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
           .description("Secret key for CSRF token generation"),
 
         // CORS
-        CORS_ORIGIN: Joi.string().default("*"),
-        CORS_CREDENTIALS: Joi.boolean().default(true),
+        CORS_ALLOWED_ORIGINS: Joi.string().default("*"),
 
         // Logging
         LOG_LEVEL: Joi.string()

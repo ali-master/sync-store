@@ -18,6 +18,7 @@ import { RemoveItemCommand } from "../commands/impl/remove-item.command";
 import { GetItemQuery } from "../queries/impl/get-item.query";
 import { GetAllItemsQuery } from "../queries/impl/get-all-items.query";
 import { permits } from "../services/access-policy";
+import { socketCorsOrigin } from "../../../cors";
 
 interface SyncMessage {
   requestId?: string;
@@ -48,8 +49,8 @@ interface SyncResponse {
   namespace: "/sync",
   transports: ["websocket"],
   cors: {
-    origin: "*",
-    credentials: true,
+    origin: socketCorsOrigin,
+    credentials: false,
   },
 })
 @UseGuards(ApiKeyGuard)
