@@ -1,0 +1,162 @@
+---
+title: Deployment
+description: Build the service and identify the boundaries that still require operational work.
+---
+
+## TLS behind a reverse proxy
+
+The API trusts no forwarding headers by default. Set `TRUSTED_PROXY_CIDRS` to the IP address (or dedicated proxy subnet) of your **directly connected, TLS-terminating proxy**. HTTP and Socket.IO use the same trust boundary. Reserve the proxy's address in your deployment network so recreating its container does not change which peer is trusted. Do not use a broad shared container subnet or `0.0.0.0/0`.
+
+The supplied Nginx configuration replaces `X-Forwarded-For` and `X-Forwarded-Proto` with the connection's real address and scheme. It does not accept these values from the client. Keep backend ports private. Additional proxy hops need their own explicit trust design; this configuration supports one terminating edge.
+
+For TLS directly at the Compose proxy, place a valid certificate chain and private key in a directory outside the repository, named `fullchain.pem` and `privkey.pem`. Add these settings to your root `.env`:
+
+```dotenv
+TLS_CERT_DIR=/absolute/path/to/certificates
+TLS_BIND_ADDRESS=0.0.0.0
+TRUSTED_PROXY_CIDRS=YOUR_RESERVED_PROXY_IP
+API_URL=https://sync.example.com
+```
+
+Then use all three Compose files:
+
+```sh
+docker compose -f compose.yml -f compose.scale.yml -f compose.tls.yml up -d --build --scale api=2
+```
+
+Port 443 serves TLS; the HTTP listener redirects to the HTTPS origin. Configure certificate renewal and reload Nginx after replacing certificate files. A key with **Require HTTPS** accepts HTTPS/WSS through the trusted edge and rejects plain HTTP and forged forwarding headers sent directly to a backend.
+
+## Quota windows with multiple replicas
+
+Minute, hour, day and month quotas use **UTC calendar boundaries**, not a sliding duration since the first request. MongoDB's clock determines the current window. Every admitted request checks the limits, rolls over stale windows and increments all four counters in one atomic update shared by every replica.
+
+Scheduled resets also record each window's start. Repeated or delayed jobs cannot erase requests already charged in that window. If jobs are delayed or the service was down at midnight, the next request performs rollover itself. When upgrading an installation that has no window markers, its counters start fresh once; existing credentials and limits are preserved.
+
+The regression suite includes verified TLS and WSS, forged-header rejection, concurrent requests through two backends, duplicate reset workers, UTC boundaries (including leap day and year-end), and a real scheduled minute rollover. Reproduction details and measured results are in `docs/tls-quota-cluster-test.md`.
+
+## Build and verify
+
+Want to run the service without installing development tools? Follow [Self hosted](/docs/guides/self-hosted) for the Docker-only setup. This page covers source development and operational boundaries.
+
+```sh
+bun install --frozen-lockfile
+bun run db:generate
+bun run test:types
+bun run lint
+bun run build
+bun run test
+```
+
+The API builds with SWC, so a successful build does not replace type checking. TypeScript 6 remains for compiler API compatibility; TypeScript 7 is available through a separate alias.
+
+Apply migrations with the intended destination URL:
+
+```sh
+DATABASE_URL='mongodb://...' bun run db:deploy
+bun run start:prod
+```
+
+Supply API_URL, DATABASE_URL, JWT_SECRET and CSRF_SECRET to the running process. The database provider connects and pings MongoDB at startup. A listening port alone is not a complete readiness check; perform an authorized read/write against an isolated readiness identity.
+
+## Docker
+
+```sh
+docker build -f apps/api/Dockerfile -t sync-store .
+docker run --rm -p 3000:3000 --env-file /secure/path/api.env sync-store
+```
+
+The runtime uses Bun and runs as the unprivileged bun user. The current image includes workspace/build dependencies and is not a minimal production image. Make adequate Docker disk space available for install, export and extraction.
+
+Use container DNS/networking for MongoDB; `localhost` inside the API container refers to that container.
+
+## Database topology
+
+The repository compose file is a local standalone setup, not an HA production deployment. Use a managed replica set or Atlas with TLS, authentication, least-privilege users, monitoring and a tested restore procedure.
+
+Prisma 8 MongoDB support is early access. Multi-document ORM transactions are unavailable. Atomic single-document storage versions and quota counters do not provide transactionality across unrelated records.
+
+## Scale WebSocket delivery
+
+All API replicas must share MongoDB, `REDIS_URL`, `SOCKET_IO_PREFIX`, and the same application secrets. Redis Streams forwards Socket.IO room broadcasts and management requests between nodes. The dashboard lists and disconnects sockets across replicas.
+
+With Docker Compose 2.24.4 or newer:
+
+```sh
+docker compose -f compose.yml -f compose.scale.yml up -d --build --scale api=3
+```
+
+Open the usual API/dashboard URL. The scaling override moves the host port to an Nginx proxy and removes per-replica port bindings. Nginx discovers replicas through Docker DNS and supports WebSocket upgrades. Scale again with `--scale api=5`; leave MongoDB and Redis shared.
+
+The server and SDK use WebSocket-only Socket.IO transport, so sticky sessions are unnecessary. Custom Socket.IO clients must set `transports: ["websocket"]`. SDK HTTP mode still uses normal REST calls and polling; it is separate from Socket.IO long-polling, which the server no longer accepts.
+
+When `REDIS_URL` is configured, the API refuses startup if Redis cannot connect within 10 seconds. Without it, a source installation remains single-process only. Use a unique `SOCKET_IO_PREFIX` per independent installation; all replicas of that installation use the same prefix. Redis is trusted internal infrastructure: do not publish its port. For remote Redis, use private networking, authentication and `rediss://` for TLS.
+
+Temporary Redis interruptions can resume from the bounded stream (100,000 entries). This is not an unlimited event log or an exactly-once guarantee. After reconnecting to any replica, the SDK reconciles from MongoDB and flushes its local outbox. Server mutations also use an atomic outbox, described below, so a backend crash between saving an item and publishing its event does not discard the pending event.
+
+Cluster session listing uses inter-node requests and may fail during a Redis outage rather than present an incomplete local list. Runtime uptime is still for the responding API process.
+
+When Redis becomes ready again, each API closes its local sync connections at the transport level. The SDK automatically reconnects and reloads MongoDB state. This also repairs events that never reached Redis during the interruption. Expect a brief reconnect; custom clients must reconnect and reconcile their state too.
+
+### Atomic server outbox
+
+Each storage document contains its pending events. A single MongoDB update changes the value or deletion flag, increments the version and appends an immutable event. This provides transactional atomicity on standalone MongoDB without a multi-document transaction. `set`, remove, clear and imports use this path. Clear remains atomic **per item**, not across the entire user storage.
+
+Every API runs a dispatcher. A dispatcher claims one item's queue using a 15-second lease, publishes its head to the shared Redis stream, waits for Redis AOF persistence, and only then removes that event from MongoDB. If the process dies, another replica resumes after lease expiry. Failed publication keeps the event pending. Physical cleanup cannot delete tombstones with pending events.
+
+Delivery is **at least once**: a crash after publishing but before removing the event can cause a retry. Each event has a stable `eventId`, `recordId` and increasing per-record `version`. The SDK ignores duplicate and older versions, including removals. Custom clients must do the same. A successful mutation response confirms storage and enqueueing; it does not mean every client has received the event yet.
+
+Distributed mode requires Redis 7.2+ with AOF enabled: the dispatcher uses `WAITAOF` before acknowledging outbox entries. Compose enables `appendonly yes` and `appendfsync always`. For external Redis, enable persistence and appropriate durability/HA settings; missing AOF or denied `WAITAOF` leaves events pending. The Redis credentials need permission for `XADD` and `WAITAOF` in addition to the adapter's commands.
+
+Monitor pending `outbox` array lengths, expired `leaseUntil` values and repeated dispatcher warnings in `sync_storage_items`. Pending events count toward MongoDB's 16 MiB document limit. If an outage fills an item's document, further writes to it fail atomically rather than silently discarding pending events. Restore dispatch capacity before retrying. Do not manually clear pending arrays or delete leased documents.
+
+The stream remains bounded: outbox durability covers the MongoDB-to-Redis handoff, not unlimited retention for disconnected clients. Clients still reconcile on reconnect. Loss of MongoDB disks or the Redis persistence volume is outside this guarantee. Without Redis, the single-node dispatcher emits locally; use shared durable Redis for distributed publication.
+
+## Required architecture decisions
+
+- Put per-user authentication and authorization in a trusted backend before exposing sync storage.
+- Restrict public origins and configure TLS/proxy trust deliberately; local CORS is permissive.
+- Configure the shared Redis adapter before running multiple API processes.
+- Account for at-least-once mutation replay; the SDK does not deduplicate accepted writes after lost acknowledgements.
+- Protect persisted browser data; the former encryption option is unsupported.
+- Treat analytics as aggregates of stored records and lifetime counters, not a complete request-event log. Historical/IP metrics without source data are unavailable.
+
+These are implementation limits, not optional production hardening claims.
+
+## Integration checks
+
+Use a disposable test database, not production:
+
+```sh
+DATABASE_URL='mongodb://127.0.0.1:27017/sync_store_test' bun run db:deploy
+TEST_DATABASE_URL='mongodb://127.0.0.1:27017/sync_store_test' bun run --cwd apps/api test:e2e
+API_TEST_URL='http://localhost:3000' API_TEST_KEY='disposable-key' \
+  bun test packages/sync-client/test/live-api.test.ts
+```
+
+The live test writes and clears data for a generated test user. Confirm key permissions first. Local tests do not certify load capacity, multi-host failover or restore readiness.
+
+For a two-replica verification, point the test at two **different backend addresses**, not the same load balancer:
+
+```sh
+API_TEST_URL_A='http://api-1:3000' API_TEST_URL_B='http://api-2:3000' \
+API_TEST_KEY='disposable-write-key' API_TEST_ADMIN_KEY='test-installation-admin-key' \
+  bun test packages/sync-client/test/distributed-api.test.ts
+```
+
+This checks cross-node WebSocket and REST delivery, user isolation, session listing from both replicas, remote disconnect, reconnect reconciliation and clear propagation. Use an isolated test installation because the session-management assertions require administrator access.
+
+### Local load and fault regression
+
+`scripts/cluster-load.ts` is deliberately restricted to the disposable Docker project named `sync-store-cluster`, with two API replicas and a write-enabled key named `Cluster test key`. **Do not use that project name for production.** The script stops Redis and forcibly stops API replica 1, then restores both in its cleanup path. It creates uniquely named test users and retains their records for inspection.
+
+```sh
+bun scripts/cluster-load.ts
+bun scripts/cluster-load.ts --combined
+bun scripts/cluster-load.ts --outbox
+```
+
+Each run opens 12 SDK readers and sends 1,800 REST writes at 30 writes/second through Nginx. It compares successful responses with MongoDB values, checks automatic SDK convergence before forcing any reconnect, and reports latency percentiles and HTTP failures. The combined scenario stops a backend while Redis is unavailable. This is a bounded regression test, not a capacity certification or a MongoDB disaster-recovery test.
+
+The `--outbox` scenario additionally launches a disposable replica with a test-only preload. Initial writes target that replica, then switch to the proxy, retrying failed requests. The preload pauses its dispatcher after claiming a committed event and before publishing it. The harness kills that process and requires surviving replicas to deliver the captured event ID and all acknowledged event IDs to continuously connected SDK readers. It also asserts the pending queues drain. The preload is never part of the production startup command. This local harness expects `/tmp/sync-store-e2e.env` from the disposable installation.
+
+On October 25, 2026, both the targeted outbox crash and combined Redis/backend outage passed with 1,800 writes each: no acknowledged data loss, no stale SDK state before manual reconnect, and no pending backlog after recovery. The targeted test also received every acknowledged event ID, including the event held at the crash point. It required 110 request retries against the deliberately killed replica (p95 logical write latency 5,015 ms, including timeout); the combined test required none (p95 92 ms). These are local regression results, not production capacity guarantees. Detailed evidence is in `docs/outbox-fault-test.md` in the repository.

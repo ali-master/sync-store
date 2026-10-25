@@ -1,0 +1,53 @@
+---
+title: Configuration
+description: The settings used by the API, client, docs and playground.
+---
+
+## API environment
+
+| Setting                  | Purpose                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Required MongoDB URL; `mongodb://` or `mongodb+srv://`.                               |
+| `API_URL`                | Explicit public API URL, e.g. `http://localhost:3000`.                                |
+| `PORT`                   | Listener port, default 3000.                                                          |
+| `TRUSTED_PROXY_CIDRS` | Comma-separated IPs/CIDRs of directly connected terminating proxies; empty trusts none. Applies to HTTP and Socket.IO. |
+| `TLS_CERT_DIR` | Compose TLS overlay: directory containing `fullchain.pem` and `privkey.pem`. |
+| `TLS_BIND_ADDRESS` | Compose TLS overlay: host bind address for port 443; defaults to `127.0.0.1`. |
+| `NODE_ENV`               | `development`, `test` or `production`; the runtime is still Bun.                      |
+| `JWT_SECRET`             | Required application secret. This does not add JWT authentication to the sync routes. |
+| `CSRF_SECRET`            | Required application secret, at least 32 characters.                                  |
+
+The Nest application reads its environment files, including `apps/api/.env.local`. Explicit shell variables are useful for Prisma and database setup commands. Keep deployment secrets outside images and source control.
+
+No initial API-key environment variables are required. Open `/dashboard/` and complete onboarding with the setup code from the API logs to create your administrator credential. See [dashboard and credential recovery](/docs/guides/dashboard).
+
+For multiple API replicas, set `REDIS_URL` to the same Redis instance and `SOCKET_IO_PREFIX` to the same installation-specific name (default `sync-store`). Omitting Redis enables single-process mode only. See [scaling](/docs/guides/deployment#scale-websocket-delivery).
+
+Use `DATABASE_URL` to select the MongoDB database. Distributed outbox delivery requires Redis 7.2+ with AOF enabled and permission to run `WAITAOF`. Compose configures this automatically. No additional outbox environment variables are required; the pending-event index is created at API startup. Apply the database migrations before starting the updated API; the Compose `init` service does this automatically.
+
+## Client options used in the supported flow
+
+| Option        | Purpose                                                               |
+| ------------- | --------------------------------------------------------------------- |
+| `serverUrl`   | API origin; defaults to local port 3000.                              |
+| `apiKey`      | Application credential.                                               |
+| `userId`      | Server-side storage identity; must be authorized by your application. |
+| `instanceId`  | Identifies this client instance; use a different value per instance.  |
+| `namespace`   | Separates browser cache/outbox storage; not an ACL.                   |
+| `mode`        | `websocket`, `http` or `auto`.                                        |
+| `autoConnect` | Disable for an explicit connect flow.                                 |
+| `timeout`     | Transport timeout in milliseconds.                                    |
+
+Changing cache identity can strand pending writes in the old namespace. Do not silently rotate it on every render.
+
+## Docs and branding
+
+Set `SITE_URL` to the documentation origin **before building**. On Vercel, `VERCEL_PROJECT_PRODUCTION_URL` is used if SITE_URL is absent. Local fallback is `http://localhost:4000`.
+
+Brand files come from the root `assets/` directory. The docs configuration copies logo/social preview assets and generates the SVG favicon on dev/build. Do not edit generated copies.
+
+GitHub repository social preview is a separate Settings upload; site metadata cannot change it.
+
+## Playground
+
+Set `VITE_DOCS_URL` to your documentation URL ending in `/docs` if you host the playground. Enter server URL and the disposable API key at runtime. Never put a private key in a frontend environment variable.

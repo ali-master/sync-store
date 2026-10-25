@@ -1,4 +1,40 @@
 ---
-title: API Key Management
-description: Understanding and managing API keys, including security features and best practices.
+title: API keys and security
+description: Issue development credentials and understand the current authorization boundary.
 ---
+
+## Create an initial key
+
+Create your administrator key through the first-time onboarding at `/dashboard/`, using the setup code printed in the API logs to prove server access. Save the generated credential securely. It persists in MongoDB and is reused across restarts; setup closes after creation. No seed environment variables or seed commands are needed.
+
+Open `/dashboard/` on your API server and sign in with this key. In **API keys**, create a separate application credential. New application keys are read-only by default; explicitly enable writes when needed. The secret is displayed only when created or rotated. Copy it before closing the panel.
+
+Use the console to change permissions, restrictions, expiration and request quotas, disable keys or rotate secrets. Rotation immediately replaces the credential for subsequent authorization checks. Existing WebSocket connections should be disconnected from **Sessions** when revoking access.
+
+Only administrator credentials can access `/api/v1/admin`. Application keys cannot grant themselves this scope. The installation administrator cannot be disabled or edited through the console, preventing accidental lockout; its secret can be rotated. See [dashboard and recovery](/docs/guides/dashboard).
+
+## Requests and identity
+
+HTTP callers provide `x-api-key`, `x-user-id` and `x-instance-id`. The SDK supplies these automatically. Socket.IO uses the auth handshake, and message handlers use the identity bound to that connection.
+
+**An API key authenticates an application credential, not the end user.** A caller holding the key can supply another user ID. Before production use, place the API behind a trusted application backend that authenticates users and derives their IDs from sessions. Do not expose an unrestricted shared key in a public frontend.
+
+The playground is intended for local development with disposable data and keys.
+
+## Enforced checks
+
+The guard checks key activity, expiry, read/write permissions, allowed methods and configured request restrictions. Quota check-and-increment is atomic to prevent concurrent requests bypassing the limit.
+
+IP restrictions support CIDR. Origin restrictions provide defense in depth; non-browser callers can forge origins, so they are not authentication. Country restrictions fail closed until a GeoIP provider is configured.
+
+Analytics endpoints require the `analytics:read` scope or `*` in the key's scopes JSON. Console-created application keys have no elevated scopes. The installation administrator can view analytics through the console.
+
+Some fields retained in the schema describe historical/planned features. Do not treat every field (webhooks, percentile counters, per-second rate settings) as a verified enforcement capability.
+
+## Browser and network boundaries
+
+Local CORS is currently permissive in API bootstrap. Setting a similarly named environment variable alone does not change the hard-coded CORS policy. Restrict allowed origins and configure your reverse proxy before public deployment.
+
+Use TLS and an application-specific MongoDB account. Forwarded headers are not trusted by default; HTTPS termination must be configured deliberately so protocol checks remain meaningful.
+
+Never put credentials in a URL, version control, a screenshot or a frontend build-time `VITE_*` variable. Avoid logging values stored by users. The demo keeps keys only in memory, but its SDK cache contains JSON data in browser storage.

@@ -1,0 +1,53 @@
+---
+title: React integration
+description: Own a client safely and render synchronized values with the current hooks.
+---
+
+Use `useSyncStore` and `useSyncValue`. The older `useRemoteStorage` family remains for compatibility and is deprecated.
+
+```tsx
+import { useState } from "react";
+import { useSyncStore, useSyncValue } from "@usex/sync-client";
+
+const defaults = { theme: "light" };
+
+export function Preferences({ config }) {
+  const [error, setError] = useState("");
+  const { storage, isConnected } = useSyncStore({
+    config,
+    autoConnect: true,
+  });
+  const [preferences, setPreferences] = useSyncValue(storage, "preferences", defaults);
+
+  async function toggleTheme() {
+    setError("");
+    try {
+      await setPreferences({
+        theme: preferences?.theme === "dark" ? "light" : "dark",
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Write failed");
+    }
+  }
+
+  return (
+    <section>
+      <p>{isConnected ? "Connected" : "Offline — changes queue locally"}</p>
+      <button onClick={toggleTheme}>Theme: {preferences?.theme}</button>
+      {error && <p role="alert">{error}</p>}
+    </section>
+  );
+}
+```
+
+Supply a stable user ID, instance ID and namespace in `config`. Changing identity or transport recreates the client. The hook owns cleanup; do not separately destroy its client during an ordinary render.
+
+Keep default objects outside the component or memoize them. `useSyncValue` treats null as a fallback value; if distinguishing stored null from absence is important, use `storage.hasItem()` and `getItem()` explicitly.
+
+## Errors and pending work
+
+A write can update local state and still reject because delivery failed. Show the error and allow reconnection; do not tell the user the server accepted the write just because the UI changed.
+
+Do not use the legacy `useOfflineSupport().queuedOperations` value as an authoritative queue count: it is currently a placeholder. Connection state should come from the client, not just `navigator.onLine`.
+
+The playground owns two `RemoteStorage` instances directly to make their lifecycles and independent caches visible. Both approaches use the same transport and outbox implementation.

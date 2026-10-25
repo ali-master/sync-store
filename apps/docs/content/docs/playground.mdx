@@ -1,0 +1,51 @@
+---
+title: Playground
+description: Inspect real synchronization between two independently cached clients.
+---
+
+The React example in `examples/react-app` is a development playground, not a hosted mockup. It requires a running API and a disposable key with read/write permission.
+
+Create that application key in the [dashboard](/docs/guides/dashboard). Keep the administrator credential out of the playground.
+
+![Two connected playground clients synchronizing JSON](/screenshots/playground.png)
+
+## Two clients, one user
+
+Client A and Client B use the same user ID and server, but different instance IDs and local cache namespaces. The replica receives its data through its own transport; the UI never copies A's state into B.
+
+1. Enter your server origin, API key and user ID.
+2. Choose WebSocket for realtime events or HTTP for polling.
+3. Select **Connect clients**. Both connections must succeed.
+4. Edit the JSON draft and select **Save & sync**.
+5. Observe the value in **Remote replica** and the real client events in **Activity stream**.
+
+The initial preferences JSON is an unsaved draft. The playground never creates data until you explicitly save. Try `false`, `0`, `""` and `null` as well as objects and arrays. Invalid JSON is rejected before a write.
+
+## Disconnect and recover
+
+Select **Go offline** on Client A. This disconnects A's transport; it does not turn off the computer's network or disconnect B.
+
+Edit the draft and select **Save locally**. B should keep its previous value until A reconnects. Select **Reconnect**: A flushes its outbox and reconciles with the server; B receives the update.
+
+**Delete key** only removes the selected key. Deletions made offline remain queued. **Clear log** clears the UI event log, not stored data.
+
+## Sessions and privacy
+
+Credentials live in React memory and are not stored in localStorage or sessionStorage. The SDK's cache and outbox **do contain your JSON values** in browser storage. Do not use confidential data on a shared computer.
+
+Each tab stores a nonsecret session ID in sessionStorage. Ending a session destroys its connections, but preserves pending outbox entries. Reconnect using the same server, user and tab to recover pending writes. Do not clear browser storage before delivery.
+
+The log holds the last 30 observed events and deliberately excludes credentials and JSON payloads. It is not a durable audit log.
+
+## Run and customize
+
+```sh
+bun run --cwd packages/sync-client build
+bun run --cwd examples/react-app dev
+bun run --cwd examples/react-app test:types
+bun run --cwd examples/react-app build
+```
+
+Set `VITE_DOCS_URL` to the deployed documentation URL ending in `/docs` to change the help links. The default is `http://localhost:4000/docs`.
+
+For a smaller example without React or the SDK, serve `examples/basic-usage/index.html` from the repository. It uses direct REST calls and does not implement realtime subscriptions or an offline queue.

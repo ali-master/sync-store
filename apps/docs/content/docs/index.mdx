@@ -1,7 +1,26 @@
 ---
-title: Hello World
+title: Overview
+description: Real-time synchronized storage for connected apps.
 ---
 
 ## Introduction
 
-I love Anime.
+Sync Store synchronizes JSON values between app instances using an HTTP and WebSocket API.
+The TypeScript client provides local caching, queued offline writes and reconciliation after reconnecting.
+
+The API runs on Bun with MongoDB storage. Two clients share server data by user ID, while each instance maintains its own local cache and pending-operation outbox.
+
+## Start here
+
+- [Self hosted](/docs/guides/self-hosted): run the API and MongoDB with Docker, without installing Bun.
+
+- [Getting started](/docs/getting-started): run MongoDB, initialize the API and create a development key.
+- [Playground](/docs/playground): write JSON and observe a second, independent client receive it.
+- [Client SDK](/docs/guides/client-sdk) and [React](/docs/guides/react): integrate storage into an application.
+- [Offline synchronization](/docs/guides/offline-sync): understand reconnect, pending writes and delivery limits.
+- [HTTP and Socket.IO](/docs/reference/http-api): inspect the wire contract and response envelope.
+- [Deployment](/docs/guides/deployment): build and operate the service.
+
+## Before production
+
+Prisma 8 MongoDB support is early access. A shared API key does not authenticate individual users; use a trusted backend to enforce user identity. Realtime broadcasting currently requires a single API process, and delivery is at least once. Read the [security guide](/docs/guides/api-key-management) and [operational limits](/docs/guides/deployment) before deployment.

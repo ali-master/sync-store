@@ -1,0 +1,87 @@
+---
+title: HTTP and Socket.IO API
+description: Routes, credential headers, response envelopes and transport semantics.
+---
+
+## REST base path
+
+`/api/v1`
+
+Every request requires `x-api-key`, `x-user-id` and `x-instance-id`. A write-capable key is required for PUT and DELETE.
+
+| Method | Path                | Result                                                         |
+| ------ | ------------------- | -------------------------------------------------------------- |
+| GET    | `/item/:key`        | Stored item or null for a missing key.                         |
+| PUT    | `/item/:key`        | Store `{ value, metadata? }` and return the item.              |
+| DELETE | `/item/:key`        | Remove an item; 204 response.                                  |
+| GET    | `/items?prefix=...` | All items, optionally filtered by literal key prefix.          |
+| GET    | `/keys?prefix=...`  | All matching keys.                                             |
+| DELETE | `/clear`            | Delete all items belonging to the supplied user; 204 response. |
+
+URL-encode keys when placing them in paths. Clear affects the user's server-side store, not just one client's local namespace.
+
+## Write a value
+
+```sh
+curl -X PUT 'http://localhost:3000/api/v1/item/preferences' \
+  -H "x-api-key: $API_KEY" \
+  -H 'x-user-id: demo-user' \
+  -H 'x-instance-id: terminal' \
+  -H 'content-type: application/json' \
+  --data '{"value":{"theme":"dark"}}'
+```
+
+Successful JSON responses use an envelope:
+
+```json
+{
+  "payload": {
+    "key": "preferences",
+    "value": { "theme": "dark" },
+    "version": 1,
+    "timestamp": 1792915200000
+  },
+  "requestId": "request-trace-id"
+}
+```
+
+The item can include additional identity and metadata fields. The SDK unwraps `payload`. A 204 response has no JSON body; do not call `response.json()` on it.
+
+Saved items and snapshots include an `id`. Combine it with `version` to identify a storage revision; the matching outbox event uses `recordId: id` and `eventId: "<id>:<version>"`. A successful mutation commits both the storage change and pending event atomically. It does not wait for every client to receive the event.
+
+The current missing-item handler returns a null payload; the historical Swagger 404 annotation does not describe that behavior. Use the actual payload or the SDK's existence check.
+
+## Error handling
+
+Treat non-2xx responses as failures. Invalid JSON/body validation is a client error; missing/invalid credentials or identity can reject authentication; forbidden permissions and exhausted quotas are rejected by the guard. Do not assume every quota rejection uses 429: current guard failures may be forbidden responses.
+
+Surface the returned message without exposing credentials. Inspect request trace IDs and server logs for diagnosis. Retry transport failures carefully: writes are at least once and an acknowledgement can be lost after the mutation succeeds.
+
+## Administration
+
+The console uses `/api/v1/admin` with `Authorization: Bearer YOUR_ADMIN_KEY`, `x-user-id` and `x-instance-id` headers. Only the installation administrator has the required `admin` scope. Responses use the same `payload` envelope. Never put this credential in a public client or URL.
+
+| Method and path | Request / behavior |
+| --- | --- |
+| `GET /overview` | Current collection counts, live sockets and database health. |
+| `GET /resources/:resource?page=1&q=search` | 25 records per page; resources: `keys`, `storage`, `sessions`, `conflicts`, `quotas`, `audits`, `analytics`, `archives`. Key secrets are excluded. Optional `userId` filters by user. |
+| `POST /keys` | `{ "name": "My app", "canRead": true, "canWrite": false }`; returns `{ id, key }` once. |
+| `PATCH /keys/:id` | Editable permission/restriction settings only. Credentials, scopes and counters cannot be assigned. |
+| `POST /keys/:id/rotate` | No body; returns the replacement `{ key }` once. |
+| `POST /storage` | `{ "userId": "user-1", "key": "preferences", "value": { "theme": "light" } }`; overwrites through normal synchronization. |
+| `POST /storage/delete` | `{ "userId": "user-1", "key": "preferences" }`. |
+| `POST /sessions/:id/disconnect` | No body; disconnects a live socket on its owning replica. |
+| `POST /conflicts/:id/resolve` | `{ "strategy": "last_write_wins" }`; also supports `first_write_wins` and `merge`. Records a proposal only. |
+| `PATCH /quotas/:id` | Updates existing stored quota configuration; `maxStorageBytes` is a decimal string. |
+
+An unknown resource or missing record returns 404; invalid settings return 400; restricting the installation administrator returns 409. Do not send an empty JSON body with a JSON content type for bodyless operations. See [dashboard](/docs/guides/dashboard) for operational limits and recovery.
+
+## Socket.IO transport
+
+Connect to namespace `/sync` with `auth: { apiKey, userId, instanceId }`. This is Socket.IO, not a raw WebSocket protocol.
+
+The SDK uses `sync:set`, `sync:get`, `sync:getAll`, `sync:remove`, `sync:clear`, `sync:subscribe` and `sync:unsubscribe`. Requests use acknowledgements with a `type: "response"` or `type: "error"` result. Prefer the SDK rather than duplicating its subscription and reconnect handling.
+
+Server `sync:update` and `sync:remove` events carry `eventId`, `recordId`, `key`, `version`, `timestamp` and `instanceId`; updates also contain `value` and optional `metadata`. Outbox retries can repeat an event. Compare versions within a record identity, deduplicate repeated events, and retain deletion versions so an older update cannot resurrect a removed value. Reconnect reconciliation is still required when a client was offline beyond Redis stream retention.
+
+Browse the running API at `/api/docs` for the expanded controller contract, including analytics and conflict endpoints. Their runtime limitations are documented in [offline sync](/docs/guides/offline-sync) and [deployment](/docs/guides/deployment).

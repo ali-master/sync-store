@@ -1,0 +1,62 @@
+---
+title: Getting started
+description: Run the API, playground and documentation locally with Bun and MongoDB.
+---
+
+## Requirements
+
+Use Bun 1.4.4 or newer and MongoDB 9.0.4. Prisma CLI is pinned to 8.0.0-rc.27 and its MongoDB library to 8.0.0-rc.20. MongoDB support is early access; see [deployment](/docs/guides/deployment) before production use.
+
+All commands below run from the repository root. They initialize an **empty development database**, not an existing production database.
+
+## Install and start MongoDB
+
+```sh
+bun install --frozen-lockfile
+export MONGO_ROOT_USERNAME=sync_store
+export MONGO_ROOT_PASSWORD='replace-with-a-random-password'
+docker compose -f docker/compose.yml up -d
+```
+
+The compose server is standalone and exposed on loopback only. Supply a URL with the matching password; URI-encode special characters.
+
+```sh
+export DATABASE_URL='mongodb://sync_store:YOUR_PASSWORD@127.0.0.1:27017/sync_store_dev?authSource=admin'
+export API_URL='http://localhost:3000'
+export JWT_SECRET="$(bun -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))')"
+export CSRF_SECRET="$(bun -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))')"
+bun run db:generate
+bun run db:deploy
+```
+
+Keep these variables in the terminal running the API, or put them in `apps/api/.env.local`. Shell exports also ensure the Prisma CLI receives the database URL. Do not commit secrets.
+
+## Create a development key
+
+```sh
+bun run build:api
+bun run dev:api
+```
+
+The first API startup prints a setup code. Open `http://localhost:3000/dashboard/` and follow onboarding: enter that code, create your administrator key and save it securely. Then create a separate application key with read and write access for the playground. Restarts preserve the administrator key. Recover it locally with `bun run --cwd apps/api admin:key` if needed. See the [dashboard guide](/docs/guides/dashboard).
+
+The API listens on port 3000. Its REST base path is `/api/v1`, Socket.IO namespace is `/sync`, and Swagger UI is `/api/docs`.
+
+## Open the playground
+
+In a second terminal:
+
+```sh
+bun run --cwd packages/sync-client build
+bun run --cwd examples/react-app dev
+```
+
+Open the URL printed by Vite. Enter the API origin and development key, then connect. A generated user ID keeps your demonstration separate from other tabs by default. See the [playground walkthrough](/docs/playground).
+
+## Read the docs locally
+
+```sh
+bun run --cwd apps/docs dev
+```
+
+Documentation runs at `http://localhost:4000`. Use [troubleshooting](/docs/troubleshooting) if connecting or generating the database contract fails.

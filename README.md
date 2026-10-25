@@ -1,332 +1,104 @@
-# 🔄 Sync Store
+<p align="center">
+  <img src="assets/logo.svg" alt="Sync Store" width="112" height="112" />
+</p>
 
-<div align="center">
-  <img src="./assets/logo.svg" alt="Sync Store Logo" width="200" height="200" />
-  
-  <h3>Real-time synchronized storage for distributed applications</h3>
-  
-  [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-  [![Node Version](https://img.shields.io/badge/node-%E2%89%A523.11.0-brightgreen)](https://nodejs.org)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
-  [![pnpm](https://img.shields.io/badge/pnpm-10.14.0-orange)](https://pnpm.io/)
-  
-  [Features](#✨-features) • [Getting Started](#🚀-getting-started) • [Architecture](#🏗️-architecture) • [API Docs](#📚-documentation) • [Contributing](#🤝-contributing)
-</div>
+# Sync Store
 
----
+A Bun/TypeScript monorepo for synchronizing JSON values between browser instances and devices.
 
-## 🎯 Overview
+- `apps/api`: NestJS HTTP and Socket.IO API, backed by MongoDB 9.
+- `packages/sync-client`: local cache, durable pending writes, HTTP/WebSocket transports and React hooks.
+- `packages/utils`: shared utilities.
+- `apps/docs`: Next.js/Fumadocs documentation.
+- `examples/react-app`: React example.
 
-**Sync Store** is a powerful, real-time storage synchronization system that keeps data consistent across multiple browser instances and devices. Built with modern web technologies, it provides seamless data persistence with automatic conflict resolution and offline support.
+## Self hosting
 
-Perfect for:
-- 🎮 **Multiplayer Games** - Sync game state across players
-- 💬 **Collaborative Apps** - Real-time document editing and sharing
-- 🛒 **E-commerce** - Synchronized shopping carts across devices
-- 📱 **Cross-device Apps** - Seamless experience across desktop and mobile
-- 🔔 **Real-time Dashboards** - Live data updates without polling
+Only Docker with Compose is required. Follow [Self hosted](apps/docs/content/docs/guides/self-hosted.mdx)
+to generate your secrets and run `docker compose up -d --build`. Bun, Node.js and MongoDB run inside containers.
 
-## ✨ Features
+## Development requirements
 
-### Core Capabilities
-- **🔄 Real-time Sync** - Instant data synchronization across all connected clients
-- **💾 Persistent Storage** - Data persists across sessions with local and remote storage
-- **🔌 Offline Support** - Queue operations when offline, sync when reconnected
-- **🔐 User Isolation** - Secure data separation between different users
-- **⚡ WebSocket Based** - Low-latency bidirectional communication
-- **🎯 Event-Driven** - React to storage changes with event listeners
-- **📦 Lightweight** - Minimal bundle size with zero dependencies
+Explore the [interactive playground](examples/README.md), follow the
+[getting-started guide](apps/docs/content/docs/getting-started.mdx), or run
+`bun run --cwd apps/docs dev` to browse the complete documentation.
 
-### Advanced Features
-- **🔄 Automatic Reconnection** - Handles network interruptions gracefully
-- **📊 Conflict Resolution** - Smart versioning to handle concurrent updates
-- **🎨 React Hooks** - First-class React integration with custom hooks
-- **🛡️ Type Safety** - Full TypeScript support with comprehensive types
-- **📈 Analytics Ready** - Built-in analytics module for usage tracking
-- **🔧 Extensible** - Modular architecture for easy customization
+- Bun 1.4.4 or newer.
+- MongoDB 9.0.4; use a managed replica set with authentication, TLS and backups for production.
+- Docker is optional for local MongoDB and API images.
 
-## 🚀 Getting Started
+Prisma CLI is pinned to **8.0.0-rc.27** and its MongoDB library to **8.0.0-rc.20**.
+MongoDB support in Prisma 8 is early access. This is an explicit compatibility risk, not a claim of production certification.
+TypeScript 6 remains the compiler API used by tsup and type checks; TypeScript 7 is available through the `@typescript/native` alias. The API builds with SWC; type checking runs separately with `bun run test:types`.
 
-### Prerequisites
-- Node.js >= 23.11.0
-- pnpm >= 10.14.0
-- MariaDB or SQLite (for API server)
+## Development
 
-### Quick Start
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/ali-master/sync-store.git
-cd sync-store
-```
-
-2. **Install dependencies**
-```bash
-pnpm install
-```
-
-3. **Set up the database**
-```bash
-# Copy environment variables
+```sh
+bun install --frozen-lockfile
 cp apps/api/.env.example apps/api/.env.local
-
-# Run database migrations
-pnpm db:setup
+# Set DATABASE_URL and JWT_SECRET in apps/api/.env.local.
+bun run db:generate
+bun run db:deploy
+bun run build:api
+bun run dev:api
 ```
 
-4. **Start development servers**
-```bash
-# Start all services
-pnpm dev
+The API serves `/api/v1` and Socket.IO namespace `/sync`.
+For horizontal scaling, use shared MongoDB and Redis with `docker compose -f compose.yml -f compose.scale.yml up -d --build --scale api=3`. The proxy exposes one address and the SDK uses WebSocket-only transport. See the [scaling guide](apps/docs/content/docs/guides/deployment.mdx).
+Open `/dashboard/` and follow first-time setup using the setup code in the API logs. Create and save your administrator key, then issue application keys in the console. See the [dashboard guide](apps/docs/content/docs/guides/dashboard.mdx).
+Swagger is at `/api/docs`. To run with Docker without installing Bun, see [Self hosted](apps/docs/content/docs/guides/self-hosted.mdx).
 
-# Or start individually
-pnpm dev:api  # API server only
-```
+## Client
 
-5. **Install the client in your app**
-```bash
-npm install @usex/sync-client
-# or
-pnpm add @usex/sync-client
-```
+```ts
+import { RemoteStorage } from "@usex/sync-client";
 
-### Basic Usage
-
-#### JavaScript/TypeScript
-```typescript
-import { createRemoteStorage } from '@usex/sync-client';
-
-// Initialize storage
-const storage = createRemoteStorage({
-  serverUrl: 'http://localhost:3000',
-  userId: 'user123',
-  autoConnect: true
+const storage = new RemoteStorage({
+  serverUrl: "http://localhost:3000",
+  apiKey: "a-key-issued-for-this-application",
+  userId: "authenticated-user",
+  instanceId: "unique-tab-or-device-id",
+  mode: "auto",
+  autoConnect: false,
 });
-
-// Store data
-await storage.setItem('theme', 'dark');
-await storage.setItem('preferences', { 
-  language: 'en',
-  notifications: true 
-});
-
-// Retrieve data
-const theme = storage.getItem('theme');
-const prefs = storage.getItem('preferences');
-
-// Listen for changes
-storage.on('change', (event) => {
-  console.log(`${event.key} changed from ${event.oldValue} to ${event.newValue}`);
-});
-
-// Check connection status
-if (storage.isOnline()) {
-  console.log('Connected to sync server');
-}
+await storage.connect();
+await storage.setItem("preferences", { theme: "dark" });
+const preferences = await storage.getItem("preferences");
+storage.destroy();
 ```
 
-#### React Integration
-```tsx
-import { useRemoteStorage, useStorageItem } from '@usex/sync-client';
+**Authentication boundary:** an API key currently authorizes the caller to supply user IDs.
+A shared key embedded in a public browser app is not end-user authentication.
+Keep unrestricted keys on a trusted server and validate user identity there before forwarding requests.
+Do not expose this API directly to untrusted users with a shared key.
 
-function App() {
-  // Initialize storage hook
-  const storage = useRemoteStorage({
-    serverUrl: 'http://localhost:3000',
-    userId: 'user123'
-  });
+## Verification
 
-  // Use reactive storage items
-  const [theme, setTheme] = useStorageItem('theme', 'light');
-  const [user, setUser] = useStorageItem('user', null);
-
-  return (
-    <div className={`app ${theme}`}>
-      <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-        Toggle Theme
-      </button>
-      {storage.isConnected && <span>✅ Synced</span>}
-    </div>
-  );
-}
+```sh
+bun run test:types
+bun run lint
+bun run build
+bun run test
+# Prepare a separate empty test database with db:deploy, then:
+TEST_DATABASE_URL=mongodb://127.0.0.1:27017/sync_store_test bun run --cwd apps/api test:e2e
+docker build -f apps/api/Dockerfile -t sync-store .
 ```
 
-## 🏗️ Architecture
+Integration tests create and remove only their own uniquely identified fixtures.
+They are skipped unless TEST_DATABASE_URL is explicitly set.
 
-### Project Structure
-```
-sync-store/
-├── apps/
-│   ├── api/              # NestJS API server
-│   └── docs/             # Documentation site
-├── packages/
-│   ├── sync-client/      # Browser client library
-│   ├── utils/            # Shared utilities
-│   └── tsconfig/         # Shared TypeScript configs
-├── examples/
-│   ├── react-app/        # React example app
-│   └── basic-usage/      # Vanilla JS examples
-└── docker/               # Docker configurations
-```
+## Synchronization guarantees and limits
 
-### Technology Stack
+Pending writes are persisted before sending and removed after an acknowledgement. Failed writes remain queued.
+Delivery is at least once: a lost acknowledgement may replay an already applied operation.
+Reconnect downloads the current server snapshot, including deletions, without uploading stale cache entries.
+The server increments versions atomically; simultaneous writes use last-write-wins behavior.
 
-#### Backend (API)
-- **Framework**: NestJS with Fastify adapter
-- **Database**: Prisma ORM with MariaDB/SQLite
-- **WebSocket**: Socket.io for real-time communication
-- **Authentication**: JWT + API Key authentication
-- **Caching**: Redis for session management
+The cache's encryption option is rejected because the previous implementation did not provide encryption.
+Historical analytics that were previously fabricated are now reported as unavailable.
+Conflict-resolution endpoints return and record a resolution decision; callers must write the returned value through the normal storage endpoint.
+Socket.IO broadcasts are process-local; run one API instance until a shared adapter and cross-instance tests are added.
 
-#### Frontend (Client)
-- **Core**: TypeScript with Socket.io client
-- **React**: Custom hooks for React integration
-- **Storage**: LocalStorage with sync layer
-- **Build**: tsup for optimized bundles
+## License
 
-### Data Flow
-```mermaid
-graph LR
-    A[Client 1] -->|WebSocket| D[API Server]
-    B[Client 2] -->|WebSocket| D
-    C[Client 3] -->|WebSocket| D
-    D --> E[Database]
-    D --> F[Redis Cache]
-    D -->|Broadcast| A
-    D -->|Broadcast| B
-    D -->|Broadcast| C
-```
-
-## 📚 Documentation
-
-### API Reference
-
-#### Storage Methods
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `setItem(key, value, metadata?)` | Store an item | `Promise<void>` |
-| `getItem(key)` | Retrieve an item | `any` |
-| `removeItem(key)` | Remove an item | `Promise<void>` |
-| `clear()` | Clear all items | `void` |
-| `getAllItems()` | Get all stored items | `Promise<StorageItem[]>` |
-| `getAllKeys()` | Get all keys | `string[]` |
-
-#### Event Handlers
-| Event | Description | Payload |
-|-------|-------------|---------|
-| `change` | Item value changed | `{ key, oldValue, newValue, source }` |
-| `sync` | Sync event occurred | `{ type, key, value, metadata }` |
-| `connect` | Connected to server | `{}` |
-| `disconnect` | Disconnected from server | `{}` |
-| `error` | Error occurred | `{ type, message, error }` |
-
-### Configuration Options
-```typescript
-interface RemoteStorageConfig {
-  serverUrl?: string;      // Server URL (default: http://localhost:3000)
-  userId: string;          // Unique user identifier
-  instanceId?: string;     // Instance ID (auto-generated)
-  autoConnect?: boolean;   // Auto-connect on init (default: true)
-  reconnection?: boolean;  // Enable auto-reconnection (default: true)
-  timeout?: number;        // Connection timeout in ms (default: 5000)
-}
-```
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pnpm test
-
-# Run tests with coverage
-pnpm test:cov
-
-# Run tests in watch mode
-pnpm test:watch
-
-# Run E2E tests
-pnpm test:e2e
-```
-
-## 📦 Building
-
-```bash
-# Build all packages
-pnpm build
-
-# Build specific package
-pnpm build:api
-
-# Production build
-NODE_ENV=production pnpm build
-```
-
-## 🚢 Deployment
-
-### Docker Deployment
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
-
-# Or use the provided scripts
-cd docker/mariadb
-./bootstrap.sh
-docker-compose up -d
-```
-
-## 🛠️ Development
-
-### Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start development servers |
-| `pnpm build` | Build all packages |
-| `pnpm test` | Run tests |
-| `pnpm lint` | Lint code |
-| `pnpm format` | Format code |
-| `pnpm db:migrate` | Run database migrations |
-| `pnpm db:seed` | Seed database |
-| `pnpm clean` | Clean build artifacts |
-
-### Code Quality
-- **Linting**: ESLint with custom configuration
-- **Formatting**: Prettier with consistent style
-- **Type Checking**: Strict TypeScript configuration
-- **Dependency Analysis**: Knip for unused dependencies
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-Built with ❤️ by [Ali Torki](https://github.com/alitorki)
-
-Special thanks to:
-- The NestJS team for the amazing framework
-- Socket.io for real-time capabilities
-- The open-source community for inspiration
-
-## 📞 Support
-
-- 📧 Email: ali_4286@live.com
-- 🐛 Issues: [GitHub Issues](https://github.com/ali-master/sync-store/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/ali-master/sync-store/discussions)
-- 📖 Docs: [sync-store.usestrict.dev](https://sync-store.usestrict.dev)
-
----
-
-<div align="center">
-  <strong>⭐ Star us on GitHub — it motivates us a lot!</strong>
-</div>
+Apache-2.0.

@@ -1,0 +1,48 @@
+---
+title: Troubleshooting
+description: Diagnose connection, schema, offline and build issues from observable behavior.
+---
+
+## Clients cannot connect
+
+Confirm the API process is running and use its origin, normally `http://localhost:3000`. Do not append `/sync` or the REST path for a WebSocket connection; the SDK chooses the namespace.
+
+Check the API key is active, unexpired and readable, and that user/instance IDs are nonempty. Browser developer tools distinguish CORS errors, unreachable hosts, non-2xx responses and Socket.IO handshake errors. Never paste credential headers into a public issue.
+
+An HTTP mode connection validates the keys endpoint; WebSocket mode requires a successful authenticated Socket.IO handshake. One transport working does not prove both work.
+
+## Reads succeed but writes fail
+
+Application keys are read-only by default. Open **API keys** in the dashboard and enable write access when needed. Check allowed methods, expiry and request quotas too.
+
+The editor accepts JSON, not JavaScript. Use double quotes and no trailing commas. A plain string must be quoted; empty string is `""`, not a blank editor.
+
+## Replica does not update
+
+Confirm both clients use the same server and user ID, with different instance IDs/cache namespaces. HTTP mode polls; allow time for a refresh. WebSocket events do not cross API processes in the current implementation.
+
+An offline writer can update its local cache before the server or replica sees it. Reconnect and watch the event stream. Do not clear localStorage to fix a connection problem if pending writes matter.
+
+## Null versus missing
+
+`getItem()` returns null for both a stored null and a missing local key. Use `hasItem()` to check existence. React's convenience value hook can fall back to a default for null; use explicit storage calls when the distinction matters.
+
+## Database validation errors
+
+Confirm the generated contract and deployed migrations match this revision. MongoDB distinguishes BSON Int32, Int64 and Double even when their printed values look identical. Do not disable validators to hide a mismatch; fix the conversion and rerun integration tests.
+
+Use `bun run db:generate` after contract changes. Review new migration plans before applying them. Do not rewrite an already applied migration.
+
+## Docker build fails
+
+A failure during image extraction with `No space left on device` is a Docker storage problem, even if the application compiled successfully. Inspect Docker disk usage and remove only resources you own and no longer need. Never prune database volumes as a generic fix.
+
+## Docs or demo build fails
+
+Build the SDK before starting the demo. Run the example's type check separately because Vite transpilation does not type-check TypeScript.
+
+Set SITE_URL before building deployed documentation; localhost Open Graph URLs cannot be fetched by social crawlers. Existing social caches may retain an old preview until refreshed.
+
+## Report a reproducible issue
+
+Include the revision, Bun/MongoDB versions, transport, sanitized error, request trace ID, steps, and whether the problem occurs with one API process. Exclude API keys, database URLs containing passwords and private stored values.

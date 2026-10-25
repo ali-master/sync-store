@@ -1,0 +1,89 @@
+---
+title: Client SDK
+description: Configure RemoteStorage and read, write, delete and observe JSON values.
+---
+
+## Use the workspace build
+
+The demo consumes `@usex/sync-client` through Bun workspaces. Build it before running a consumer:
+
+```sh
+bun run --cwd packages/sync-client build
+```
+
+Use the version packaged from this repository when evaluating this implementation; an independently published registry release may differ.
+
+## Create a client
+
+```ts
+import { RemoteStorage } from "@usex/sync-client";
+
+const storage = new RemoteStorage({
+  serverUrl: "http://localhost:3000",
+  apiKey: developmentKey,
+  userId: "demo-user",
+  instanceId: "browser-tab-a",
+  namespace: "my-app:tab-a",
+  mode: "websocket",
+  autoConnect: false,
+});
+
+await storage.connect();
+await storage.setItem("preferences", { theme: "dark" });
+const preferences = storage.getItem("preferences");
+await storage.removeItem("preferences");
+storage.destroy();
+```
+
+Use a trusted backend to bind production user IDs to authenticated sessions. A shared key in a public browser does not provide per-user authorization. See [API keys and security](/docs/guides/api-key-management).
+
+## Core operations
+
+| Method                           | Behavior                                                                         |
+| -------------------------------- | -------------------------------------------------------------------------------- |
+| `connect()`                      | Opens transport, flushes pending writes and downloads the server snapshot.       |
+| `getItem(key)`                   | Synchronously reads the local cache; missing values return null.                 |
+| `setItem(key, value, metadata?)` | Stores JSON locally and queues delivery; await it to observe online errors.      |
+| `hasItem(key)`                   | Asynchronously checks existence; use it to distinguish missing from stored null. |
+| `getAllKeys()`                   | Returns locally cached keys.                                                     |
+| `getAllItems()`                  | Asynchronously returns items; connected clients can fetch current server data.   |
+| `removeItem(key)`                | Queues a deletion.                                                               |
+| `clear()`                        | Asynchronously queues deletion of all keys for the user. Await it.               |
+| `disconnect()`                   | Stops transport while retaining cached values and pending writes.                |
+| `forceSync()`                    | Attempts to flush pending work; it does not grant connectivity.                  |
+| `destroy()`                      | Releases listeners, transport and timers when the client is no longer owned.     |
+
+Values must be JSON-serializable. `false`, zero, an empty string and null are supported; undefined, functions, circular references and BigInt are not JSON values. Encode large integers as strings.
+
+## Observe changes
+
+```ts
+const onChange = (event) => {
+  console.log(event.key, event.source);
+  render(storage.getItem(event.key));
+};
+
+storage.on("change", onChange);
+// Later, before the owning component goes away:
+storage.off("change", onChange);
+```
+
+Use `connect`, `disconnect`, `reconnect` and `error` for connection UI. A local change event is not proof of remote delivery; handle the write promise and observe a receiving client separately.
+
+## Select a transport
+
+- `websocket`: Socket.IO with acknowledgements and server events.
+- `http`: REST with polling-based subscriptions; updates are not instant push events.
+- `auto`: attempts WebSocket and can fall back to HTTP.
+
+Use the server origin for WebSocket/auto. HTTP defaults to `/api/v1`; an explicit path in the server URL can override it. Raw WebSocket connections are not compatible with Socket.IO.
+
+The SDK now selects Socket.IO's WebSocket transport directly. Custom Socket.IO clients must use `transports: ["websocket"]`; Engine.IO long-polling is disabled. Upgrade SDK clients together with the server. Multiple backend replicas must share MongoDB and Redis; see [scaling](/docs/guides/deployment#scale-websocket-delivery).
+
+## Namespaces and compatibility
+
+Server events include `eventId`, `recordId` and `version` for durable outbox delivery. The SDK suppresses duplicate and stale versions. Custom clients must handle at-least-once events, retain deletion versions, and reconcile snapshots after reconnect. Mutation responses confirm that data and its event are saved; dispatch can lag during Redis outages.
+
+Use distinct cache namespaces for independent clients on the same origin. A namespace separates browser storage; it is **not** a server-side access-control boundary.
+
+The former `encryptionKey` option throws because it did not encrypt values. Compression, browser background execution and every historical configuration field are not promises of implemented behavior. The supported core flow is explicit connection, JSON mutations, subscriptions and the persistent outbox.

@@ -5,13 +5,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-pnpm dev
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
@@ -38,3 +32,18 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 This directory contains example API routes for the headless API app.
 
 For more details, see [route.js file convention](https://nextjs.org/docs/app/api-reference/file-conventions/route).
+
+# Branding and link previews
+
+The canonical logo and share image live in the repository's `assets/` directory.
+Next.js copies them to `public/brand/` and creates `app/icon.svg` on dev/build.
+Generated copies are ignored by Git; edit the originals rather than the copies.
+
+Set `SITE_URL` to the public documentation origin before building (for example,
+`SITE_URL=https://docs.example.com bun run build`). This provides absolute URLs for
+Open Graph and Twitter cards. Vercel's production domain is detected automatically;
+local development defaults to `http://localhost:4000`.
+
+The GitHub repository preview is a separate setting: upload
+`assets/social-preview.png` under repository **Settings → General → Social preview**.
+Committing an image or adding website metadata does not change that GitHub setting.

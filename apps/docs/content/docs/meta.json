@@ -2,11 +2,19 @@
   "pages": [
     "---Introduction---",
     "index",
+    "getting-started",
+    "playground",
     "---Guides---",
+    "guides/self-hosted",
+    "guides/dashboard",
     "guides/api-key-management",
-    "---API Documentation---",
-    "...",
+    "guides/client-sdk",
+    "guides/react",
+    "guides/offline-sync",
+    "guides/deployment",
     "---References---",
-    "...(api)"
+    "reference/http-api",
+    "reference/configuration",
+    "troubleshooting"
   ]
 }

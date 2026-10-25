@@ -1,0 +1,40 @@
+---
+title: Offline and reconnect
+description: Understand local writes, acknowledgements, retries and the limits of synchronization.
+---
+
+## The write path
+
+1. The client updates local storage and creates a pending operation.
+2. The pending operation is persisted in a separate outbox namespace.
+3. When connected, operations are sent in order.
+4. Acknowledged operations are removed from the outbox.
+5. On reconnect, pending operations are flushed before the server snapshot is reconciled.
+
+A failed online write rejects and remains queued. A disconnected client can save locally. If browser storage is unavailable or full, writes can fail: surface the error instead of promising durability.
+
+## Delivery is at least once
+
+If the server accepts a mutation but its acknowledgement is lost, a retry can repeat that mutation and increase its version again. There is no exactly-once guarantee or operation-ID deduplication.
+
+Server storage versions increase atomically. This is not a CRDT, a distributed transaction, or a guarantee that simultaneous edits are automatically merged without loss.
+
+The server separately appends an event to an embedded outbox in the same atomic MongoDB write. A replica crash cannot leave a committed storage mutation without its pending event. Another replica retries publication after lease expiry. Publication retries retain the same `eventId`; the SDK suppresses duplicate and older record versions, including deletion events. This event deduplication does not deduplicate retried write requests. See [server outbox durability](/docs/guides/deployment#atomic-server-outbox).
+
+## Remote deletions
+
+Snapshot reconciliation removes locally cached keys deleted while a client was disconnected. Locally pending keys are protected until pending work is sent. Offline remove and clear operations are queued rather than silently discarded.
+
+Browser localStorage retains cache and outbox across reloads in the same origin and namespace. Clearing site data, private-browsing eviction or changing namespaces can make pending work unavailable.
+
+## Conflict records
+
+Conflict history and resolution are scoped to the requesting user ID. A resolution records a proposed value. The caller must apply that value through the normal write endpoint; recording a resolution does not itself mutate the stored item.
+
+Do not assume every concurrent write produces a conflict record. The storage mutation path and the explicit conflict workflow are distinct.
+
+## Runtime limits
+
+For multiple API replicas, configure the shared Redis Streams adapter and a WebSocket-capable load balancer. Reconnecting to another replica reconciles from MongoDB; no process-local pending queue is used. See [scaling](/docs/guides/deployment#scale-websocket-delivery). HTTP polling has a delay and consumes requests/quota.
+
+There is no service-worker delivery guarantee after closing a tab. Reopen the app with the same identity and namespace to resume pending work.

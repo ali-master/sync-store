@@ -1,0 +1,102 @@
+---
+title: Self hosted
+description: Run Sync Store with Docker. No Bun, Node.js or database installation required.
+---
+
+## What you need
+
+Install **Docker with Docker Compose**. Download this repository from GitHub and extract it, or clone it with Git. Open a terminal in the repository folder.
+
+You do **not** need Bun, Node.js or MongoDB on your computer. Docker builds the API and runs MongoDB for you. The first build downloads dependencies and can take several minutes and several gigabytes of disk space.
+
+## 1. Create your secrets
+
+Run this once in a macOS, Linux or WSL terminal:
+
+```sh
+test ! -e .env && docker run --rm oven/bun:1.4.4 bun -e '
+const names = ["MONGO_ROOT_PASSWORD", "JWT_SECRET", "CSRF_SECRET"];
+for (const name of names) console.log(name + "=" + require("node:crypto").randomBytes(32).toString("hex"));
+' > .env
+```
+
+This creates three random secrets in `.env`. Keep this file private and backed up. The command does not overwrite an existing `.env`. If Docker fails, remove only the empty file it created and retry.
+
+Already have a root `.env`? Add the three variables above with independently generated secrets. Use a 64-character hexadecimal value for the MongoDB password so it is safe inside the connection URL. Do not replace an existing database password just by editing this file.
+
+## 2. Start Sync Store
+
+```sh
+docker compose up -d --build
+docker compose ps -a
+```
+
+Docker starts MongoDB and Redis, prepares the collections and indexes, then starts the API. Redis forwards WebSocket events between API replicas. The `init` container finishing with **Exited (0)** is normal.
+
+Open [http://localhost:3000/api/docs](http://localhost:3000/api/docs) to see the API.
+
+Open [the dashboard](http://localhost:3000/dashboard/) and select **Set up Sync Store**. Run `docker compose logs api` and paste the **Setup code** into the onboarding form. Enter an administrator name and select **Create administrator key**. Save the generated key in your password manager, confirm you saved it, then open your console.
+
+Create a separate application key under **API keys → Create key**. Enable write access if your application needs it. Copy its secret into your application's server-side configuration. Keep the administrator credential and setup code private. Existing installations skip onboarding and ask for their saved administrator key.
+
+The administrator key survives restarts. To recover it later, run `docker compose exec api bun run admin:key`. Bun runs inside Docker; you do not install it on your computer. See the [dashboard walkthrough](/docs/guides/dashboard).
+
+## 3. Check your connection
+
+Send this read-only request from your terminal. Replace `YOUR_API_KEY` with the application key you just created:
+
+```sh
+curl --fail-with-body http://localhost:3000/api/v1/keys \
+  -H 'x-api-key: YOUR_API_KEY' \
+  -H 'x-user-id: self-hosted-check' \
+  -H 'x-instance-id: terminal'
+```
+
+A new database returns an empty list inside `payload`. An HTTP error means the service or credentials need attention; opening the documentation alone does not verify database access.
+
+## Everyday commands
+
+Run these from the same repository folder:
+
+```sh
+# See API logs
+docker compose logs --tail=100 api
+
+# Investigate setup failures
+docker compose logs --tail=100 init mongodb
+
+# Stop without deleting data
+docker compose down
+
+# Start again
+docker compose up -d
+```
+
+Data is stored in the `mongodb_data` named volume. **Do not use `docker compose down -v`** unless you intend to delete the database. Keep the same Compose project name and `.env` when restarting.
+
+Need another port? Add `API_PORT=3001` and `API_URL=http://localhost:3001` to `.env`, then run `docker compose up -d`. Use port 3001 in the URLs above.
+
+If the build or MongoDB reports **No space left on device**, check `docker system df` and increase Docker's available disk space before retrying. Free space on the host does not necessarily mean Docker's virtual disk has space. Do not remove database volumes to fix a build failure.
+
+## Update an existing installation
+
+To run multiple backend replicas, follow [Scale WebSocket delivery](/docs/guides/deployment#scale-websocket-delivery). The scaling Compose file supplies a single proxy address for all replicas.
+
+Back up the database and `.env` first. Obtain the new source revision while keeping both, then run:
+
+```sh
+docker compose stop api
+docker compose build
+docker compose run --rm init
+docker compose up -d
+```
+
+Continue to the last command only if initialization succeeds. Existing keys and stored items are preserved. Rotate or disable application keys in the dashboard when needed.
+
+## Before exposing it to the internet
+
+The default setup listens on **localhost only** and does not publish MongoDB's port. Access it locally or through an SSH tunnel. For a public service, configure an HTTPS reverse proxy with Socket.IO support and set `API_URL` to the public origin.
+
+This is a simple single-server setup, not a high-availability installation. It uses a MongoDB administrator account for initialization and runtime; use a dedicated restricted runtime account for a hardened deployment. Back up MongoDB and test restoring it before relying on stored data.
+
+A shared API key does not authenticate individual users. Put user authentication in your trusted backend. Current CORS settings are permissive, multiple API replicas require shared Redis, and Prisma 8 MongoDB support is early access. See [API keys and security](/docs/guides/api-key-management) and [deployment limits](/docs/guides/deployment) before public use.
