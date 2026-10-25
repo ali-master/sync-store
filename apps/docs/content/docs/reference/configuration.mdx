@@ -22,6 +22,12 @@ The Nest application reads its environment files, including `apps/api/.env.local
 
 No initial API-key environment variables are required. Open `/dashboard/` and complete onboarding with the setup code from the API logs to create your administrator credential. See [dashboard and credential recovery](/docs/guides/dashboard).
 
+[Operational reports](/docs/guides/operational-reports) store minute metrics and
+metadata-only change events for 90 days. Shared storage-size snapshots run once per
+minute across replicas. There is no additional service or secret to configure.
+Report retention is separate from `HISTORY_RETENTION_DAYS`; size charts measure
+logical values and retained BSON, not physical MongoDB disk usage.
+
 For multiple API replicas, set `REDIS_URL` to the same Redis instance and `SOCKET_IO_PREFIX` to the same installation-specific name (default `sync-store`). Omitting Redis enables single-process mode only. See [scaling](/docs/guides/deployment#scale-websocket-delivery).
 
 Use `DATABASE_URL` to select the MongoDB database. Distributed outbox delivery requires Redis 7.2+ with AOF enabled and permission to run `WAITAOF`. Compose configures this automatically. No additional outbox environment variables are required; the pending-event index is created at API startup. Apply the database migrations before starting the updated API; the Compose `init` service does this automatically.

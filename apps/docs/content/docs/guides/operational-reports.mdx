@@ -17,7 +17,9 @@ across replicas before calculating the p95 bucket upper bound. The finite upper
 bounds are 10, 50, 100, 250, 500, 1,000, 5,000, 15,000 and 60,000 milliseconds.
 A p95 in the overflow bucket is unavailable rather than falsely capped at 60 seconds.
 
-The pending-event count and oldest pending age are sampled once per minute. These
+The pending-event count and oldest pending age are sampled once per minute. A unique
+MongoDB minute claim lets only one replica scan shared state; a failed sampler leaves
+a gap until the next minute. These
 are shared cluster snapshots even when a replica filter is selected; they are never
 summed once per replica. Hourly charts show the last recorded snapshot in each hour.
 
@@ -70,3 +72,53 @@ a historical traffic window.
 `GET /api/v1/admin/reports/usage` accepts the same time-range parameters plus
 `project` and `apiKeyId`. Live quotas only cover the returned top 50 keys, or the
 explicitly selected key. Metrics share the 90-day best-effort retention policy.
+
+## Changes and growth
+
+Open **Changes & growth** to compare creations, updates, deletions and restores with
+the preceding period. Filter by project. Change events are recorded in the same
+MongoDB transaction as the storage mutation and outbox entry, so rollback leaves no
+event and an idempotent retry adds no duplicate. Restoring a value counts as one
+restore instead of an additional update. A delete or restore that changes nothing
+does not count as a new revision. Counts start after installing this release; old
+history snapshots are not misclassified as new mutations.
+
+Conflicts count retained conflict records by creation time. The top 50 changed keys
+group equal key names within each project, across users. No values or credentials
+are returned. Change-event metadata is retained for 90 days independently of the
+history snapshot retention setting.
+
+Storage growth is sampled by project each minute:
+
+- **Active items** excludes deletion tombstones.
+- **Active JSON value size** sums the logical UTF-8 value bytes of active items.
+- **Retained history BSON size** measures retained documents, including metadata;
+  it is not compressed disk size, index size or a billing estimate.
+- **Retained versions** can decrease when MongoDB removes expired history.
+
+Snapshots are measurements, not a reconstruction from today's data. Hourly charts
+use the last available sample. The sampler scans current storage and retained
+history with a 10-second timeout per aggregation; very large installations may
+need incremental size counters. A timeout produces a gap, not a zero estimate.
+
+`GET /api/v1/admin/reports/changes` accepts `hours`, optional `end`, and `project`.
+The endpoint is administrator-only like the other reports.
+
+## Saved views and CSV
+
+On any report, enter a name and choose **Save view**. This saves the report type,
+relative time window and filters to this installation, shared with administrators.
+Click its name to reload the view or × to delete it. Saving a view does not freeze
+its results. The picker shows the 100 newest saved views.
+
+**Export CSV** downloads current-period event buckets and available snapshots;
+usage exports also include live quota cards. Each row identifies its source and
+the report range and filters. Blank measurements stay blank. Text that could be
+interpreted as a spreadsheet formula is escaped. The export is generated locally
+from the report response; it never includes API-key secrets or stored JSON values.
+
+Saved-view API: `GET`/`POST /api/v1/admin/reports/saved` and
+`DELETE /api/v1/admin/reports/saved/:id`. All require administrator authentication.
+POST accepts `{ name, kind, query }`, with `kind` one of `health`, `usage`, `changes`;
+`query` contains string values for `hours`, `project`, `apiKeyId` and `replica`.
+Only applicable filters are used by each report.

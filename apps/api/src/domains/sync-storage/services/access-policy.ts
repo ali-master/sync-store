@@ -12,6 +12,11 @@ export const defaultPolicy: AccessPolicy = {
 };
 const marker = "project:";
 
+/** Recover the server-owned project namespace for metadata-only operational reporting. */
+export function storageProject(userId: string): string {
+  return userId.startsWith(marker) ? JSON.parse(userId.slice(marker.length))[0] : "default";
+}
+
 /** Keep existing data in the default project; reserve an unambiguous namespace for new projects. */
 export function projectUser(projectId: string, userId: string): string {
   if (userId.startsWith(marker)) throw new BadRequestException("Reserved user identifier prefix");

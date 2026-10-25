@@ -22,6 +22,7 @@ type Page = { items: Row[]; total: number; page: number; pageSize: number };
 const sections = [
   ["health", "Sync health", "◉"],
   ["usage", "Usage & quotas", "◴"],
+  ["changes", "Changes & growth", "↗"],
   ["overview", "Overview", "◈"],
   ["storage", "Data explorer", "▤"],
   ["keys", "API keys", "⌘"],
@@ -36,6 +37,8 @@ const sections = [
   ["system", "System", "⚙"],
 ];
 const descriptions: Record<string, string> = {
+  changes:
+    "Track data changes, retained history and storage growth. Save report views and export CSV.",
   usage: "Request trends, top consumers and live quota forecasts for each project and API key.",
   health: "Publication latency, pending events and connection trends across your replicas.",
   history:
@@ -199,7 +202,7 @@ export default function App({ section }: { section: string }) {
         token,
         signal,
       ),
-    enabled: Boolean(token) && !["system", "health", "usage"].includes(section),
+    enabled: Boolean(token) && !["system", "health", "usage", "changes"].includes(section),
   });
   const mutation = useMutation({
     mutationFn: (action: () => Promise<void>) => action(),
@@ -667,7 +670,7 @@ export default function App({ section }: { section: string }) {
               </div>
             </>
           )}
-          {["health", "usage"].includes(section) ? (
+          {["health", "usage", "changes"].includes(section) ? (
             <Reports kind={section} request={request} sessionId={sessionId} />
           ) : section === "system" && overview ? (
             <section className="grid gap-5 xl:grid-cols-2">

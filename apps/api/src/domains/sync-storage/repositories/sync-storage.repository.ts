@@ -1,3 +1,4 @@
+import { storageProject } from "../services/access-policy";
 import {
   Injectable,
   BadRequestException,
@@ -174,6 +175,7 @@ export class SyncStorageRepository {
     );
     if (!document) throw new Error("MongoDB did not return the saved item");
     await this.snapshot(document);
+    await this.recordChange(document, !previous || previous.isDeleted ? "created" : "updated");
     const { _id, ...fields } = document;
     return this.toEntity({ ...fields, id: _id } as Item);
   }
@@ -194,7 +196,10 @@ export class SyncStorageRepository {
           useBigInt64: true,
         },
       );
-      if (document) await this.snapshot(document);
+      if (document) {
+        await this.snapshot(document);
+        await this.recordChange(document, "deleted");
+      }
     });
   }
 
@@ -235,6 +240,42 @@ export class SyncStorageRepository {
         { $setOnInsert: snapshot },
         { upsert: true, session: mutationSession.getStore() },
       );
+  }
+
+  /** Persist a metadata-only report event atomically with the new storage version. */
+  private async recordChange(document: ItemDocument, action: string) {
+    await this.database.native
+      .collection<{ _id: string; [key: string]: any }>("storage_change_events")
+      .updateOne(
+        { _id: `${document._id}:${document.version}` },
+        {
+          $setOnInsert: {
+            time: document.lastModified,
+            project: storageProject(document.userId),
+            key: document.key,
+            action,
+            bytes: document.isDeleted ? 0 : Number(document.size),
+            expiresAt: new Date(+document.lastModified + 90 * 86400000),
+          },
+        },
+        { upsert: true, session: mutationSession.getStore() },
+      );
+  }
+
+  /** Relabel the new revision inside the restore transaction, without counting a second mutation. */
+  private async markRestored(userId: string, key: string) {
+    const document = await this.collection.findOne(
+      { userId, key },
+      { session: mutationSession.getStore() },
+    );
+    if (document)
+      await this.database.native
+        .collection<{ _id: string }>("storage_change_events")
+        .updateOne(
+          { _id: `${document._id}:${document.version}` },
+          { $set: { action: "restored" } },
+          { session: mutationSession.getStore() },
+        );
   }
 
   /** Page retained versions, including tombstones for deleted keys. */
@@ -319,6 +360,7 @@ export class SyncStorageRepository {
           throw new ConflictException("Item changed since preview; preview again before restoring");
         if (snapshot.isDeleted) {
           await this.delete(userId, key, instanceId);
+          if (current && !current.isDeleted) await this.markRestored(userId, key);
           return { restored: true, isDeleted: true };
         }
         const item = await this.upsert({
@@ -331,6 +373,7 @@ export class SyncStorageRepository {
           lastModified: new Date(),
           version: 1,
         });
+        await this.markRestored(userId, key);
         return { restored: true, item };
       },
     );

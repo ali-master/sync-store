@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { reportCsv } from "../lib/report-csv";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Activity, RefreshCw } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
@@ -113,6 +114,30 @@ export function Reports({
   const [replica, setReplica] = useState("");
   const [filters, setFilters] = useState({ project: "", apiKeyId: "" });
   const [page, setPage] = useState(1);
+  const [tableSource, setTableSource] = useState("events");
+  const [reportName, setReportName] = useState("");
+  const saved = useQuery<Row[]>({
+    queryKey: ["console", sessionId, "saved-reports"],
+    queryFn: ({ signal }) => request("reports/saved", "GET", undefined, undefined, signal),
+  });
+  const save = useMutation({
+    mutationFn: () =>
+      request("reports/saved", "POST", {
+        name: reportName,
+        kind,
+        query: { hours, replica, ...filters },
+      }),
+    onSuccess: () => {
+      setReportName("");
+      void saved.refetch();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => request("reports/saved/" + id, "DELETE"),
+    onSuccess: () => {
+      void saved.refetch();
+    },
+  });
   const [selected, setSelected] = useState<Row | null>(null);
   const query = useQuery<Row>({
     queryKey: ["console", sessionId, "reports", kind, hours, replica, filters],
@@ -130,16 +155,24 @@ export function Reports({
   const start = data ? +new Date(data.start) : 0,
     end = data ? +new Date(data.end) : 0;
   const rows: Row[] = data?.series?.filter((row: Row) => +new Date(row.time) >= start) ?? [];
+  const tableRows: Row[] =
+    tableSource === "events"
+      ? rows
+      : (data?.growth || data?.snapshots || []).filter((row: Row) => +new Date(row.time) >= start);
   const previous: Row[] = data?.series?.filter((row: Row) => +new Date(row.time) < start) ?? [];
   const total = (items: Row[], field: string) => items.reduce((n, row) => n + (row[field] || 0), 0);
   const fields =
     kind === "health"
       ? ["published", "publishFailures", "connections", "disconnections"]
-      : ["admitted", "reads", "writes", "quotaRejections"];
+      : kind === "usage"
+        ? ["admitted", "reads", "writes", "quotaRejections"]
+        : ["created", "updated", "deleted", "restored"];
   const labels =
     kind === "health"
       ? ["Publications", "Failed drain attempts", "Connections", "Disconnections"]
-      : ["Quota admissions", "Read admissions", "Write admissions", "Quota / disabled rejections"];
+      : kind === "usage"
+        ? ["Quota admissions", "Read admissions", "Write admissions", "Quota / disabled rejections"]
+        : ["Created", "Updated", "Deleted", "Restored"];
   return (
     <section className="space-y-6">
       <Card className="flex-row flex-wrap items-end gap-4 p-5">
@@ -186,6 +219,7 @@ export function Reports({
       </Card>
       {kind !== "health" && (
         <form
+          key={JSON.stringify(filters)}
           className="flex flex-wrap items-end gap-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -200,15 +234,115 @@ export function Reports({
         >
           <label className="grid gap-2 text-xs">
             Project ID
-            <Input name="project" maxLength={128} placeholder="All projects" />
+            <Input
+              defaultValue={filters.project}
+              name="project"
+              maxLength={128}
+              placeholder="All projects"
+            />
           </label>
-          <label className="grid gap-2 text-xs">
-            API key ID
-            <Input name="apiKeyId" maxLength={128} placeholder="All keys (not a secret)" />
-          </label>
+          {kind === "usage" && (
+            <label className="grid gap-2 text-xs">
+              API key ID
+              <Input
+                defaultValue={filters.apiKeyId}
+                name="apiKeyId"
+                maxLength={128}
+                placeholder="All keys (not a secret)"
+              />
+            </label>
+          )}
           <Button type="submit">Apply filters</Button>
         </form>
       )}
+      <Card className="p-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-2 text-xs">
+            Report name
+            <Input
+              maxLength={80}
+              value={reportName}
+              onChange={(e) => setReportName(e.target.value)}
+              placeholder="Weekly operations review"
+            />
+          </label>
+          <Button disabled={!reportName.trim() || save.isPending} onClick={() => save.mutate()}>
+            Save view
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!data}
+            onClick={() => {
+              const records = [
+                ...rows.map((row) => ({ ...row, source: "events" })),
+                ...(data?.growth || data?.snapshots || [])
+                  .filter((row: Row) => +new Date(row.time) >= start)
+                  .map((row: Row) => ({ ...row, source: "snapshots" })),
+                ...(data?.quotas || []).map((row: Row) => ({ ...row, source: "live-quotas" })),
+              ];
+              const csv = reportCsv(
+                records.map((row) => ({
+                  ...row,
+                  report: kind,
+                  projectFilter: filters.project,
+                  keyFilter: filters.apiKeyId,
+                  replicaFilter: replica,
+                  rangeStart: data?.start,
+                  rangeEnd: data?.end,
+                })),
+              );
+              const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = `sync-store-${kind}.csv`;
+              anchor.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            Export CSV
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Saved views share filters with installation administrators; they do not freeze report
+          results.
+        </p>
+        {(save.error || saved.error || remove.error) && (
+          <p role="alert" className="text-destructive">
+            {(save.error || saved.error || remove.error)?.message}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {saved.data
+            ?.filter((view) => view.kind === kind)
+            .map((view) => (
+              <div key={view._id} className="flex rounded-lg border">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setHours(view.query.hours || "24");
+                    setReplica(view.query.replica || "");
+                    setFilters({
+                      project: view.query.project || "",
+                      apiKeyId: view.query.apiKeyId || "",
+                    });
+                    setPage(1);
+                    setSelected(null);
+                  }}
+                >
+                  {view.name}
+                </Button>
+                <Button
+                  aria-label={`Delete saved view ${view.name}`}
+                  variant="ghost"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate(view._id)}
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
+        </div>
+      </Card>
       {query.isPending && <p role="status">Loading recorded metrics…</p>}
       {query.error && (
         <p role="alert" className="text-destructive">
@@ -298,7 +432,7 @@ export function Reports({
                 {data.retentionDays} days.
               </p>
             </>
-          ) : (
+          ) : kind === "usage" ? (
             <>
               <div className="grid gap-5 xl:grid-cols-2">
                 {[...fields, "httpRequests", "httpErrors", "http429"].map((field) => (
@@ -407,7 +541,63 @@ export function Reports({
                 traffic.
               </p>
             </>
+          ) : (
+            <>
+              <div className="grid gap-5 xl:grid-cols-2">
+                {[...fields, "conflicts"].map((field) => (
+                  <Trend
+                    key={field}
+                    title={field[0].toUpperCase() + field.slice(1)}
+                    rows={rows}
+                    field={field}
+                    start={start}
+                    end={end}
+                    step={data.step}
+                    onSelect={setSelected}
+                  />
+                ))}
+                {[
+                  ["items", "Active items", "items"],
+                  ["valueBytes", "Active JSON value size", "bytes"],
+                  ["historyBytes", "Retained history BSON size", "bytes"],
+                  ["historyVersions", "Retained versions", "versions"],
+                ].map(([field, title, unit]) => (
+                  <Trend
+                    key={field}
+                    title={title}
+                    unit={unit}
+                    rows={data.growth}
+                    field={field}
+                    start={start}
+                    end={end}
+                    step={data.step}
+                    onSelect={setSelected}
+                  />
+                ))}
+              </div>
+              <Card className="p-5">
+                <h2 className="font-semibold">Most changed keys · top 50</h2>
+                {data.topKeys.map((row: Row) => (
+                  <div
+                    key={JSON.stringify(row._id)}
+                    className="flex flex-wrap justify-between gap-3 border-b py-3 text-sm"
+                  >
+                    <span className="break-all">
+                      {row._id.project} / {row._id.key}
+                    </span>
+                    <strong>{row.changes} changes</strong>
+                  </div>
+                ))}
+              </Card>
+              <p className="text-xs leading-6 text-muted-foreground">
+                Mutation counts are transactional and start with this release. An idempotent retry
+                is not another change. Conflicts count retained conflict records. Storage charts
+                show logical JSON and BSON sizes, not compressed disk usage. History expiry can
+                reduce retained volume. Snapshots are best-effort.
+              </p>
+            </>
           )}
+
           {selected && (
             <Card className="p-5">
               <h2 className="font-semibold">
@@ -430,14 +620,45 @@ export function Reports({
           )}
           <Card className="p-5">
             <h2 className="font-semibold">Recorded intervals</h2>
+            {kind !== "usage" && (
+              <label className="grid gap-2 text-xs">
+                Table source
+                <NativeSelect
+                  value={tableSource}
+                  onChange={(event) => {
+                    setTableSource(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="events">Event counts</option>
+                  <option value="snapshots">Cluster snapshots</option>
+                </NativeSelect>
+              </label>
+            )}
             <RecordsTable
-              fields={[
-                "time",
-                ...fields,
-                ...(kind === "health" ? ["p95UpperMs"] : ["httpRequests", "httpErrors", "http429"]),
-              ]}
+              fields={
+                tableSource === "snapshots"
+                  ? [
+                      "time",
+                      ...(kind === "health"
+                        ? ["pending", "oldestAgeMs"]
+                        : ["items", "valueBytes", "historyBytes", "historyVersions"]),
+                    ]
+                  : [
+                      "time",
+                      ...fields,
+                      ...(kind === "health"
+                        ? ["p95UpperMs"]
+                        : kind === "usage"
+                          ? ["httpRequests", "httpErrors", "http429"]
+                          : ["conflicts"]),
+                    ]
+              }
               labels={{ time: "Time", p95UpperMs: "p95 upper (ms)" }}
-              records={{ items: rows.slice((page - 1) * 25, page * 25), total: rows.length }}
+              records={{
+                items: tableRows.slice((page - 1) * 25, page * 25),
+                total: tableRows.length,
+              }}
               page={page}
               loading={query.isFetching}
               query=""

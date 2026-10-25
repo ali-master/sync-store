@@ -57,6 +57,22 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("version history and restore", (
         }),
       ).rejects.toThrow("abort");
       expect(await repo.history("user", "theme")).toHaveLength(5);
+      const changes = await native
+        .collection("storage_change_events")
+        .find({})
+        .sort({ time: 1 })
+        .toArray();
+      expect(changes).toHaveLength(5);
+      expect(changes.map((row) => row.action)).toEqual([
+        "created",
+        "updated",
+        "deleted",
+        "restored",
+        "updated",
+      ]);
+      expect(changes.every((row) => row.value === undefined && row.project === "default")).toBe(
+        true,
+      );
       const time = new Date();
       await native.collection<{ _id: string; [key: string]: any }>("storage_history").insertMany(
         Array.from({ length: 65 }, (_, index) => ({

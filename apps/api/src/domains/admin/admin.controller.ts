@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
   Header,
+  Delete,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminService } from "./admin.service";
@@ -37,6 +38,29 @@ export class AdminController {
   @ApiOperation({ summary: "Read project/key traffic trends and live UTC quota forecasts" })
   usage(@Query() query: Record<string, string>) {
     return this.operations.usage(query);
+  }
+
+  @Get("reports/changes")
+  @Header("Cache-Control", "no-store")
+  @ApiOperation({ summary: "Read durable change counts and sampled logical data growth" })
+  changes(@Query() query: Record<string, string>) {
+    return this.operations.changes(query);
+  }
+
+  @Get("reports/saved")
+  @Header("Cache-Control", "no-store")
+  savedReports() {
+    return this.operations.savedReports();
+  }
+
+  @Post("reports/saved")
+  saveReport(@Body() body: unknown, @Req() req: any) {
+    return this.operations.saveReport(body, req.apiKey.id);
+  }
+
+  @Delete("reports/saved/:id")
+  deleteReport(@Param("id") id: string) {
+    return this.operations.deleteReport(id);
   }
 
   @Post("history/preview")

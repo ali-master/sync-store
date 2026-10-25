@@ -16,9 +16,18 @@ test.skipIf(!process.env.TEST_REPORTS_DATABASE_URL)(
         { time, replica: "a", published: 95, latency0: 95 },
         { time, replica: "b", published: 5, latency4: 5 },
       ]);
+      await db.collection("sync_storage_items").insertOne({
+        userId: 'project:["one","user"]',
+        isDeleted: false,
+        size: 5,
+        outbox: [{ timestamp: Date.now() - 5000 }, { timestamp: Date.now() }],
+      });
       await db
         .collection("sync_storage_items")
-        .insertOne({ outbox: [{ timestamp: Date.now() - 5000 }, { timestamp: Date.now() }] });
+        .insertOne({ userId: 'project:["one","user"]', isDeleted: true, size: 100 });
+      await db
+        .collection("storage_history")
+        .insertOne({ userId: 'project:["one","user"]', value: "private-history-payload" });
       await operations.snapshot();
       await operations.snapshot();
       const result = await operations.health({ hours: "1" });
@@ -62,6 +71,39 @@ test.skipIf(!process.env.TEST_REPORTS_DATABASE_URL)(
       expect(JSON.stringify(usage)).not.toContain("secret-must-not-escape");
       const mismatch = await operations.usage({ project: "two", apiKeyId: "key-one" });
       expect(mismatch.quotas).toHaveLength(0);
+      await db.collection("storage_change_events").insertMany([
+        { time, project: "one", key: "settings/theme", action: "created", bytes: 5 },
+        { time, project: "one", key: "settings/theme", action: "restored", bytes: 5 },
+        { time, project: "two", key: "private", action: "deleted", bytes: 0 },
+      ]);
+      await db.collection("sync_conflicts").insertOne({
+        userId: 'project:["one","user"]',
+        createdAt: time,
+        currentValue: "private-payload",
+      });
+      const changes = await operations.changes({ project: "one", hours: "1" });
+      expect(changes.series[0].created).toBe(1);
+      expect(changes.series[0].restored).toBe(1);
+      expect(changes.series[0].conflicts).toBe(1);
+      expect(changes.topKeys).toHaveLength(1);
+      expect(changes.growth.at(-1)?.items).toBe(1);
+      expect(changes.growth.at(-1)?.valueBytes).toBe(5);
+      expect(changes.growth.at(-1)?.historyBytes).toBeGreaterThan(5);
+      expect(JSON.stringify(changes)).not.toContain("private-history-payload");
+      expect(JSON.stringify(changes)).not.toContain("private-payload");
+      const saved = await operations.saveReport(
+        { name: "Weekly review", kind: "changes", query: { hours: "168", project: "one" } },
+        "admin",
+      );
+      expect((await operations.savedReports())[0].name).toBe("Weekly review");
+      await expect(
+        operations.saveReport(
+          { name: "Bad", kind: "changes", query: { token: "secret" } },
+          "admin",
+        ),
+      ).rejects.toThrow();
+      await operations.deleteReport(saved._id);
+      expect(await operations.savedReports()).toHaveLength(0);
     } finally {
       await db.dropDatabase();
       await client.close();
