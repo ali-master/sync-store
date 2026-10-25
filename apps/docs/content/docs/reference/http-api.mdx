@@ -59,12 +59,12 @@ Surface the returned message without exposing credentials. Inspect request trace
 
 ## Administration
 
-The console uses `/api/v1/admin` with `Authorization: Bearer YOUR_ADMIN_KEY`, `x-user-id` and `x-instance-id` headers. Only the installation administrator has the required `admin` scope. Responses use the same `payload` envelope. Never put this credential in a public client or URL.
+The console uses `/api/v1/admin` with `Authorization: Bearer YOUR_ADMIN_KEY`, `x-user-id` and `x-instance-id` headers. Installation and tenant administrators have `admin` scope; tenant credentials are restricted to their own workspace. Responses use the same `payload` envelope. Never put this credential in a public client or URL.
 
 | Method and path | Request / behavior |
 | --- | --- |
 | `GET /overview` | Current collection counts, live sockets and database health. |
-| `GET /resources/:resource?page=1&q=search` | 25 records per page; resources: `keys`, `storage`, `sessions`, `conflicts`, `quotas`, `audits`, `analytics`, `archives`. Key secrets are excluded. Optional `userId` filters by user. |
+| `GET /resources/:resource?page=1&q=search` | 25 records per page; resources: `projects`, `history`, `tenants` (platform only), `keys`, `storage`, `sessions`, `conflicts`, `quotas`, `audits`, `analytics`, `archives`. Key secrets are excluded. Optional `userId` filters by user. |
 | `POST /keys` | `{ "name": "My app", "canRead": true, "canWrite": false }`; returns `{ id, key }` once. |
 | `PATCH /keys/:id` | Editable permission/restriction settings only. Credentials, scopes and counters cannot be assigned. |
 | `POST /keys/:id/rotate` | No body; returns the replacement `{ key }` once. |
@@ -91,3 +91,34 @@ The SDK uses `sync:set`, `sync:get`, `sync:getAll`, `sync:remove`, `sync:clear`,
 Server `sync:update` and `sync:remove` events carry `eventId`, `recordId`, `key`, `version`, `timestamp` and `instanceId`; updates also contain `value` and optional `metadata`. Outbox retries can repeat an event. Compare versions within a record identity, deduplicate repeated events, and retain deletion versions so an older update cannot resurrect a removed value. Reconnect reconciliation is still required when a client was offline beyond Redis stream retention.
 
 Browse the running API at `/api/docs` for the expanded controller contract, including analytics and conflict endpoints. Their runtime limitations are documented in [offline sync](/docs/guides/offline-sync) and [deployment](/docs/guides/deployment).
+
+## Branches and tenant administration
+
+Versioning routes are under `/api/v1/versioning`. Send the usual application key,
+user and instance headers, plus optional `X-Branch` (default `main`). Ownership is
+always derived from the credential. All responses use the `payload` envelope.
+
+| Method and path | Body or behavior |
+| --- | --- |
+| `GET /branches` | Branch names and heads for this tenant/project/user. |
+| `POST /branches` | `{ name, commitId }`; atomically fork an existing committed tree. |
+| `GET /commits?before=ID` | Latest 50 commits recorded on the branch, with a stable cursor. |
+| `GET /commits/:id` | An owned immutable commit and its key-to-blob tree manifest. |
+| `POST /commits` | `{ message, expectedHead }`; create a checkpoint; head can be `null` initially. |
+| `POST /commits/:id/restore` | `{ message, expectedHead }`; replace the branch tree and create a new commit. |
+| `GET /timeline` | Deduplicated time-series metadata for recent branch commits; may lag. |
+
+Checkpoint and restore support `Idempotency-Key`. A stale `expectedHead` returns 409.
+Whole-tree operations require unrestricted read access and write operations require
+write permission. See [Branches and commits](/docs/guides/branches-and-commits).
+
+Platform-only `/api/v1/admin/tenants` accepts `POST { name }` and returns the tenant
+plus its initial administrator secret once. `PATCH /admin/tenants/:id { isActive }`
+suspends or resumes a tenant. `GET /admin/resources/tenants` is platform-only.
+Tenant-scoped administrators use the other dashboard endpoints for their workspace.
+
+`GET /admin/versioning?userId=USER&projectId=default&branch=main` returns branches,
+commits and timeline. A platform admin can add `tenantId`; tenant admins cannot
+select another tenant. `POST /admin/versioning/commit`, `/fork` and `/restore` accept
+that scope plus the equivalent versioning fields. Checkpoint/restore accept a
+`requestId` in this administrative body.

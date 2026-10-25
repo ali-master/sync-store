@@ -122,3 +122,9 @@ Saved-view API: `GET`/`POST /api/v1/admin/reports/saved` and
 POST accepts `{ name, kind, query }`, with `kind` one of `health`, `usage`, `changes`;
 `query` contains string values for `hours`, `project`, `apiKeyId` and `replica`.
 Only applicable filters are used by each report.
+
+## Tenant scope
+
+Tenant administrators see only their own traffic, quotas, pending publication snapshots,
+data growth and saved reports. Platform administrators see installation-wide totals.
+The server applies ownership from the stored credential, independently of report filters.

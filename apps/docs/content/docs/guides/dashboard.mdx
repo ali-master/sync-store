@@ -69,3 +69,10 @@ The API build includes the dashboard automatically. For UI development, run `bun
 ## Deployment boundaries
 
 The console grants installation-wide access. Keep it behind HTTPS and a trusted network or authenticated reverse proxy. It is an operator console, not an end-user account system. Application keys do not authenticate user IDs. With the shared Redis adapter, session listing and disconnection work across API replicas. See [security](/docs/guides/api-key-management) and [deployment limits](/docs/guides/deployment).
+
+## Customer workspaces and version graphs
+
+Platform administrators can create and suspend customer workspaces under **Tenants**.
+Each workspace has its own administrator key. **Branches & commits** provides user-scoped
+checkpoints, forks and whole-tree restores. See [Multi-tenancy](/docs/guides/multi-tenancy)
+and [Branches and commits](/docs/guides/branches-and-commits).

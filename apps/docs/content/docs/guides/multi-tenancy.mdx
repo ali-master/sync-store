@@ -1,0 +1,65 @@
+---
+title: Multi-tenancy
+description: Give each customer an isolated workspace and administrator credential.
+---
+
+## Create a workspace
+
+1. Sign in to the dashboard with the installation administrator key.
+2. Open **Tenants**, enter the customer's name and choose **Create tenant**.
+3. Save the tenant administrator key shown once. Deliver it privately to that customer.
+4. Sign out and sign in with that key. Create projects and application keys as usual.
+
+The tenant and its first administrator are created in one transaction. A tenant
+administrator manages only that tenant's data, projects, keys, history, connections,
+conflicts and reports. Tenant administrators cannot create tenants or assign platform
+permissions. The installation administrator retains access to the entire installation.
+
+To suspend a workspace, open its record under **Tenants** and choose **Suspend tenant**.
+Resuming preserves its data and credentials. Suspended credentials fail new requests
+and future event authorization; events already sent cannot be recalled.
+
+## How isolation works
+
+The server derives tenant ownership from the API key. Do not send a tenant header.
+Within a tenant, the project's key, client user ID and branch identify a data namespace.
+Two tenants can use the same user ID, storage key, branch name and idempotency key
+without sharing data, receipts or WebSocket rooms.
+
+Tenant dashboard filters cannot override credential ownership. Saved reports and
+traffic, quota, change and growth reports are scoped to the authenticated tenant.
+Legacy global analytics endpoints are unavailable to tenant credentials; use dashboard
+reports instead. Platform reports aggregate all tenants.
+
+An application key still does **not** authenticate ownership of a client-provided
+user ID. Validate users in your application or proxy before issuing storage requests.
+Never embed tenant administrator credentials in a public app.
+
+## Browser cache
+
+Set a stable, distinct SDK `namespace` for each backend, tenant and project:
+
+```ts
+const store = new RemoteStorage({
+  serverUrl: 'https://sync.example.com',
+  apiKey: applicationKey,
+  userId: authenticatedUserId,
+  namespace: `production:${tenantId}:${projectId}`,
+});
+```
+
+The server does not trust `namespace` for authorization. It only partitions the
+browser cache and pending offline queue. Reusing a namespace across tenants can mix
+local cached data, so change it when switching customer or project. Branches are
+partitioned automatically; the existing `main` cache layout is preserved.
+
+## Upgrade an existing installation
+
+Run the normal database migrations before starting the new backend. Existing keys
+without a tenant ID, projects and storage keep their original default namespace.
+The migration adopts the existing `projects` collection without deleting its records.
+Creating a tenant does not move existing data into it.
+
+This release uses shared collections and credential-based isolation. It does not
+include invitations, SSO, billing or database-per-tenant provisioning. Back up the
+entire database, including credentials, receipts, history and versioning collections.

@@ -93,3 +93,10 @@ Server events include `eventId`, `recordId` and `version` for durable outbox del
 Use distinct cache namespaces for independent clients on the same origin. A namespace separates browser storage; it is **not** a server-side access-control boundary.
 
 The former `encryptionKey` option throws because it did not encrypt values. Compression, browser background execution and every historical configuration field are not promises of implemented behavior. The supported core flow is explicit connection, JSON mutations, subscriptions and the persistent outbox.
+
+## Tenants and branches
+
+The credential selects the tenant and project. Set a unique cache namespace for each
+backend/tenant/project. Use the `branch` option (default `main`) to bind both HTTP
+and WebSocket traffic to a branch. See [Multi-tenancy](/docs/guides/multi-tenancy) and
+[Branches and commits](/docs/guides/branches-and-commits) for isolation and snapshot APIs.

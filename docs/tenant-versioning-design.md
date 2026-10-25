@@ -1,6 +1,6 @@
 # Tenant and versioning design
 
-Status: implementation proposal, not an available feature.
+Status: implemented; see the multi-tenancy and branches-and-commits user guides.
 
 ## Scope
 
@@ -80,9 +80,15 @@ identity and idempotency indexes during any backfill or index replacement.
 6. Dashboard and SDK use the same tenant/branch authorization contract as HTTP and
    WebSocket, including reconnection and durable offline queues.
 
-## Outstanding decision
+## Persistence decision
 
-The database access choice is awaiting clarification: official `mongodb` driver
-without any ORM, or Prisma-only access without direct MongoDB calls. The user's
-previous wording excludes both Prisma and Mongo ORM but may contain a typo. Do not
-perform a repository-wide persistence rewrite until this is resolved.
+Use Prisma 8's official `@prisma/orm-mongo` for modeled reads and writes. Native
+MongoDB is permitted when the installed Prisma release lacks a required capability.
+Shared ClientSession transactions, time-series provisioning/projection and operational
+collections outside the generated contract are the explicit exceptions. Both paths
+share a connection pool. Administrator resource aggregations for modeled collections
+also execute through Prisma's raw query API.
+
+Authoritative trees are limited to 8 MiB and have no automatic garbage collection.
+Branches are user-owned. The branch log lists commits created on that branch, with
+parent pointers back to its source. There is no merge or rebase implementation.

@@ -74,3 +74,7 @@ Stored `value` and `metadata` in snapshots are JSON strings; parse them for disp
 Use `expected: null` only when preview reports no current item. URL-encode key and
 revision path segments. Send `Idempotency-Key` on restore, along with the usual
 API-key and user/instance headers. Project and prefix restrictions apply to history.
+
+For whole-tree snapshots within one tenant/project/user, use
+[Branches and commits](/docs/guides/branches-and-commits). Commit retention is separate
+from the per-key history expiry described above.

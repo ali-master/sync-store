@@ -13,6 +13,8 @@
     "guides/react",
     "guides/offline-sync",
     "guides/idempotency",
+    "guides/multi-tenancy",
+    "guides/branches-and-commits",
     "guides/projects",
     "guides/history",
     "guides/deployment",
