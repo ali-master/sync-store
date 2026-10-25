@@ -23,9 +23,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Set the Vercel project's **Root Directory** to `apps/docs` and enable **Include source files outside of the Root Directory in the Build Step**. The Next.js configuration reads canonical branding files from the repository's `assets/` directory.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The checked-in `vercel.json` sets the Next.js preset, installs with `bun install --frozen-lockfile`, and builds with `bun run build`. This runs the existing `bun --bun next build` script directly. Leave the output directory at the Next.js default.
+
+Do not use the automatically suggested `turbo run build` command for this project: Turbo's JavaScript launcher has a Node shebang and fails with `env: 'node': No such file or directory` on a Bun-only build image. Repository `bunfig.toml` settings apply when Bun launches scripts, not when the platform launches Turbo directly. The explicit file-based build command overrides that default.
+
+After deploying this configuration, the build log should show `Running "bun run build"`, followed by `bun --bun next build`. The warning about blocked dependency postinstall scripts is separate from the Turbo launcher failure; it does not require enabling all lifecycle scripts.
 
 ## API Routes
 
