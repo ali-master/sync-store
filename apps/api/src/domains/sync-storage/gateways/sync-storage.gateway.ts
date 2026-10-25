@@ -9,16 +9,14 @@ import {
   WsException,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
-import { Logger } from "@nestjs/common";
-import { CommandBus, QueryBus, EventBus } from "@nestjs/cqrs";
+import { Logger, UseGuards } from "@nestjs/common";
+import { ApiKeyGuard } from "../guards/api-key.guard";
+import { ClearStorageCommand } from "../commands/impl/clear-storage.command";
+import { CommandBus, QueryBus } from "@nestjs/cqrs";
 import { SetItemCommand } from "../commands/impl/set-item.command";
 import { RemoveItemCommand } from "../commands/impl/remove-item.command";
 import { GetItemQuery } from "../queries/impl/get-item.query";
 import { GetAllItemsQuery } from "../queries/impl/get-all-items.query";
-import { UserSessionService } from "../services/user-session.service";
-import { SyncQueueService } from "../services/sync-queue.service";
-import { ItemSyncedEvent } from "../events/impl/item-synced.event";
-import { ItemRemovedEvent } from "../events/impl/item-removed.event";
 
 interface SyncMessage {
   type: "set" | "remove" | "get" | "getAll" | "subscribe" | "unsubscribe";
@@ -33,6 +31,7 @@ interface SyncMessage {
 }
 
 interface SyncResponse {
+  id?: string;
   type: "sync" | "response" | "error";
   key?: string;
   value?: any;
@@ -45,11 +44,13 @@ interface SyncResponse {
 
 @WebSocketGateway({
   namespace: "/sync",
+  transports: ["websocket"],
   cors: {
     origin: "*",
     credentials: true,
   },
 })
+@UseGuards(ApiKeyGuard)
 export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -59,14 +60,21 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
   constructor(
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
-    private readonly eventBus: EventBus,
-    private readonly userSessionService: UserSessionService,
-    private readonly syncQueueService: SyncQueueService,
+    private readonly apiKeyGuard: ApiKeyGuard,
   ) {}
 
+  /** Authenticate before Socket.IO exposes the namespace as connected. */
+  afterInit(server: Server): void {
+    server.use((client, next) => {
+      void this.apiKeyGuard.authorizeSocket(client).then(
+        () => next(),
+        () => next(new Error("Unauthorized")),
+      );
+    });
+  }
+
   async handleConnection(client: Socket): Promise<void> {
-    const userId = client.handshake.query.userId as string;
-    const instanceId = client.handshake.query.instanceId as string;
+    const { userId, instanceId } = client.data.identity ?? {};
 
     if (!userId || !instanceId) {
       client.disconnect();
@@ -75,31 +83,45 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
     this.logger.log(`Client connected: ${client.id} (User: ${userId})`);
 
-    await this.userSessionService.addSession(userId, instanceId, client.id);
-
-    client.join(`user:${userId}`);
-    client.join(`instance:${instanceId}`);
-
-    const pendingUpdates = await this.syncQueueService.getPendingUpdates(userId, instanceId);
-
-    if (pendingUpdates.length > 0) {
-      client.emit("pending-updates", pendingUpdates);
-    }
+    client.data.connectedAt = Date.now();
+    await client.join(`user:${userId}`);
+    await client.join(JSON.stringify([userId, instanceId]));
 
     // Notify this instance about successful connection
-    this.notifyInstanceConnectionStatus(instanceId, "connected");
+    this.notifyInstanceConnectionStatus(userId, instanceId, "connected");
+  }
+
+  /** Expose active connection identity without leaking handshake credentials. */
+  async getSessions() {
+    const sockets = await this.server.fetchSockets();
+    return sockets
+      .filter((socket) => socket.data.identity)
+      .map((socket) => ({
+        _id: socket.id,
+        userId: String(socket.data.identity.userId),
+        instanceId: String(socket.data.identity.instanceId),
+        socketId: socket.id,
+        connectedAt: new Date(socket.data.connectedAt ?? socket.handshake.time),
+        connectionType: "websocket",
+        disconnectedAt: null,
+      }));
+  }
+
+  /** Disconnect the requested session on whichever replica owns its socket. */
+  async disconnectSession(socketId: string): Promise<number> {
+    const sockets = await this.server.in(socketId).fetchSockets();
+    for (const socket of sockets) socket.disconnect(true);
+    return sockets.length;
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
-    const userId = client.handshake.query.userId as string;
-    const instanceId = client.handshake.query.instanceId as string;
+    const { userId, instanceId } = client.data.identity ?? {};
 
     this.logger.log(`Client disconnected: ${client.id}`);
 
     if (userId && instanceId) {
-      await this.userSessionService.removeSession(userId, instanceId, client.id);
       // Notify this instance about disconnection
-      this.notifyInstanceConnectionStatus(instanceId, "disconnected");
+      this.notifyInstanceConnectionStatus(userId, instanceId, "disconnected");
     }
   }
 
@@ -109,7 +131,8 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     @ConnectedSocket() client: Socket,
   ): Promise<SyncResponse> {
     try {
-      const { key, value, metadata, userId, instanceId } = data;
+      const { key, value, metadata } = data;
+      const { userId, instanceId } = client.data.identity;
 
       if (!key || value === undefined) {
         throw new WsException("Key and value are required");
@@ -119,39 +142,11 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
       const result = await this.commandBus.execute(command);
 
-      // Broadcast to all user's instances except the current one
-      this.broadcastToUserExcept(userId, client.id, "sync:update", {
-        type: "sync",
-        key,
-        value: result.value,
-        metadata: result.metadata,
-        timestamp: result.timestamp,
-        version: result.version,
-      });
-
-      // Also notify key-specific subscribers
-      this.broadcastToKey(userId, key, "sync:update", {
-        type: "sync",
-        key,
-        value: result.value,
-        metadata: result.metadata,
-        timestamp: result.timestamp,
-        version: result.version,
-      });
-
-      this.eventBus.publish(new ItemSyncedEvent(userId, instanceId, key, value, metadata));
-
-      // Example usage: Check if user is approaching storage quota
-      // This would typically be done by a service, but showing how to use broadcastToUser
-      // const userStorageSize = await this.getUserStorageSize(userId);
-      // if (userStorageSize > MAX_STORAGE_WARNING_THRESHOLD) {
-      //   this.notifyUserStorageQuotaExceeded(userId, userStorageSize, MAX_STORAGE_SIZE);
-      // }
-
       return {
         type: "response",
         key,
         value: result.value,
+        id: result.id,
         metadata: result.metadata,
         timestamp: result.timestamp,
         version: result.version,
@@ -172,7 +167,8 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     @ConnectedSocket() client: Socket,
   ): Promise<SyncResponse> {
     try {
-      const { key, userId, instanceId } = data;
+      const { key } = data;
+      const { userId, instanceId } = client.data.identity;
 
       if (!key) {
         throw new WsException("Key is required");
@@ -180,22 +176,6 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
 
       const command = new RemoveItemCommand(userId, instanceId, key);
       await this.commandBus.execute(command);
-
-      // Broadcast to all user's instances except the current one
-      this.broadcastToUserExcept(userId, client.id, "sync:remove", {
-        type: "sync",
-        key,
-        timestamp: Date.now(),
-      });
-
-      // Also notify key-specific subscribers
-      this.broadcastToKey(userId, key, "sync:remove", {
-        type: "sync",
-        key,
-        timestamp: Date.now(),
-      });
-
-      this.eventBus.publish(new ItemRemovedEvent(userId, instanceId, key));
 
       return {
         type: "response",
@@ -213,9 +193,13 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
   }
 
   @SubscribeMessage("sync:get")
-  async handleGetItem(@MessageBody() data: SyncMessage): Promise<SyncResponse> {
+  async handleGetItem(
+    @MessageBody() data: SyncMessage,
+    @ConnectedSocket() client: Socket,
+  ): Promise<SyncResponse> {
     try {
-      const { key, userId, instanceId } = data;
+      const { key } = data;
+      const { userId, instanceId } = client.data.identity;
 
       if (!key) {
         throw new WsException("Key is required");
@@ -237,6 +221,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
         type: "response",
         key,
         value: result.value,
+        id: result.id,
         metadata: result.metadata,
         timestamp: result.timestamp,
         version: result.version,
@@ -252,9 +237,13 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
   }
 
   @SubscribeMessage("sync:getAll")
-  async handleGetAllItems(@MessageBody() data: SyncMessage): Promise<SyncResponse> {
+  async handleGetAllItems(
+    @MessageBody() data: SyncMessage,
+    @ConnectedSocket() client: Socket,
+  ): Promise<SyncResponse> {
     try {
-      const { userId, instanceId, prefix } = data;
+      const { prefix } = data;
+      const { userId, instanceId } = client.data.identity;
 
       const query = new GetAllItemsQuery(userId, instanceId, prefix);
       const items = await this.queryBus.execute(query);
@@ -278,32 +267,48 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
   async handleSubscribe(
     @MessageBody() data: { keys: string[]; userId: string },
     @ConnectedSocket() client: Socket,
-  ): Promise<void> {
-    const { keys, userId } = data;
+  ): Promise<SyncResponse> {
+    const { keys } = data;
+    const { userId } = client.data.identity;
+    if (!Array.isArray(keys) || keys.length > 1000 || keys.some((key) => typeof key !== "string"))
+      throw new WsException("Invalid subscription keys");
 
     keys.forEach((key) => {
       client.join(`key:${userId}:${key}`);
     });
+    return { type: "response", timestamp: Date.now() };
   }
 
   @SubscribeMessage("sync:unsubscribe")
   async handleUnsubscribe(
     @MessageBody() data: { keys: string[]; userId: string },
     @ConnectedSocket() client: Socket,
-  ): Promise<void> {
-    const { keys, userId } = data;
+  ): Promise<SyncResponse> {
+    const { keys } = data;
+    const { userId } = client.data.identity;
+    if (!Array.isArray(keys) || keys.length > 1000 || keys.some((key) => typeof key !== "string"))
+      throw new WsException("Invalid subscription keys");
 
     keys.forEach((key) => {
       client.leave(`key:${userId}:${key}`);
     });
+    return { type: "response", timestamp: Date.now() };
+  }
+
+  /** Clear only the authenticated user's records. */
+  @SubscribeMessage("sync:clear")
+  async handleClear(@ConnectedSocket() client: Socket): Promise<SyncResponse> {
+    const { userId, instanceId } = client.data.identity;
+    await this.commandBus.execute(new ClearStorageCommand(userId, instanceId));
+    return { type: "response", timestamp: Date.now() };
   }
 
   broadcastToUser(userId: string, event: string, data: any): void {
     this.server.to(`user:${userId}`).emit(event, data);
   }
 
-  broadcastToInstance(instanceId: string, event: string, data: any): void {
-    this.server.to(`instance:${instanceId}`).emit(event, data);
+  broadcastToInstance(userId: string, instanceId: string, event: string, data: any): void {
+    this.server.to(JSON.stringify([userId, instanceId])).emit(event, data);
   }
 
   broadcastToKey(userId: string, key: string, event: string, data: any): void {
@@ -323,8 +328,12 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     });
   }
 
-  notifyInstanceConnectionStatus(instanceId: string, status: "connected" | "disconnected"): void {
-    this.broadcastToInstance(instanceId, "connection:status", {
+  notifyInstanceConnectionStatus(
+    userId: string,
+    instanceId: string,
+    status: "connected" | "disconnected",
+  ): void {
+    this.broadcastToInstance(userId, instanceId, "connection:status", {
       status,
       timestamp: Date.now(),
     });

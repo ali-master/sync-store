@@ -7,10 +7,8 @@ import { SyncStorageService } from "./services/sync-storage.service";
 import { ConflictResolutionService } from "./services/conflict-resolution.service";
 import { CommandHandlers } from "./commands/handlers";
 import { QueryHandlers } from "./queries/handlers";
-import { EventHandlers } from "./events/handlers";
+import { OutboxService } from "./services/outbox.service";
 import { SyncStorageRepository } from "./repositories/sync-storage.repository";
-import { UserSessionService } from "./services/user-session.service";
-import { SyncQueueService } from "./services/sync-queue.service";
 import { ApiKeyGuard } from "./guards/api-key.guard";
 import { ApiKeyQuotaService } from "./services/api-key-quota.service";
 import { ApiKeyMetricsInterceptor } from "./interceptors/api-key-metrics.interceptor";
@@ -23,15 +21,20 @@ import { ApiKeyMetricsInterceptor } from "./interceptors/api-key-metrics.interce
     SyncStorageService,
     ConflictResolutionService,
     SyncStorageRepository,
-    UserSessionService,
-    SyncQueueService,
     ApiKeyGuard,
     ApiKeyQuotaService,
     ApiKeyMetricsInterceptor,
     ...CommandHandlers,
     ...QueryHandlers,
-    ...EventHandlers,
+    OutboxService,
   ],
-  exports: [SyncStorageService, ApiKeyQuotaService, ApiKeyMetricsInterceptor],
+  exports: [
+    SyncStorageService,
+    ApiKeyQuotaService,
+    ApiKeyMetricsInterceptor,
+    ApiKeyGuard,
+    SyncStorageGateway,
+    ConflictResolutionService,
+  ],
 })
 export class SyncStorageModule {}
