@@ -12,6 +12,7 @@ import * as Joi from "joi";
 import { envConfigLoader } from "@root/utils";
 // Enums & Constants
 import { APP_INTERCEPTOR } from "@nestjs/core";
+import { AdminModule } from "./domains/admin/admin.module";
 // Types
 import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 
@@ -33,16 +34,9 @@ import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
         PORT: Joi.number().port().default(3000),
         API_URL: Joi.string().uri().default("http://localhost:3000").required(),
 
-        // Database (MariaDB)
-        DATABASE_URL: Joi.string().uri().required(),
-        DB_HOST: Joi.string().default("localhost"),
-        DB_PORT: Joi.number().port().default(3306),
-        DB_USERNAME: Joi.string().default("root"),
-        DB_PASSWORD: Joi.string().default("pass@1234"),
-        DB_DATABASE: Joi.string().default("payment_gateway"),
-        DB_CONNECTION_LIMIT: Joi.number().default(10),
-        DB_SSL: Joi.boolean().default(false),
-        DB_TIMEZONE: Joi.string().default("Asia/Tehran"),
+        DATABASE_URL: Joi.string()
+          .pattern(/^mongodb(?:\+srv)?:\/\//)
+          .required(),
 
         // Redis
         REDIS_URL: Joi.string().uri().optional(),
@@ -100,6 +94,7 @@ import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
     ContextModule,
     SyncStorageModule,
     AnalyticsModule,
+    AdminModule,
   ],
   providers: [
     {

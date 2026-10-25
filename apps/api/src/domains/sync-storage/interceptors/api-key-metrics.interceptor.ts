@@ -27,15 +27,9 @@ export class ApiKeyMetricsInterceptor implements NestInterceptor {
       }),
       catchError((error) => {
         // Error - record failure
-        const responseTime = Date.now() - startTime;
         this.apiKeyQuotaService
           .recordFailure(apiKey.id, error.message || "Unknown error")
           .catch((err) => console.error("Failed to record API key failure:", err));
-
-        // Update performance metrics even on error
-        this.apiKeyQuotaService
-          .updatePerformanceMetrics(apiKey.id, responseTime)
-          .catch((err) => console.error("Failed to update performance metrics:", err));
 
         throw error;
       }),

@@ -1,16 +1,20 @@
 import "reflect-metadata";
+import { proxyTrust } from "./trusted-proxy";
 // Modules
 import { AppModule } from "@root/app.module";
+import { DistributedSocketAdapter } from "./distributed-socket.adapter";
 // Filters
 import { GlobalExceptionFilter } from "@root/filters";
 // Interceptors
 import { getHeader, SystemLogger } from "@usex/utils";
 // Utilities
 import helmet from "helmet";
-import killPort from "kill-port";
 import { NestFactory } from "@nestjs/core";
 import { ClsMiddleware } from "nestjs-cls";
 import compression from "@fastify/compress";
+import fastifyStatic from "@fastify/static";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { ConfigService } from "@nestjs/config";
 import { useContainer } from "class-validator";
 import { Logger, ValidationPipe } from "@nestjs/common";
@@ -55,7 +59,7 @@ async function bootstrap() {
       requestTimeout: 60000,
       requestIdHeader: TRACE_ID_TOKEN_HEADER,
       requestIdLogLabel: "requestId",
-      trustProxy: true,
+      trustProxy: proxyTrust(),
       genReqId(req: any) {
         return getHeader(req.headers, TRACE_ID_TOKEN_HEADER) as string;
       },
@@ -76,6 +80,11 @@ async function bootstrap() {
 
     const logger = new Logger("Bootstrap");
     const configService = app.get(ConfigService);
+    if (process.env.REDIS_URL) {
+      const sockets = new DistributedSocketAdapter(app);
+      await sockets.connect(process.env.REDIS_URL, process.env.SOCKET_IO_PREFIX || "sync-store");
+      app.useWebSocketAdapter(sockets);
+    }
 
     app.enableVersioning({
       type: VersioningType.URI,
@@ -141,7 +150,6 @@ async function bootstrap() {
     );
 
     // Temporarily disable compression to fix Swagger UI Content-Length mismatch
-    // @ts-expect-error
     await app.register(compression, {
       encodings: ["br", "gzip", "deflate"],
       requestEncodings: ["br", "gzip", "deflate"],
@@ -166,6 +174,24 @@ async function bootstrap() {
 
     // Enable Helmet for security headers
     app.use(helmet(helmetConfig));
+
+    const dashboardRoot = resolve(process.cwd(), "../dashboard/dist");
+    if (existsSync(dashboardRoot)) {
+      await app.register(fastifyStatic, {
+        root: dashboardRoot,
+        prefix: "/dashboard/",
+        index: "index.html",
+      });
+      fastify.get("/dashboard", async (_, reply) => reply.sendFile("index.html"));
+      // Client routes must survive direct navigation and refresh in the packaged API.
+      fastify.get<{ Params: { section: string } }>(
+        "/dashboard/:section",
+        async (request, reply) => {
+          if (request.params.section.includes(".")) return reply.code(404).send();
+          return reply.sendFile("index.html");
+        },
+      );
+    }
 
     setupSignals(logger, async () => {
       app.flushLogs();
@@ -196,13 +222,7 @@ async function bootstrap() {
     // Start the server
     const port = configService.get<number>("port") || 3000;
     logger.log(`Starting application on port ${port}...`);
-    try {
-      await killPort(port);
-    } catch (error) {
-      logger.error(`Failed to start application on port ${port}:`, error);
-    } finally {
-      await app.listen(port, "0.0.0.0");
-    }
+    await app.listen(port, "0.0.0.0");
 
     setNodeProcessTitle(process.cwd(), {
       port,
@@ -216,6 +236,7 @@ async function bootstrap() {
     logger.log(`Swagger YAML: ${appUrl}/api/docs/openapi.yaml`);
   } catch (e) {
     console.error("Error starting the application:", e);
+    process.exitCode = 1;
   }
 }
 

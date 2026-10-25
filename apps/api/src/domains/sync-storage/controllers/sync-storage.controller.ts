@@ -23,7 +23,7 @@ import { ApiKeyAuth } from "../decorators/api-key-auth.decorator";
 import { getUserId, getInstanceId } from "@root/modules/context/context.storage";
 
 @ApiTags("Sync Storage")
-@Controller("sync-storage")
+@Controller()
 @ApiKeyAuth()
 export class SyncStorageController {
   constructor(

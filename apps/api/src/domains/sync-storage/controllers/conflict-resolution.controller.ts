@@ -31,7 +31,7 @@ interface ConflictStatsQuery {
 }
 
 @ApiTags("Conflict Resolution")
-@Controller("sync-storage/conflicts")
+@Controller("conflicts")
 @ApiKeyAuth()
 export class ConflictResolutionController {
   constructor(private readonly conflictResolutionService: ConflictResolutionService) {}
@@ -48,7 +48,7 @@ export class ConflictResolutionController {
     description: "ID of the item to retrieve conflict history for",
   })
   async getConflictHistory(@Param("itemId") itemId: string) {
-    const history = await this.conflictResolutionService.getConflictHistory(itemId);
+    const history = await this.conflictResolutionService.getConflictHistory(itemId, getUserId());
 
     return {
       itemId,
@@ -140,6 +140,7 @@ export class ConflictResolutionController {
     try {
       const result = await this.conflictResolutionService.resolveConflictById(
         conflictId,
+        getUserId(),
         resolveDto.strategy,
         {
           aiModel: resolveDto.aiModel,

@@ -6,7 +6,12 @@ import {
   ForbiddenException,
 } from "@nestjs/common";
 import { Request } from "express";
-import { InjectDbTransactor, type PrismaTransactor } from "@root/modules/db";
+import { Reflector } from "@nestjs/core";
+import type { Socket } from "socket.io";
+import { BlockList, isIP } from "node:net";
+import { InjectDatabase, type Database } from "@root/modules/db";
+import { quotaConsumption } from "../services/quota-window";
+import { socketProxyIdentity } from "@root/trusted-proxy";
 // import * as geoip from 'maxmind'; // TODO: Add GeoIP dependency if needed
 
 interface ApiKeyRestrictions {
@@ -27,12 +32,73 @@ interface ApiKeyRestrictions {
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
   constructor(
-    @InjectDbTransactor()
-    private readonly dbTransactorService: PrismaTransactor,
+    @InjectDatabase()
+    private readonly database: Database,
+    private readonly reflector: Reflector = new Reflector(),
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    if (context.getType() === "ws") {
+      const ws = context.switchToWs();
+      const client = ws.getClient<Socket>();
+      if (!client.data.identity) throw new UnauthorizedException("Unauthenticated socket");
+      const event = context.getHandler().name;
+      const method =
+        event === "handleSetItem"
+          ? "PUT"
+          : event === "handleRemoveItem" || event === "handleClear"
+            ? "DELETE"
+            : "GET";
+      return this.authorizeSocket(client, method, ws.getData());
+    }
     const request = context.switchToHttp().getRequest<Request>();
+    return this.authorize(
+      request,
+      this.reflector.getAllAndOverride<string>("required-api-key-scope", [
+        context.getHandler(),
+        context.getClass(),
+      ]),
+    );
+  }
+
+  /** Apply the same API-key restrictions to socket connections and each storage operation. */
+  async authorizeSocket(client: Socket, method = "GET", body: any = {}): Promise<boolean> {
+    const auth = client.handshake.auth;
+    const userId = client.data.identity?.userId ?? auth.userId ?? client.handshake.query.userId;
+    const instanceId =
+      client.data.identity?.instanceId ?? auth.instanceId ?? client.handshake.query.instanceId;
+    if (typeof userId !== "string" || !userId || typeof instanceId !== "string" || !instanceId) {
+      throw new UnauthorizedException("User and instance identifiers are required");
+    }
+    const apiKey =
+      auth.apiKey ?? client.handshake.query["api-key"] ?? client.handshake.query.apiKey;
+    const proxy = socketProxyIdentity(
+      client.handshake.address,
+      client.handshake.secure,
+      client.handshake.headers,
+    );
+    const request = {
+      headers: {
+        ...client.handshake.headers,
+        "x-api-key": apiKey,
+        "x-user-id": userId,
+        "x-instance-id": instanceId,
+      },
+      method,
+      body,
+      params: { key: body?.key },
+      query: {},
+      protocol: proxy.protocol,
+      ip: proxy.ip,
+      socket: { remoteAddress: client.handshake.address },
+    } as unknown as Request;
+    await this.authorize(request);
+    client.data.identity = { userId, instanceId };
+    return true;
+  }
+
+  /** Reject missing identities and enforce read/write permissions before touching storage. */
+  async authorize(request: Request, requiredScope?: string): Promise<boolean> {
     const apiKey = this.extractApiKey(request);
 
     if (!apiKey) {
@@ -40,12 +106,28 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     // Validate API key exists and is active
-    const apiKeyRecord = await this.dbTransactorService.tx.apiKey.findUnique({
-      where: { key: apiKey },
-    });
+    const apiKeyRecord = await this.database.orm.api_keys.where({ key: apiKey }).first();
 
     if (!apiKeyRecord || !apiKeyRecord.isActive) {
       throw new UnauthorizedException("Invalid or inactive API key");
+    }
+    if (requiredScope) {
+      const scopes = JSON.parse(apiKeyRecord.scopes || "[]");
+      if (!Array.isArray(scopes) || (!scopes.includes(requiredScope) && !scopes.includes("*"))) {
+        throw new ForbiddenException("Required API key scope: " + requiredScope);
+      }
+    }
+
+    const userId = request.headers["x-user-id"] ?? request.headers["user-id"];
+    const instanceId = request.headers["x-instance-id"] ?? request.headers["instance-id"];
+    if (typeof userId !== "string" || !userId || typeof instanceId !== "string" || !instanceId) {
+      throw new UnauthorizedException("User and instance identifiers are required");
+    }
+    const reading = request.method === "GET" || request.method === "HEAD";
+    if (reading ? !apiKeyRecord.canRead : !apiKeyRecord.canWrite) {
+      throw new ForbiddenException(
+        reading ? "Read permission is required" : "Write permission is required",
+      );
     }
 
     // Check expiration
@@ -60,10 +142,9 @@ export class ApiKeyGuard implements CanActivate {
     await this.validateRestrictions(request, restrictions, apiKeyRecord.id);
 
     // Check rate limits and quotas
-    await this.checkQuotas(apiKeyRecord);
+    await this.consumeQuota(apiKeyRecord.id);
 
     // Update usage statistics
-    await this.updateUsageStats(apiKeyRecord.id, request);
 
     // Store API key info in request context
     (request as any).apiKey = apiKeyRecord;
@@ -79,7 +160,7 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     // Check X-API-Key header
-    const apiKeyHeader = request.headers["x-api-key"] as string;
+    const apiKeyHeader = (request.headers["x-api-key"] ?? request.headers["api-key"]) as string;
     if (apiKeyHeader) {
       return apiKeyHeader;
     }
@@ -97,7 +178,7 @@ export class ApiKeyGuard implements CanActivate {
     return {
       allowedKeyPatterns: JSON.parse(apiKeyRecord.allowedKeyPatterns || "[]"),
       blockedKeyPatterns: JSON.parse(apiKeyRecord.blockedKeyPatterns || "[]"),
-      allowedDomains: JSON.parse(apiKeyRecord.allowedDomains || "[]"),
+      allowedDomains: JSON.parse(apiKeyRecord.websiteOrigins || "[]"),
       ipRestrictions: JSON.parse(apiKeyRecord.ipRestrictions || "[]"),
       countryRestrictions: JSON.parse(apiKeyRecord.countryRestrictions || "[]"),
       restrictionMode: apiKeyRecord.restrictionMode || "allow",
@@ -171,24 +252,8 @@ export class ApiKeyGuard implements CanActivate {
       }
     }
 
-    // Check country restrictions using GeoIP
     if (restrictions.countryRestrictions.length > 0) {
-      try {
-        const country = await this.getCountryFromIp(clientIp);
-        if (country) {
-          const isAllowed =
-            restrictions.restrictionMode === "allow"
-              ? restrictions.countryRestrictions.includes(country)
-              : !restrictions.countryRestrictions.includes(country);
-
-          if (!isAllowed) {
-            throw new ForbiddenException(`Access from ${country} is not allowed`);
-          }
-        }
-      } catch (error) {
-        // Log error but don't block if GeoIP fails
-        console.warn("GeoIP lookup failed:", error);
-      }
+      throw new ForbiddenException("Country restrictions require a configured GeoIP provider");
     }
 
     // Check user limits per IP and domain
@@ -205,7 +270,8 @@ export class ApiKeyGuard implements CanActivate {
 
   private matchesPattern(value: string, pattern: string): boolean {
     // Convert wildcard pattern to regex
-    const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$", "i");
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    const regex = new RegExp("^" + escaped + "$", "i");
     return regex.test(value);
   }
 
@@ -228,44 +294,33 @@ export class ApiKeyGuard implements CanActivate {
     }
   }
 
+  /** Match actual CIDR boundaries instead of accepting addresses with a similar text prefix. */
   private matchesIp(clientIp: string, allowedIp: string): boolean {
-    // Simple IP matching - could be enhanced with CIDR support
-    if (allowedIp.includes("/")) {
-      // CIDR notation - simplified implementation
-      const [network, prefixLength] = allowedIp.split("/");
-      // This is a simplified check - in production, use a proper CIDR library
-      return clientIp.startsWith(
-        network
-          .split(".")
-          .slice(0, Math.ceil(parseInt(prefixLength) / 8))
-          .join("."),
-      );
-    }
-
-    return clientIp === allowedIp || allowedIp === "*";
+    if (allowedIp === "*") return true;
+    const address = clientIp.replace(/^::ffff:/, "");
+    const family = isIP(address);
+    if (!family) return false;
+    if (!allowedIp.includes("/")) return address === allowedIp;
+    const [network, prefix] = allowedIp.split("/");
+    const type = family === 4 ? "ipv4" : "ipv6";
+    const bits = Number(prefix);
+    if (
+      isIP(network) !== family ||
+      !Number.isInteger(bits) ||
+      bits < 0 ||
+      bits > (family === 4 ? 32 : 128)
+    )
+      return false;
+    const list = new BlockList();
+    list.addSubnet(network, bits, type);
+    return list.check(address, type);
   }
 
   private getClientIp(request: Request): string {
-    return (request.headers["x-forwarded-for"] ||
-      request.headers["x-real-ip"] ||
+    return (request.ip ||
       request.connection?.remoteAddress ||
       request.socket?.remoteAddress ||
       "127.0.0.1") as string;
-  }
-
-  private async getCountryFromIp(ip: string): Promise<string | null> {
-    try {
-      // This would require GeoIP database - simplified implementation
-      // In production, use a proper GeoIP service or database
-      if (ip === "127.0.0.1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
-        return null; // Local/private IP
-      }
-
-      // Placeholder - implement actual GeoIP lookup
-      return null;
-    } catch {
-      return null;
-    }
   }
 
   private async checkUserLimits(
@@ -278,16 +333,12 @@ export class ApiKeyGuard implements CanActivate {
 
     if (restrictions.maxUsersPerIp) {
       // Count unique users from this IP in the last 24 hours
-      const uniqueUsers = await this.dbTransactorService.tx.syncSession.findMany({
-        where: {
+      const uniqueUsers = await this.database.native
+        .collection("sync_sessions")
+        .distinct("userId", {
           ipAddress: clientIp,
-          connectedAt: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          },
-        },
-        select: { userId: true },
-        distinct: ["userId"],
-      });
+          connectedAt: { $gte: new Date(Date.now() - 86_400_000) },
+        });
 
       if (uniqueUsers.length >= restrictions.maxUsersPerIp) {
         throw new ForbiddenException(
@@ -300,15 +351,15 @@ export class ApiKeyGuard implements CanActivate {
       try {
         const domain = new URL(origin).hostname;
 
-        const uniqueUsers = await this.dbTransactorService.tx.syncSession.findMany({
-          where: {
-            connectedAt: {
-              gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        const uniqueUsers = await this.database.native
+          .collection("sync_sessions")
+          .find(
+            {
+              connectedAt: { $gte: new Date(Date.now() - 86_400_000) },
             },
-          },
-          select: { userId: true, userAgent: true },
-          distinct: ["userId"],
-        });
+            { projection: { userId: 1, userAgent: 1 } },
+          )
+          .toArray();
 
         // Filter by domain (simplified - would need better domain extraction)
         const domainUsers = uniqueUsers.filter((session) => session.userAgent?.includes(domain));
@@ -318,8 +369,9 @@ export class ApiKeyGuard implements CanActivate {
             `Maximum users per domain (${restrictions.maxUsersPerDomain}) exceeded`,
           );
         }
-      } catch {
-        // Ignore domain parsing errors
+      } catch (error) {
+        if (error instanceof ForbiddenException) throw error;
+        throw new ForbiddenException("Invalid origin");
       }
     }
   }
@@ -358,51 +410,18 @@ export class ApiKeyGuard implements CanActivate {
     }
   }
 
-  private async checkQuotas(apiKeyRecord: any): Promise<void> {
-    // const minute = 60 * 1000;
-    // const hour = 60 * minute;
-    // const day = 24 * hour;
-
-    // Check various quota limits
-    const quotaChecks = [
-      { quota: apiKeyRecord.minuteQuota, usage: apiKeyRecord.currentMinuteUsage, period: "minute" },
-      { quota: apiKeyRecord.hourQuota, usage: apiKeyRecord.currentHourUsage, period: "hour" },
-      { quota: apiKeyRecord.dailyQuota, usage: apiKeyRecord.currentDailyUsage, period: "day" },
+  /** Checks all quotas and increments counters in one atomic document update. */
+  private async consumeQuota(apiKeyId: string): Promise<void> {
+    const { filter, update } = quotaConsumption();
+    const result = await this.database.native.collection<{ _id: string }>("api_keys").updateOne(
       {
-        quota: apiKeyRecord.monthlyQuota,
-        usage: apiKeyRecord.currentMonthlyUsage,
-        period: "month",
+        _id: apiKeyId,
+        isActive: true,
+        ...filter,
       },
-    ];
-
-    for (const check of quotaChecks) {
-      if (check.quota && check.usage >= check.quota) {
-        throw new ForbiddenException(`${check.period} quota of ${check.quota} requests exceeded`);
-      }
-    }
-  }
-
-  private async updateUsageStats(apiKeyId: string, _request: Request): Promise<void> {
-    const now = new Date();
-    // const startTime = Date.now();
-
-    // Update last used timestamp and increment counters
-    await this.dbTransactorService.tx.apiKey.update({
-      where: { id: apiKeyId },
-      data: {
-        lastUsedAt: now,
-        totalCalls: { increment: 1 },
-        successfulCalls: { increment: 1 },
-        currentMinuteUsage: { increment: 1 },
-        currentHourUsage: { increment: 1 },
-        currentDailyUsage: { increment: 1 },
-        currentMonthlyUsage: { increment: 1 },
-        // Note: In a real implementation, you'd need to handle quota resets based on time periods
-      },
-    });
-
-    // Record performance metrics (would be updated after response)
-    // const responseTime = Date.now() - startTime;
-    // This would typically be done in a response interceptor
+      update,
+    );
+    if (result.matchedCount !== 1)
+      throw new ForbiddenException("API key quota exceeded or key disabled");
   }
 }
