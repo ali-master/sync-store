@@ -53,7 +53,8 @@ test.skipIf(!process.env.TEST_TLS_URL)(
           socket.emit("sync:getAll", {}, (reply: any) => {
             clearTimeout(timeout);
             socket.close();
-            reply.type === "error" ? reject(new Error(JSON.stringify(reply))) : resolve();
+            if (reply.type === "error") reject(new Error(JSON.stringify(reply)));
+            else resolve();
           }),
         );
         socket.on("connect_error", (error) => {

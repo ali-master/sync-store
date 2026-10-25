@@ -26,12 +26,18 @@ test("socket proxy configuration loaded after module import matches HTTP trust",
   const previous = process.env.TRUSTED_PROXY_CIDRS;
   process.env.TRUSTED_PROXY_CIDRS = "192.0.2.10";
   try {
-    expect(socketProxyIdentity("192.0.2.10", false, {
-      "x-forwarded-proto": "https", "x-forwarded-for": "203.0.113.8",
-    })).toEqual({ ip: "203.0.113.8", protocol: "https" });
-    expect(socketProxyIdentity("192.0.2.11", false, {
-      "x-forwarded-proto": "https", "x-forwarded-for": "203.0.113.8",
-    })).toEqual({ ip: "192.0.2.11", protocol: "http" });
+    expect(
+      socketProxyIdentity("192.0.2.10", false, {
+        "x-forwarded-proto": "https",
+        "x-forwarded-for": "203.0.113.8",
+      }),
+    ).toEqual({ ip: "203.0.113.8", protocol: "https" });
+    expect(
+      socketProxyIdentity("192.0.2.11", false, {
+        "x-forwarded-proto": "https",
+        "x-forwarded-for": "203.0.113.8",
+      }),
+    ).toEqual({ ip: "192.0.2.11", protocol: "http" });
   } finally {
     if (previous === undefined) delete process.env.TRUSTED_PROXY_CIDRS;
     else process.env.TRUSTED_PROXY_CIDRS = previous;
