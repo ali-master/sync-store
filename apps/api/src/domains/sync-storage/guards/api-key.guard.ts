@@ -15,7 +15,13 @@ import { InjectDatabase, type Database } from "@root/modules/db";
 import { quotaConsumption } from "../services/quota-window";
 import { socketProxyIdentity } from "@root/trusted-proxy";
 import { createHash } from "node:crypto";
-import { accessPolicy, permits, projectUser } from "../services/access-policy";
+import {
+  accessPolicy,
+  permits,
+  projectUser,
+  branchName,
+  versionScope,
+} from "../services/access-policy";
 import { isContextActive, setContext } from "@root/modules/context/context.storage";
 // import * as geoip from 'maxmind'; // TODO: Add GeoIP dependency if needed
 
@@ -87,6 +93,7 @@ export class ApiKeyGuard implements CanActivate {
       headers: {
         ...client.handshake.headers,
         "x-api-key": apiKey,
+        "x-branch": client.data.branch ?? auth.branch ?? "main",
         "x-user-id": userId,
         "x-instance-id": instanceId,
       },
@@ -101,9 +108,10 @@ export class ApiKeyGuard implements CanActivate {
     await this.authorize(request);
     const record = (request as any).apiKey;
     client.data.identity = {
-      userId: projectUser(accessPolicy(record).projectId, userId),
+      userId: (request as any).storageUserId,
       instanceId,
     };
+    client.data.branch = branchName((request.headers as any)["x-branch"]);
     client.data.apiKeyId = record.id;
     client.data.credentialHash = createHash("sha256").update(apiKey).digest("hex");
     client.data.access = accessPolicy(record);
@@ -124,6 +132,15 @@ export class ApiKeyGuard implements CanActivate {
     if (!apiKeyRecord || !apiKeyRecord.isActive) {
       throw new UnauthorizedException("Invalid or inactive API key");
     }
+    if (
+      apiKeyRecord.tenantId &&
+      !(await this.database.orm.tenants
+        .where({ id: apiKeyRecord.tenantId, isActive: true })
+        .first())
+    )
+      throw new ForbiddenException("Tenant is inactive");
+    if (apiKeyRecord.tenantId && requiredScope && requiredScope !== "admin")
+      throw new ForbiddenException("Use tenant-scoped dashboard reports");
     if (requiredScope) {
       const scopes = JSON.parse(apiKeyRecord.scopes || "[]");
       if (!Array.isArray(scopes) || (!scopes.includes(requiredScope) && !scopes.includes("*"))) {
@@ -151,7 +168,23 @@ export class ApiKeyGuard implements CanActivate {
     // Parse restrictions
     const restrictions = this.parseRestrictions(apiKeyRecord);
     const policy = accessPolicy(apiKeyRecord);
-    const scopedUser = projectUser(policy.projectId, userId);
+    const branch = branchName(request.headers["x-branch"] ?? "main");
+    const scopedUser = projectUser(
+      policy.projectId,
+      userId,
+      apiKeyRecord.tenantId ?? "default",
+      branch,
+    );
+    if (branch !== "main" && !requiredScope) {
+      const { owner } = versionScope(scopedUser);
+      if (!(await this.database.orm.version_branches.where({ owner, name: branch }).first()))
+        throw new ForbiddenException("Branch does not exist");
+    }
+    if (
+      request.url?.includes("/versioning") &&
+      (policy.readPrefixes.length || policy.writePrefixes.length || !apiKeyRecord.canRead)
+    )
+      throw new ForbiddenException("Versioning requires unrestricted project read access");
     const key = request.params?.key ?? request.body?.key;
     if (
       request.url?.includes("/history/") &&
@@ -179,7 +212,11 @@ export class ApiKeyGuard implements CanActivate {
     await this.validateRestrictions(request, restrictions, apiKeyRecord.id);
 
     // Check rate limits and quotas
-    const dimensions = { project: policy.projectId, apiKeyId: apiKeyRecord.id };
+    const dimensions = {
+      tenantId: apiKeyRecord.tenantId ?? "default",
+      project: policy.projectId,
+      apiKeyId: apiKeyRecord.id,
+    };
     if (!requiredScope) (request as any).metricsIdentity = dimensions;
     try {
       await this.consumeQuota(apiKeyRecord.id);
@@ -211,6 +248,8 @@ export class ApiKeyGuard implements CanActivate {
     const record = await this.database.orm.api_keys.where({ id: data.apiKeyId }).first();
     return Boolean(
       record &&
+      (!record.tenantId ||
+        (await this.database.orm.tenants.where({ id: record.tenantId, isActive: true }).first())) &&
       record.isActive &&
       record.canRead &&
       (!record.expiresAt || record.expiresAt > new Date()) &&

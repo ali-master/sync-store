@@ -1,4 +1,5 @@
-import { storageProject } from "../services/access-policy";
+import { appendCommit, groupingCommit } from "./version-store";
+import { storageProject, storageTenant } from "../services/access-policy";
 import {
   Injectable,
   BadRequestException,
@@ -252,6 +253,7 @@ export class SyncStorageRepository {
           $setOnInsert: {
             time: document.lastModified,
             project: storageProject(document.userId),
+            tenantId: storageTenant(document.userId),
             key: document.key,
             action,
             bytes: document.isDeleted ? 0 : Number(document.size),
@@ -259,6 +261,13 @@ export class SyncStorageRepository {
           },
         },
         { upsert: true, session: mutationSession.getStore() },
+      );
+    if (!groupingCommit.getStore())
+      await appendCommit(
+        this.database,
+        document.userId,
+        `${action}: ${document.key}`.slice(0, 500),
+        document,
       );
   }
 

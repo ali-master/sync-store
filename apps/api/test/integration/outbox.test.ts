@@ -35,7 +35,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("atomic embedded outbox", () => 
             ? history
             : name === "storage_change_events"
               ? changes
-              : scoped,
+              : name.startsWith("version_")
+                ? native.collection(name)
+                : scoped,
       },
     } as any);
     // Worker queries are scoped to this fixture so no unrelated installation work is claimed.

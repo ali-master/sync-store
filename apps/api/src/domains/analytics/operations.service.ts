@@ -9,7 +9,22 @@ import { randomUUID } from "node:crypto";
 // Project IDs are server-validated ASCII identifiers embedded in the storage namespace.
 const projectExpression = {
   $let: {
-    vars: { match: { $regexFind: { input: "$userId", regex: '^project:\\["([a-zA-Z0-9_-]+)"' } } },
+    vars: {
+      match: {
+        $regexFind: {
+          input: "$userId",
+          regex:
+            '^(?:tenant:[a-zA-Z0-9_-]+:)?(?:branch:[a-zA-Z0-9._/-]+:)?project:\\["([a-zA-Z0-9_-]+)"',
+        },
+      },
+    },
+    in: { $ifNull: [{ $arrayElemAt: ["$$match.captures", 0] }, "default"] },
+  },
+};
+
+const tenantExpression = {
+  $let: {
+    vars: { match: { $regexFind: { input: "$userId", regex: "^tenant:([a-zA-Z0-9_-]+):" } } },
     in: { $ifNull: [{ $arrayElemAt: ["$$match.captures", 0] }, "default"] },
   },
 };
@@ -112,17 +127,33 @@ export class OperationsService implements OnModuleInit {
     }
     await this.db.native.collection("storage_change_events").createIndex({ project: 1, time: 1 });
     await this.db.native.collection("sync_conflicts").createIndex({ createdAt: 1 });
+    for (const name of [
+      "operation_metrics",
+      "operation_snapshots",
+      "operation_growth",
+      "storage_change_events",
+    ])
+      await this.db.native.collection(name).createIndex({ tenantId: 1, time: 1 });
+    for (const name of ["operation_metrics", "operation_growth", "storage_change_events"])
+      await this.db.native.collection(name).createIndex({ tenantId: 1, project: 1, time: 1 });
+    await this.db.native
+      .collection("operation_metrics")
+      .createIndex({ tenantId: 1, apiKeyId: 1, time: 1 });
+    await this.db.native
+      .collection("saved_reports")
+      .createIndex({ tenantId: 1, createdAt: -1, _id: -1 });
   }
 
   /** Atomic increments avoid lost counts when multiple requests share a time bucket. */
   async record(
     values: Record<string, number>,
-    dimensions: { project?: string; apiKeyId?: string } = {},
+    dimensions: { project?: string; apiKeyId?: string; tenantId?: string } = {},
   ) {
     const time = new Date(Math.floor(Date.now() / 60000) * 60000);
     const project = dimensions.project ?? "",
       apiKeyId = dimensions.apiKeyId ?? "";
-    const _id = JSON.stringify([time.toISOString(), this.replica, project, apiKeyId]);
+    const tenantId = dimensions.tenantId ?? "default";
+    const _id = JSON.stringify([time.toISOString(), this.replica, tenantId, project, apiKeyId]);
     try {
       await this.db.native
         .collection<{ _id: string; [key: string]: any }>("operation_metrics")
@@ -133,6 +164,7 @@ export class OperationsService implements OnModuleInit {
               time,
               replica: this.replica,
               project,
+              tenantId,
               apiKeyId,
               expiresAt: new Date(+time + retentionMs),
             },
@@ -146,14 +178,17 @@ export class OperationsService implements OnModuleInit {
   }
 
   /** Publication latency includes queued time; duplicates count as publication attempts. */
-  published(timestamp: number) {
+  published(timestamp: number, tenantId = "default") {
     const latency = Math.max(0, Date.now() - timestamp);
     const bucket = latencyBounds.findIndex((bound) => latency <= bound);
-    return this.record({
-      published: 1,
-      latencySum: latency,
-      ["latency" + (bucket < 0 ? latencyBounds.length : bucket)]: 1,
-    });
+    return this.record(
+      {
+        published: 1,
+        latencySum: latency,
+        ["latency" + (bucket < 0 ? latencyBounds.length : bucket)]: 1,
+      },
+      { tenantId },
+    );
   }
 
   /** A shared snapshot is overwritten, never summed once per replica. */
@@ -169,14 +204,14 @@ export class OperationsService implements OnModuleInit {
         if ((error as { code?: number }).code === 11000) return;
         throw error;
       }
-      const [pending] = await this.db.native
+      const pending = await this.db.native
         .collection("sync_storage_items")
         .aggregate(
           [
             { $match: { "outbox.0": { $exists: true } } },
             {
               $group: {
-                _id: null,
+                _id: tenantExpression,
                 pending: { $sum: { $size: "$outbox" } },
                 oldest: { $min: { $arrayElemAt: ["$outbox.timestamp", 0] } },
               },
@@ -185,19 +220,33 @@ export class OperationsService implements OnModuleInit {
           { maxTimeMS: 10000 },
         )
         .toArray();
+      const tenants = await this.db.orm.tenants.all();
+      const totals = new Map(pending.map((row) => [String(row._id), row]));
+      for (const tenant of tenants)
+        if (!totals.has(tenant.id)) totals.set(tenant.id, { pending: 0, oldest: null });
+      if (!totals.has("default")) totals.set("default", { pending: 0, oldest: null });
+      totals.set("*", {
+        pending: pending.reduce((sum, row) => sum + row.pending, 0),
+        oldest: pending.length ? Math.min(...pending.map((row) => Number(row.oldest))) : null,
+      });
       await this.db.native
         .collection<{ _id: string; [key: string]: any }>("operation_snapshots")
-        .updateOne(
-          { _id: time.toISOString() },
-          {
-            $set: {
-              time,
-              pending: pending?.pending ?? 0,
-              oldestAgeMs: pending?.oldest ? Math.max(0, Date.now() - Number(pending.oldest)) : 0,
-              expiresAt: new Date(+time + retentionMs),
+        .bulkWrite(
+          [...totals].map(([tenantId, row]) => ({
+            updateOne: {
+              filter: { _id: JSON.stringify([time.toISOString(), tenantId]) },
+              update: {
+                $set: {
+                  time,
+                  tenantId,
+                  pending: row.pending,
+                  oldestAgeMs: row.oldest ? Math.max(0, Date.now() - Number(row.oldest)) : 0,
+                  expiresAt: new Date(+time + retentionMs),
+                },
+              },
+              upsert: true,
             },
-          },
-          { upsert: true },
+          })),
         );
       await this.growthSnapshot(time);
     } catch {
@@ -207,14 +256,15 @@ export class OperationsService implements OnModuleInit {
 
   /** Measure logical value bytes separately from retained history BSON size, not physical disk usage. */
   private async growthSnapshot(time: Date) {
-    const [active, history, projects] = await Promise.all([
+    const grouping = { tenantId: tenantExpression, project: projectExpression };
+    const [active, history, projects, tenants] = await Promise.all([
       this.db.native
         .collection("sync_storage_items")
         .aggregate(
           [
             {
               $group: {
-                _id: projectExpression,
+                _id: grouping,
                 items: { $sum: { $cond: ["$isDeleted", 0, 1] } },
                 valueBytes: { $sum: { $cond: ["$isDeleted", 0, "$size"] } },
               },
@@ -229,7 +279,7 @@ export class OperationsService implements OnModuleInit {
           [
             {
               $group: {
-                _id: projectExpression,
+                _id: grouping,
                 historyVersions: { $sum: 1 },
                 historyBytes: { $sum: { $bsonSize: "$$ROOT" } },
               },
@@ -238,33 +288,33 @@ export class OperationsService implements OnModuleInit {
           { maxTimeMS: 10000 },
         )
         .toArray(),
-      this.db.native
-        .collection("projects")
-        .find({}, { projection: { _id: 1 }, maxTimeMS: 10000 })
-        .toArray(),
+      this.db.orm.projects.all(),
+      this.db.orm.tenants.all(),
     ]);
-    const ids = new Set([
-      "default",
-      ...projects.map((row) => String(row._id)),
-      ...active.map((row) => row._id),
-      ...history.map((row) => row._id),
-    ]);
-    const values = new Map(active.map((row) => [row._id, row])),
-      versions = new Map(history.map((row) => [row._id, row]));
+    const rows = new Map<string, any>();
+    const put = (tenantId: string, project: string, values: any = {}) => {
+      const key = JSON.stringify([tenantId, project]);
+      rows.set(key, { ...rows.get(key), ...values, tenantId, project });
+    };
+    put("default", "default");
+    for (const tenant of tenants) put(tenant.id, "default");
+    for (const project of projects) put(project.tenantId ?? "default", project.id);
+    for (const row of [...active, ...history]) put(row._id.tenantId, row._id.project, row);
     await this.db.native
       .collection<{ _id: string; [key: string]: any }>("operation_growth")
       .bulkWrite(
-        [...ids].map((project) => ({
+        [...rows.values()].map((row) => ({
           updateOne: {
-            filter: { _id: JSON.stringify([time.toISOString(), project]) },
+            filter: { _id: JSON.stringify([time.toISOString(), row.tenantId, row.project]) },
             update: {
               $set: {
                 time,
-                project,
-                items: values.get(project)?.items ?? 0,
-                valueBytes: Number(values.get(project)?.valueBytes ?? 0),
-                historyVersions: versions.get(project)?.historyVersions ?? 0,
-                historyBytes: versions.get(project)?.historyBytes ?? 0,
+                tenantId: row.tenantId,
+                project: row.project,
+                items: row.items ?? 0,
+                valueBytes: Number(row.valueBytes ?? 0),
+                historyVersions: row.historyVersions ?? 0,
+                historyBytes: row.historyBytes ?? 0,
                 expiresAt: new Date(+time + retentionMs),
               },
             },
@@ -275,9 +325,10 @@ export class OperationsService implements OnModuleInit {
   }
 
   /** Return real sampled points, preserving missing intervals rather than inventing zero traffic. */
-  async health(query: Record<string, string>) {
+  async health(query: Record<string, string>, tenantId: string | null = null) {
     const range = reportRange(query);
     const match = {
+      ...(tenantId ? { tenantId } : {}),
       time: { $gte: new Date(+range.start - range.hours * 3600000), $lt: range.end },
       ...(query.replica ? { replica: query.replica } : {}),
     };
@@ -319,7 +370,12 @@ export class OperationsService implements OnModuleInit {
       .collection("operation_snapshots")
       .aggregate(
         [
-          { $match: { time: match.time } },
+          {
+            $match: {
+              time: match.time,
+              ...(tenantId ? { tenantId } : { tenantId: { $in: [null, "*"] } }),
+            },
+          },
           { $sort: { time: 1 } },
           {
             $group: {
@@ -337,7 +393,7 @@ export class OperationsService implements OnModuleInit {
       .toArray();
     const replicas = await this.db.native
       .collection("operation_metrics")
-      .distinct("replica", { time: match.time });
+      .distinct("replica", { time: match.time, ...(tenantId ? { tenantId } : {}) });
     return {
       ...range,
       series,
@@ -349,7 +405,7 @@ export class OperationsService implements OnModuleInit {
   }
 
   /** Separate completed HTTP traffic from quota admissions, which also include WebSocket operations. */
-  async usage(query: Record<string, string>) {
+  async usage(query: Record<string, string>, tenantId: string | null = null) {
     const range = reportRange(query);
     const fields = [
       "httpRequests",
@@ -361,6 +417,7 @@ export class OperationsService implements OnModuleInit {
       "quotaRejections",
     ];
     const match = {
+      ...(tenantId ? { tenantId } : {}),
       time: { $gte: new Date(+range.start - range.hours * 3600000), $lt: range.end },
       apiKeyId: query.apiKeyId || { $ne: "" },
       ...(query.project ? { project: query.project } : {}),
@@ -415,6 +472,7 @@ export class OperationsService implements OnModuleInit {
           {
             $project: {
               name: 1,
+              tenantId: 1,
               metadata: 1,
               now: "$$NOW",
               ...Object.fromEntries(
@@ -430,7 +488,11 @@ export class OperationsService implements OnModuleInit {
       )
       .toArray();
     const quotas = keys
-      .filter((key) => !query.project || accessPolicy(key).projectId === query.project)
+      .filter(
+        (key) =>
+          (!tenantId || key.tenantId === tenantId) &&
+          (!query.project || accessPolicy(key).projectId === query.project),
+      )
       .flatMap((key) =>
         quotaWindows.map((window) => ({
           apiKeyId: key._id,
@@ -456,10 +518,14 @@ export class OperationsService implements OnModuleInit {
   }
 
   /** Aggregate durable mutation events without reading or returning customer JSON. */
-  async changes(query: Record<string, string>) {
+  async changes(query: Record<string, string>, tenantId: string | null = null) {
     const range = reportRange(query);
     const time = { $gte: new Date(+range.start - range.hours * 3600000), $lt: range.end };
-    const match = { time, ...(query.project ? { project: query.project } : {}) };
+    const match = {
+      ...(tenantId ? { tenantId } : {}),
+      time,
+      ...(query.project ? { project: query.project } : {}),
+    };
     const bucket = {
       $dateTrunc: { date: "$time", unit: range.step === 60000 ? "minute" : "hour" },
     };
@@ -489,7 +555,8 @@ export class OperationsService implements OnModuleInit {
       .aggregate(
         [
           { $match: { createdAt: time } },
-          { $set: { project: projectExpression, time: "$createdAt" } },
+          { $set: { tenantId: tenantExpression, project: projectExpression, time: "$createdAt" } },
+          ...(tenantId ? [{ $match: { tenantId } }] : []),
           ...(query.project ? [{ $match: { project: query.project } }] : []),
           { $group: { _id: bucket, conflicts: { $sum: 1 } } },
         ],
@@ -562,7 +629,7 @@ export class OperationsService implements OnModuleInit {
   }
 
   /** Save bounded report definitions, never credentials or result payloads. */
-  async saveReport(body: any, actor: string) {
+  async saveReport(body: any, actor: string, tenantId: string | null = null) {
     if (
       !body ||
       typeof body.name !== "string" ||
@@ -589,6 +656,7 @@ export class OperationsService implements OnModuleInit {
       kind: body.kind,
       query,
       actor,
+      tenantId,
       createdAt: new Date(),
     };
     await this.db.native
@@ -598,18 +666,20 @@ export class OperationsService implements OnModuleInit {
   }
 
   /** Shared administrator views are scoped to this installation and can be removed by any admin. */
-  async savedReports() {
+  async savedReports(tenantId: string | null = null) {
     return this.db.native
       .collection("saved_reports")
-      .find({}, { projection: { actor: 0 } })
+      .find(tenantId ? { tenantId } : {}, { projection: { actor: 0 } })
       .sort({ createdAt: -1 })
       .limit(100)
       .toArray();
   }
 
-  async deleteReport(id: string) {
+  async deleteReport(id: string, tenantId: string | null = null) {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new BadRequestException("Invalid report ID");
-    await this.db.native.collection<{ _id: string }>("saved_reports").deleteOne({ _id: id });
+    await this.db.native
+      .collection<{ _id: string }>("saved_reports")
+      .deleteOne({ _id: id, ...(tenantId ? { tenantId } : {}) });
     return { deleted: true };
   }
 }

@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -12,6 +13,7 @@ import {
   Delete,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { VersioningService } from "../sync-storage/services/versioning.service";
 import { AdminService } from "./admin.service";
 import { AdminGuard } from "./admin.guard";
 import { OperationsService } from "../analytics/operations.service";
@@ -23,50 +25,51 @@ import { OperationsService } from "../analytics/operations.service";
 export class AdminController {
   constructor(
     private readonly admin: AdminService,
+    private readonly versions: VersioningService,
     private readonly operations: OperationsService,
   ) {}
 
   @Get("reports/health")
   @Header("Cache-Control", "no-store")
   @ApiOperation({ summary: "Read sampled publication health and previous-period time series" })
-  health(@Query() query: Record<string, string>) {
-    return this.operations.health(query);
+  async health(@Query() query: Record<string, string>, @Req() req: any) {
+    return this.operations.health(query, await this.admin.tenant(req.apiKey.id));
   }
 
   @Get("reports/usage")
   @Header("Cache-Control", "no-store")
   @ApiOperation({ summary: "Read project/key traffic trends and live UTC quota forecasts" })
-  usage(@Query() query: Record<string, string>) {
-    return this.operations.usage(query);
+  async usage(@Query() query: Record<string, string>, @Req() req: any) {
+    return this.operations.usage(query, await this.admin.tenant(req.apiKey.id));
   }
 
   @Get("reports/changes")
   @Header("Cache-Control", "no-store")
   @ApiOperation({ summary: "Read durable change counts and sampled logical data growth" })
-  changes(@Query() query: Record<string, string>) {
-    return this.operations.changes(query);
+  async changes(@Query() query: Record<string, string>, @Req() req: any) {
+    return this.operations.changes(query, await this.admin.tenant(req.apiKey.id));
   }
 
   @Get("reports/saved")
   @Header("Cache-Control", "no-store")
-  savedReports() {
-    return this.operations.savedReports();
+  async savedReports(@Req() req: any) {
+    return this.operations.savedReports(await this.admin.tenant(req.apiKey.id));
   }
 
   @Post("reports/saved")
-  saveReport(@Body() body: unknown, @Req() req: any) {
-    return this.operations.saveReport(body, req.apiKey.id);
+  async saveReport(@Body() body: unknown, @Req() req: any) {
+    return this.operations.saveReport(body, req.apiKey.id, await this.admin.tenant(req.apiKey.id));
   }
 
   @Delete("reports/saved/:id")
-  deleteReport(@Param("id") id: string) {
-    return this.operations.deleteReport(id);
+  async deleteReport(@Param("id") id: string, @Req() req: any) {
+    return this.operations.deleteReport(id, await this.admin.tenant(req.apiKey.id));
   }
 
   @Post("history/preview")
   @ApiOperation({ summary: "Preview a retained version and current value" })
-  previewHistory(@Body() body: unknown) {
-    return this.admin.previewHistory(body);
+  previewHistory(@Body() body: unknown, @Req() req: any) {
+    return this.admin.previewHistory(body, req.apiKey.id);
   }
 
   @Post("history/restore")
@@ -75,6 +78,39 @@ export class AdminController {
   })
   restoreHistory(@Body() body: unknown, @Req() req: any) {
     return this.admin.restoreHistory(body, req.apiKey.id);
+  }
+
+  @Get("versioning")
+  async versioning(@Query() query: Record<string, string>, @Req() req: any) {
+    const user = await this.admin.versionUser(query, req.apiKey.id);
+    const [branches, commits, timeline] = await Promise.all([
+      this.versions.branches(user),
+      this.versions.commits(user, query.before),
+      this.versions.timeline(user),
+    ]);
+    return { branches, commits, timeline };
+  }
+  @Post("versioning/:action")
+  async versionAction(@Param("action") action: string, @Body() body: any, @Req() req: any) {
+    const user = await this.admin.versionUser(body, req.apiKey.id);
+    let result;
+    if (action === "fork") result = await this.versions.fork(user, body);
+    else if (action === "commit")
+      result = await this.versions.checkpoint(user, body, body.requestId);
+    else if (action === "restore")
+      result = await this.versions.restore(user, body.commitId, body, body.requestId);
+    else throw new BadRequestException("Unknown versioning action");
+    await this.admin.audit(req.apiKey.id, "admin.versioning." + action, user);
+    return result;
+  }
+  @Patch("tenants/:id")
+  updateTenant(@Param("id") id: string, @Body() body: unknown, @Req() req: any) {
+    return this.admin.updateTenant(id, body, req.apiKey.id);
+  }
+
+  @Post("tenants")
+  createTenant(@Body() body: unknown, @Req() req: any) {
+    return this.admin.createTenant(body, req.apiKey.id);
   }
 
   @Post("projects")
@@ -88,15 +124,19 @@ export class AdminController {
   @ApiOperation({
     summary: "Read live installation counts and database health (admin scope required)",
   })
-  overview() {
-    return this.admin.overview();
+  overview(@Req() req: any) {
+    return this.admin.overview(req.apiKey.id);
   }
 
   @Get("resources/:resource")
   @Header("Cache-Control", "no-store")
   @ApiOperation({ summary: "Read paginated records; key secrets are excluded" })
-  list(@Param("resource") resource: string, @Query() query: Record<string, string>) {
-    return this.admin.list(resource, query);
+  list(
+    @Param("resource") resource: string,
+    @Query() query: Record<string, string>,
+    @Req() req: any,
+  ) {
+    return this.admin.list(resource, query, req.apiKey.id);
   }
 
   @Post("keys")

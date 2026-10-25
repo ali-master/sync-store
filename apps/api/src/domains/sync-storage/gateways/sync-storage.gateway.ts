@@ -17,7 +17,7 @@ import { SetItemCommand } from "../commands/impl/set-item.command";
 import { RemoveItemCommand } from "../commands/impl/remove-item.command";
 import { GetItemQuery } from "../queries/impl/get-item.query";
 import { GetAllItemsQuery } from "../queries/impl/get-all-items.query";
-import { permits } from "../services/access-policy";
+import { permits, storageTenant } from "../services/access-policy";
 import { socketCorsOrigin } from "../../../cors";
 import { OperationsService } from "../../analytics/operations.service";
 
@@ -89,7 +89,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     this.logger.log(`Client connected: ${client.id} (User: ${userId})`);
 
     client.data.connectedAt = Date.now();
-    void this.operations.record({ connections: 1 });
+    void this.operations.record({ connections: 1 }, { tenantId: storageTenant(userId) });
     await client.join(`user:${userId}`);
     await client.join(JSON.stringify([userId, instanceId]));
 
@@ -126,7 +126,7 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
     this.logger.log(`Client disconnected: ${client.id}`);
 
     if (userId && instanceId) {
-      void this.operations.record({ disconnections: 1 });
+      void this.operations.record({ disconnections: 1 }, { tenantId: storageTenant(userId) });
       // Notify this instance about disconnection
       this.notifyInstanceConnectionStatus(userId, instanceId, "disconnected");
     }

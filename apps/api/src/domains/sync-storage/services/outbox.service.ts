@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "redis";
 import { InjectDatabase, Database } from "@root/modules/db";
 import { SyncStorageGateway } from "../gateways/sync-storage.gateway";
+import { storageTenant } from "./access-policy";
 import { OperationsService } from "../../analytics/operations.service";
 
 /** A stored event survives process death together with the item mutation that produced it. */
@@ -70,6 +71,7 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
 
   /** Delete only the acknowledged head and only while still owning its lease. */
   async drain() {
+    let tenantId = "default";
     try {
       for (let i = 0; i < 100 && !this.stopped; i++) {
         const token = randomUUID();
@@ -83,8 +85,9 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
         );
         if (!document) return;
         const event = document.outbox[0];
+        tenantId = storageTenant(event.userId);
         await this.publish(event);
-        void this.operations.published(Number(event.timestamp));
+        void this.operations.published(Number(event.timestamp), tenantId);
         await this.collection.updateOne(
           { _id: document._id, leaseToken: token, "outbox.0.eventId": event.eventId },
           {
@@ -95,7 +98,7 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
         );
       }
     } catch {
-      void this.operations.record({ publishFailures: 1 });
+      void this.operations.record({ publishFailures: 1 }, { tenantId });
       this.logger.warn("Outbox delivery failed; lease expiry will retry the pending event");
     }
   }

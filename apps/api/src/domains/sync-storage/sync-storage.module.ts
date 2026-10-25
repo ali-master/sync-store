@@ -1,3 +1,5 @@
+import { VersioningService } from "./services/versioning.service";
+import { VersioningController } from "./controllers/versioning.controller";
 import { Module } from "@nestjs/common";
 import { CqrsModule } from "@nestjs/cqrs";
 import { SyncStorageController } from "./controllers/sync-storage.controller";
@@ -15,8 +17,9 @@ import { ApiKeyMetricsInterceptor } from "./interceptors/api-key-metrics.interce
 
 @Module({
   imports: [CqrsModule],
-  controllers: [SyncStorageController, ConflictResolutionController],
+  controllers: [SyncStorageController, ConflictResolutionController, VersioningController],
   providers: [
+    VersioningService,
     SyncStorageGateway,
     SyncStorageService,
     ConflictResolutionService,
@@ -29,6 +32,7 @@ import { ApiKeyMetricsInterceptor } from "./interceptors/api-key-metrics.interce
     OutboxService,
   ],
   exports: [
+    VersioningService,
     SyncStorageRepository,
     SyncStorageService,
     ApiKeyQuotaService,

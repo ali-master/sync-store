@@ -8,7 +8,10 @@ test.skipIf(!process.env.TEST_REPORTS_DATABASE_URL)(
   async () => {
     const client = await new MongoClient(process.env.TEST_REPORTS_DATABASE_URL!).connect();
     const db = client.db("reports_test_" + crypto.randomUUID().replaceAll("-", ""));
-    const operations = new OperationsService({ native: db } as any);
+    const operations = new OperationsService({
+      native: db,
+      orm: { tenants: { all: async () => [] }, projects: { all: async () => [] } },
+    } as any);
     try {
       await operations.onModuleInit();
       const time = new Date(Math.floor(Date.now() / 60000) * 60000 - 60000);
@@ -34,7 +37,7 @@ test.skipIf(!process.env.TEST_REPORTS_DATABASE_URL)(
       expect(result.series[0].published).toBe(100);
       expect(result.series[0].p95UpperMs).toBe(10);
       expect(result.snapshots.at(-1)?.pending).toBe(2);
-      expect(await db.collection("operation_snapshots").countDocuments()).toBe(1);
+      expect(await db.collection("operation_snapshots").countDocuments()).toBe(2);
       const filtered = await operations.health({ hours: "1", replica: "b" });
       expect(filtered.series[0].published).toBe(5);
       expect(filtered.series[0].p95UpperMs).toBe(500);

@@ -64,3 +64,18 @@ test("authorization rejects disallowed paths and refreshes event permissions aft
   row.canRead = false;
   expect(await guard.canReceive(data, "settings/theme")).toBe(false);
 });
+
+test("tenant and branch scopes round-trip without permitting forged application identities", async () => {
+  const { projectUser, storageProject, storageTenant, versionScope, branchUser, branchName } =
+    await import("../../src/domains/sync-storage/services/access-policy");
+  const identity = projectUser("project-a", "same-user", "tenant-a", "feature/a");
+  expect(storageTenant(identity)).toBe("tenant-a");
+  expect(storageProject(identity)).toBe("project-a");
+  expect(versionScope(identity).branch).toBe("feature/a");
+  expect(branchUser(versionScope(identity).owner, "feature/a")).toBe(identity);
+  expect(projectUser("default", "same-user")).toBe("same-user");
+  for (const prefix of ["tenant:", "project:", "branch:"])
+    expect(() => projectUser("default", prefix + "spoof")).toThrow();
+  for (const branch of ["../main", "a//b", "a:", "a/", "", ["main"]])
+    expect(() => branchName(branch)).toThrow();
+});

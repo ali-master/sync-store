@@ -11,10 +11,17 @@ export async function inMutation<T>(database: Database, work: () => Promise<T>):
   if (mutationSession.getStore()) return work();
   const session = database.client.startSession();
   try {
-    return (await session.withTransaction(() => mutationSession.run(session, work), {
-      readConcern: { level: "snapshot" },
-      writeConcern: { w: "majority", j: true },
-    })) as T;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return (await session.withTransaction(() => mutationSession.run(session, work), {
+          readConcern: { level: "snapshot" },
+          writeConcern: { w: "majority", j: true },
+        })) as T;
+      } catch (error) {
+        // Concurrent first writes can race to initialize the same branch or storage key.
+        if ((error as { code?: number }).code !== 11000 || attempt >= 4) throw error;
+      }
+    }
   } finally {
     await session.endSession();
   }
