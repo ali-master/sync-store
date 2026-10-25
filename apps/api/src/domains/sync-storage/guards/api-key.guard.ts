@@ -4,7 +4,9 @@ import {
   ExecutionContext,
   UnauthorizedException,
   ForbiddenException,
+  Optional,
 } from "@nestjs/common";
+import { OperationsService } from "../../analytics/operations.service";
 import { Request } from "express";
 import { Reflector } from "@nestjs/core";
 import type { Socket } from "socket.io";
@@ -38,6 +40,7 @@ export class ApiKeyGuard implements CanActivate {
     @InjectDatabase()
     private readonly database: Database,
     private readonly reflector: Reflector = new Reflector(),
+    @Optional() private readonly operations?: OperationsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -176,7 +179,20 @@ export class ApiKeyGuard implements CanActivate {
     await this.validateRestrictions(request, restrictions, apiKeyRecord.id);
 
     // Check rate limits and quotas
-    await this.consumeQuota(apiKeyRecord.id);
+    const dimensions = { project: policy.projectId, apiKeyId: apiKeyRecord.id };
+    if (!requiredScope) (request as any).metricsIdentity = dimensions;
+    try {
+      await this.consumeQuota(apiKeyRecord.id);
+      if (!requiredScope)
+        void this.operations?.record(
+          { admitted: 1, [reading ? "reads" : "writes"]: 1 },
+          dimensions,
+        );
+    } catch (error) {
+      if (!requiredScope && error instanceof ForbiddenException)
+        void this.operations?.record({ quotaRejections: 1 }, dimensions);
+      throw error;
+    }
 
     // Update usage statistics
 

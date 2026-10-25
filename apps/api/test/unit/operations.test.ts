@@ -1,10 +1,29 @@
 import "reflect-metadata";
 import { expect, test } from "bun:test";
 import {
+  quotaForecast,
   OperationsService,
   percentile,
   reportRange,
 } from "../../src/domains/analytics/operations.service";
+
+test("quota forecast respects UTC month boundaries, unlimited quotas and empty windows", () => {
+  const now = new Date("2026-01-31T12:00:00Z");
+  expect(quotaForecast("month", 50, 100, now).resetsAt.toISOString()).toBe(
+    "2026-02-01T00:00:00.000Z",
+  );
+  expect(quotaForecast("month", 50, 100, now).estimatedExhaustionAt).toBeNull();
+  expect(
+    quotaForecast(
+      "minute",
+      90,
+      100,
+      new Date("2026-01-01T00:00:30Z"),
+    ).estimatedExhaustionAt?.getTime(),
+  ).toBeCloseTo(new Date("2026-01-01T00:00:33.333Z").getTime(), -1);
+  expect(quotaForecast("hour", 10, null, now).percent).toBeNull();
+  expect(quotaForecast("hour", 0, 100, now).estimatedExhaustionAt).toBeNull();
+});
 
 test("report windows reject unbounded input and compare equal durations", () => {
   const now = Date.now();

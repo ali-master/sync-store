@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, RefreshCw } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { RecordsTable } from "./records-table";
 
@@ -110,13 +111,14 @@ export function Reports({
 }) {
   const [hours, setHours] = useState("24");
   const [replica, setReplica] = useState("");
+  const [filters, setFilters] = useState({ project: "", apiKeyId: "" });
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Row | null>(null);
   const query = useQuery<Row>({
-    queryKey: ["console", sessionId, "reports", kind, hours, replica],
+    queryKey: ["console", sessionId, "reports", kind, hours, replica, filters],
     queryFn: ({ signal }) =>
       request(
-        `reports/${kind}?hours=${hours}&replica=${encodeURIComponent(replica)}`,
+        `reports/${kind}?hours=${hours}&replica=${encodeURIComponent(replica)}&project=${encodeURIComponent(filters.project)}&apiKeyId=${encodeURIComponent(filters.apiKeyId)}`,
         "GET",
         undefined,
         undefined,
@@ -130,8 +132,14 @@ export function Reports({
   const rows: Row[] = data?.series?.filter((row: Row) => +new Date(row.time) >= start) ?? [];
   const previous: Row[] = data?.series?.filter((row: Row) => +new Date(row.time) < start) ?? [];
   const total = (items: Row[], field: string) => items.reduce((n, row) => n + (row[field] || 0), 0);
-  const fields = ["published", "publishFailures", "connections", "disconnections"];
-  const labels = ["Publications", "Failed drain attempts", "Connections", "Disconnections"];
+  const fields =
+    kind === "health"
+      ? ["published", "publishFailures", "connections", "disconnections"]
+      : ["admitted", "reads", "writes", "quotaRejections"];
+  const labels =
+    kind === "health"
+      ? ["Publications", "Failed drain attempts", "Connections", "Disconnections"]
+      : ["Quota admissions", "Read admissions", "Write admissions", "Quota / disabled rejections"];
   return (
     <section className="space-y-6">
       <Card className="flex-row flex-wrap items-end gap-4 p-5">
@@ -151,21 +159,23 @@ export function Reports({
             <option value="720">Last 30 days</option>
           </NativeSelect>
         </label>
-        <label className="grid gap-2 text-xs font-medium">
-          Replica
-          <NativeSelect
-            value={replica}
-            onChange={(e) => {
-              setReplica(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">All replicas</option>
-            {data?.replicas?.map((name: string) => (
-              <option key={name}>{name}</option>
-            ))}
-          </NativeSelect>
-        </label>
+        {kind === "health" && (
+          <label className="grid gap-2 text-xs font-medium">
+            Replica
+            <NativeSelect
+              value={replica}
+              onChange={(e) => {
+                setReplica(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All replicas</option>
+              {data?.replicas?.map((name: string) => (
+                <option key={name}>{name}</option>
+              ))}
+            </NativeSelect>
+          </label>
+        )}
         <Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>
           <RefreshCw className="size-4" />
           Refresh
@@ -174,6 +184,31 @@ export function Reports({
           UTC buckets · local display · refreshes every minute
         </p>
       </Card>
+      {kind !== "health" && (
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const values = new FormData(event.currentTarget);
+            setFilters({
+              project: String(values.get("project") || ""),
+              apiKeyId: String(values.get("apiKeyId") || ""),
+            });
+            setPage(1);
+            setSelected(null);
+          }}
+        >
+          <label className="grid gap-2 text-xs">
+            Project ID
+            <Input name="project" maxLength={128} placeholder="All projects" />
+          </label>
+          <label className="grid gap-2 text-xs">
+            API key ID
+            <Input name="apiKeyId" maxLength={128} placeholder="All keys (not a secret)" />
+          </label>
+          <Button type="submit">Apply filters</Button>
+        </form>
+      )}
       {query.isPending && <p role="status">Loading recorded metrics…</p>}
       {query.error && (
         <p role="alert" className="text-destructive">
@@ -196,70 +231,183 @@ export function Reports({
               </Card>
             ))}
           </div>
-          <div className="grid gap-5 xl:grid-cols-2">
-            <Trend
-              title="Publication latency · p95 bucket upper bound"
-              unit="ms"
-              rows={rows}
-              field="p95UpperMs"
-              start={start}
-              end={end}
-              step={data.step}
-              onSelect={setSelected}
-            />
-            <Trend
-              title="Failed drain attempts"
-              rows={rows}
-              field="publishFailures"
-              start={start}
-              end={end}
-              step={data.step}
-              onSelect={setSelected}
-            />
-            <Trend
-              title="Pending events · entire cluster"
-              rows={data.snapshots}
-              field="pending"
-              start={start}
-              end={end}
-              step={data.step}
-              onSelect={setSelected}
-            />
-            <Trend
-              title="Oldest pending event · entire cluster"
-              unit="ms"
-              rows={data.snapshots}
-              field="oldestAgeMs"
-              start={start}
-              end={end}
-              step={data.step}
-              onSelect={setSelected}
-            />
-            <Trend
-              title="WebSocket connections"
-              rows={rows}
-              field="connections"
-              start={start}
-              end={end}
-              step={data.step}
-              onSelect={setSelected}
-            />
-            <Trend
-              title="WebSocket disconnections"
-              rows={rows}
-              field="disconnections"
-              start={start}
-              end={end}
-              step={data.step}
-              onSelect={setSelected}
-            />
-          </div>
-          <p className="text-xs leading-6 text-muted-foreground">
-            Publication is not client acknowledgement. Retries can count the same event more than
-            once. p95 is an upper bucket bound; values beyond 60 seconds are unavailable. Missing
-            samples are gaps, not zero. Telemetry is best-effort and retained for{" "}
-            {data.retentionDays} days.
-          </p>
+          {kind === "health" ? (
+            <>
+              <div className="grid gap-5 xl:grid-cols-2">
+                <Trend
+                  title="Publication latency · p95 bucket upper bound"
+                  unit="ms"
+                  rows={rows}
+                  field="p95UpperMs"
+                  start={start}
+                  end={end}
+                  step={data.step}
+                  onSelect={setSelected}
+                />
+                <Trend
+                  title="Failed drain attempts"
+                  rows={rows}
+                  field="publishFailures"
+                  start={start}
+                  end={end}
+                  step={data.step}
+                  onSelect={setSelected}
+                />
+                <Trend
+                  title="Pending events · entire cluster"
+                  rows={data.snapshots}
+                  field="pending"
+                  start={start}
+                  end={end}
+                  step={data.step}
+                  onSelect={setSelected}
+                />
+                <Trend
+                  title="Oldest pending event · entire cluster"
+                  unit="ms"
+                  rows={data.snapshots}
+                  field="oldestAgeMs"
+                  start={start}
+                  end={end}
+                  step={data.step}
+                  onSelect={setSelected}
+                />
+                <Trend
+                  title="WebSocket connections"
+                  rows={rows}
+                  field="connections"
+                  start={start}
+                  end={end}
+                  step={data.step}
+                  onSelect={setSelected}
+                />
+                <Trend
+                  title="WebSocket disconnections"
+                  rows={rows}
+                  field="disconnections"
+                  start={start}
+                  end={end}
+                  step={data.step}
+                  onSelect={setSelected}
+                />
+              </div>
+              <p className="text-xs leading-6 text-muted-foreground">
+                Publication is not client acknowledgement. Retries can count the same event more
+                than once. p95 is an upper bucket bound; values beyond 60 seconds are unavailable.
+                Missing samples are gaps, not zero. Telemetry is best-effort and retained for{" "}
+                {data.retentionDays} days.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-5 xl:grid-cols-2">
+                {[...fields, "httpRequests", "httpErrors", "http429"].map((field) => (
+                  <Trend
+                    key={field}
+                    title={field.replace(/([A-Z])/g, " $1")}
+                    rows={rows}
+                    field={field}
+                    start={start}
+                    end={end}
+                    step={data.step}
+                    onSelect={setSelected}
+                  />
+                ))}
+              </div>
+              <Card className="p-5">
+                <h2 className="font-semibold">Traffic by hour of day · UTC</h2>
+                <p className="text-xs text-muted-foreground">
+                  Admissions summed across sampled days in the selected period.
+                </p>
+                <div className="grid grid-cols-6 gap-2 sm:grid-cols-12">
+                  {Array.from({ length: 24 }, (_, hour) => {
+                    const samples = rows.filter((row) => new Date(row.time).getUTCHours() === hour);
+                    const count = total(samples, "admitted");
+                    return (
+                      <div key={hour} className="rounded-lg border p-2 text-center">
+                        <p className="text-xs text-muted-foreground">
+                          {String(hour).padStart(2, "0")}:00
+                        </p>
+                        <strong className="text-sm">
+                          {samples.length ? count.toLocaleString() : "—"}
+                        </strong>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+              <Card className="p-5">
+                <h2 className="font-semibold">Live quota outlook</h2>
+                <p className="text-xs text-muted-foreground">
+                  Top 50 active keys in this period, or the selected key. Forecast assumes
+                  consumption continues at its current UTC-window average; it is not a guarantee.
+                </p>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {data.quotas.map((quota: Row) => (
+                    <div key={quota.apiKeyId + quota.window} className="rounded-lg border p-4">
+                      <div className="flex justify-between gap-3">
+                        <strong className="text-sm">{quota.name || quota.apiKeyId}</strong>
+                        <span className="text-xs">{quota.window}</span>
+                      </div>
+                      <p className="mt-3 text-sm tabular-nums">
+                        {quota.used.toLocaleString()} /{" "}
+                        {quota.limit == null ? "Unlimited" : quota.limit.toLocaleString()}
+                      </p>
+                      {quota.percent != null && (
+                        <progress
+                          className="my-2 h-2 w-full accent-primary"
+                          max={100}
+                          value={quota.percent}
+                          aria-label={`${quota.name} ${quota.window} quota consumed`}
+                        />
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Resets {new Date(quota.resetsAt).toLocaleString()}
+                      </p>
+                      <p className="mt-1 text-xs">
+                        {quota.estimatedExhaustionAt
+                          ? "Estimated exhaustion: " +
+                            new Date(quota.estimatedExhaustionAt).toLocaleString()
+                          : "No exhaustion forecast before reset"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {!data.quotas.length && (
+                  <p className="text-sm text-muted-foreground">
+                    No keys matched. Enter a key ID to inspect an idle key.
+                  </p>
+                )}
+              </Card>
+              <Card className="p-5">
+                <h2 className="font-semibold">Top consumers</h2>
+                {data.topKeys.map((key: Row) => (
+                  <button
+                    key={key._id}
+                    className="flex w-full flex-wrap justify-between gap-2 border-b py-3 text-left text-sm hover:text-primary"
+                    onClick={() => {
+                      setFilters((current) => ({ ...current, apiKeyId: key._id }));
+                      setPage(1);
+                    }}
+                  >
+                    <span className="break-all">
+                      {key.project} / {key._id}
+                    </span>
+                    <span>
+                      {key.admitted} admissions · {key.quotaRejections} rejections
+                    </span>
+                  </button>
+                ))}
+              </Card>
+              <p className="text-xs leading-6 text-muted-foreground">
+                Admissions include HTTP, socket handshakes and socket operations. Completed HTTP
+                responses are counted separately. Quota rejection currently uses HTTP 403 and can
+                include a concurrently disabled key; 429 is shown separately. Unauthorized
+                credentials and administrator traffic are excluded. Missing samples are not zero
+                traffic.
+              </p>
+            </>
+          )}
           {selected && (
             <Card className="p-5">
               <h2 className="font-semibold">
@@ -283,7 +431,11 @@ export function Reports({
           <Card className="p-5">
             <h2 className="font-semibold">Recorded intervals</h2>
             <RecordsTable
-              fields={["time", ...fields, "p95UpperMs"]}
+              fields={[
+                "time",
+                ...fields,
+                ...(kind === "health" ? ["p95UpperMs"] : ["httpRequests", "httpErrors", "http429"]),
+              ]}
               labels={{ time: "Time", p95UpperMs: "p95 upper (ms)" }}
               records={{ items: rows.slice((page - 1) * 25, page * 25), total: rows.length }}
               page={page}

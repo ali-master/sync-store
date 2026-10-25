@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { corsOptions } from "./cors";
+import { OperationsService } from "./domains/analytics/operations.service";
 import { proxyTrust } from "./trusted-proxy";
 // Modules
 import { AppModule } from "@root/app.module";
@@ -119,6 +120,18 @@ async function bootstrap() {
     useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
     const fastify = app.getHttpAdapter().getInstance();
+    const operations = app.get(OperationsService);
+    fastify.addHook("onResponse", async (request: any, reply: any) => {
+      if (!request.metricsIdentity) return;
+      void operations.record(
+        {
+          httpRequests: 1,
+          httpErrors: reply.statusCode >= 400 ? 1 : 0,
+          http429: reply.statusCode === 429 ? 1 : 0,
+        },
+        request.metricsIdentity,
+      );
+    });
     fastify
       .addHook("onError", (_, reply) => {
         reply.status(500).header("content-type", "application/json").send({

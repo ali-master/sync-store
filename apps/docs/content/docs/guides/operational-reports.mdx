@@ -41,3 +41,32 @@ No separate monitoring service is required. All replicas must share MongoDB and 
 synchronized clocks. Reports contain counts and identifiers, never API-key secrets
 or stored JSON values. The dashboard refreshes each minute and reports errors instead
 of replacing failed reads with zeroes.
+
+## Usage and quotas
+
+Open **Usage & quotas** and filter by project ID or API-key record ID (never paste
+the secret). Read/write admissions include HTTP requests, Socket.IO handshakes and
+operations, matching the existing quota enforcement path. Administrator traffic is
+excluded. Completed HTTP responses, HTTP errors and HTTP 429 responses have separate
+charts; they must not be added to admissions as if they were distinct requests.
+
+The existing quota gate returns HTTP 403 when exhausted or concurrently disabled;
+the **Quota / disabled rejections** chart counts that outcome explicitly. Failed
+authentication and requests rejected before the quota gate are not attributed to a key.
+The dashboard does not silently relabel 403 responses as 429.
+
+Click a traffic point or inspect an interval to investigate a spike. Top consumers
+show the 50 keys with most admissions in the selected window; clicking a key filters
+the report. Enter a specific key ID to inspect an idle key's quotas.
+
+Quota cards use live database counters and UTC reset markers, treating counters from
+expired windows as zero. Minute, hour, day and calendar-month limits show the next
+reset. Estimated exhaustion uses the average consumption since the current window
+started; it is only shown if that rate would reach the limit before reset. Sparse
+traffic, a recent rollout and bursts reduce forecast usefulness. Unlimited quotas
+have no exhaustion estimate. These cards show **current** quotas even when viewing
+a historical traffic window.
+
+`GET /api/v1/admin/reports/usage` accepts the same time-range parameters plus
+`project` and `apiKeyId`. Live quotas only cover the returned top 50 keys, or the
+explicitly selected key. Metrics share the 90-day best-effort retention policy.

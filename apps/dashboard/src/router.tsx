@@ -21,6 +21,7 @@ const rootRoute = createRootRoute({
 });
 const sections = [
   "health",
+  "usage",
   "overview",
   "storage",
   "keys",

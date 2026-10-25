@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger, OnModuleInit } from "@nestjs/c
 import { Cron } from "@nestjs/schedule";
 import { hostname } from "node:os";
 import { Database, InjectDatabase } from "@root/modules/db";
+import { quotaWindows, quotaWindow } from "../sync-storage/services/quota-window";
+import { accessPolicy } from "../sync-storage/services/access-policy";
 
 export const latencyBounds = [10, 50, 100, 250, 500, 1000, 5000, 15000, 60000];
 const retentionMs = 90 * 86400000;
@@ -37,6 +39,44 @@ export function percentile(buckets: number[], quantile: number) {
     if (count >= target) return latencyBounds[i] ?? null;
   }
   return null;
+}
+
+/** Forecast using elapsed UTC-window consumption, capped by the next reset boundary. */
+export function quotaForecast(unit: string, used: number, limit: number | null, now: Date) {
+  const start = new Date(now),
+    reset = new Date(now);
+  if (unit === "month") {
+    start.setUTCDate(1);
+    start.setUTCHours(0, 0, 0, 0);
+    reset.setUTCDate(1);
+    reset.setUTCMonth(reset.getUTCMonth() + 1);
+    reset.setUTCHours(0, 0, 0, 0);
+  } else if (unit === "day") {
+    start.setUTCHours(0, 0, 0, 0);
+    reset.setUTCDate(reset.getUTCDate() + 1);
+    reset.setUTCHours(0, 0, 0, 0);
+  } else if (unit === "hour") {
+    start.setUTCMinutes(0, 0, 0);
+    reset.setUTCHours(reset.getUTCHours() + 1);
+    reset.setUTCMinutes(0, 0, 0);
+  } else {
+    start.setUTCSeconds(0, 0);
+    reset.setUTCMinutes(reset.getUTCMinutes() + 1);
+    reset.setUTCSeconds(0, 0);
+  }
+  const elapsed = +now - +start;
+  const estimate =
+    limit === null || used <= 0 || elapsed < 1000
+      ? null
+      : (Math.max(0, limit - used) * elapsed) / used;
+  return {
+    used,
+    limit,
+    percent: limit === null ? null : limit === 0 ? 100 : Math.min(100, (used / limit) * 100),
+    resetsAt: reset,
+    estimatedExhaustionAt:
+      estimate !== null && estimate < +reset - +now ? new Date(+now + estimate) : null,
+  };
 }
 
 /** Store metadata-only minute counters across replicas; telemetry failure never blocks writes. */
@@ -206,6 +246,113 @@ export class OperationsService implements OnModuleInit {
       series,
       snapshots: snapshots.map((row) => ({ ...row, time: row._id })),
       replicas,
+      retentionDays: 90,
+      generatedAt: new Date(),
+    };
+  }
+
+  /** Separate completed HTTP traffic from quota admissions, which also include WebSocket operations. */
+  async usage(query: Record<string, string>) {
+    const range = reportRange(query);
+    const fields = [
+      "httpRequests",
+      "httpErrors",
+      "http429",
+      "admitted",
+      "reads",
+      "writes",
+      "quotaRejections",
+    ];
+    const match = {
+      time: { $gte: new Date(+range.start - range.hours * 3600000), $lt: range.end },
+      apiKeyId: query.apiKeyId || { $ne: "" },
+      ...(query.project ? { project: query.project } : {}),
+    };
+    const rows = await this.db.native
+      .collection("operation_metrics")
+      .aggregate(
+        [
+          { $match: match },
+          {
+            $group: {
+              _id: {
+                $dateTrunc: { date: "$time", unit: range.step === 60000 ? "minute" : "hour" },
+              },
+              ...Object.fromEntries(fields.map((field) => [field, { $sum: "$" + field }])),
+            },
+          },
+          { $sort: { _id: 1 } },
+        ],
+        { maxTimeMS: 10000 },
+      )
+      .toArray();
+    const topKeys = await this.db.native
+      .collection("operation_metrics")
+      .aggregate(
+        [
+          { $match: { ...match, time: { $gte: range.start, $lt: range.end } } },
+          {
+            $group: {
+              _id: "$apiKeyId",
+              project: { $first: "$project" },
+              admitted: { $sum: "$admitted" },
+              httpRequests: { $sum: "$httpRequests" },
+              quotaRejections: { $sum: "$quotaRejections" },
+            },
+          },
+          { $sort: { admitted: -1 } },
+          { $limit: 50 },
+        ],
+        { maxTimeMS: 10000 },
+      )
+      .toArray();
+    const keys = await this.db.native
+      .collection("api_keys")
+      .aggregate(
+        [
+          {
+            $match: query.apiKeyId
+              ? { _id: query.apiKeyId }
+              : { _id: { $in: topKeys.map((row) => row._id) } },
+          },
+          {
+            $project: {
+              name: 1,
+              metadata: 1,
+              now: "$$NOW",
+              ...Object.fromEntries(
+                quotaWindows.flatMap((window) => [
+                  [window.limit, 1],
+                  [window.counter, quotaWindow(window).usage],
+                ]),
+              ),
+            },
+          },
+        ],
+        { maxTimeMS: 10000 },
+      )
+      .toArray();
+    const quotas = keys
+      .filter((key) => !query.project || accessPolicy(key).projectId === query.project)
+      .flatMap((key) =>
+        quotaWindows.map((window) => ({
+          apiKeyId: key._id,
+          name: key.name,
+          project: accessPolicy(key).projectId,
+          window: window.unit,
+          ...quotaForecast(
+            window.unit,
+            Number(key[window.counter] ?? 0),
+            key[window.limit] == null ? null : Number(key[window.limit]),
+            key.now,
+          ),
+        })),
+      );
+    return {
+      ...range,
+      series: rows.map((row) => ({ ...row, time: row._id })),
+      topKeys,
+      quotas,
       retentionDays: 90,
       generatedAt: new Date(),
     };

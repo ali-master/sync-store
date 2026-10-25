@@ -31,6 +31,37 @@ test.skipIf(!process.env.TEST_REPORTS_DATABASE_URL)(
       expect(filtered.series[0].p95UpperMs).toBe(500);
       expect(filtered.snapshots.at(-1)?.pending).toBe(2);
       expect(await db.collection("operation_metrics").indexExists("expiresAt_1")).toBe(true);
+      await db.collection("operation_metrics").insertMany([
+        {
+          time,
+          replica: "a",
+          project: "one",
+          apiKeyId: "key-one",
+          admitted: 10,
+          reads: 8,
+          writes: 2,
+          httpRequests: 5,
+          httpErrors: 1,
+          quotaRejections: 1,
+        },
+        { time, replica: "b", project: "two", apiKeyId: "key-two", admitted: 20 },
+      ]);
+      await db.collection<{ _id: string; [key: string]: any }>("api_keys").insertOne({
+        _id: "key-one",
+        key: "secret-must-not-escape",
+        name: "One",
+        metadata: JSON.stringify({ access: { projectId: "one" } }),
+        minuteQuota: 100,
+        currentMinuteUsage: 99,
+        quotaWindow_minute: new Date(0),
+      });
+      const usage = await operations.usage({ project: "one", hours: "1" });
+      expect(usage.series[0].admitted).toBe(10);
+      expect(usage.topKeys).toHaveLength(1);
+      expect(usage.quotas.find((row) => row.window === "minute")?.used).toBe(0);
+      expect(JSON.stringify(usage)).not.toContain("secret-must-not-escape");
+      const mismatch = await operations.usage({ project: "two", apiKeyId: "key-one" });
+      expect(mismatch.quotas).toHaveLength(0);
     } finally {
       await db.dropDatabase();
       await client.close();

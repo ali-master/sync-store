@@ -21,6 +21,7 @@ type Row = Record<string, any>;
 type Page = { items: Row[]; total: number; page: number; pageSize: number };
 const sections = [
   ["health", "Sync health", "◉"],
+  ["usage", "Usage & quotas", "◴"],
   ["overview", "Overview", "◈"],
   ["storage", "Data explorer", "▤"],
   ["keys", "API keys", "⌘"],
@@ -35,6 +36,7 @@ const sections = [
   ["system", "System", "⚙"],
 ];
 const descriptions: Record<string, string> = {
+  usage: "Request trends, top consumers and live quota forecasts for each project and API key.",
   health: "Publication latency, pending events and connection trends across your replicas.",
   history:
     "Review retained versions and recover deleted data. Every restore creates a new synchronized change.",
@@ -197,7 +199,7 @@ export default function App({ section }: { section: string }) {
         token,
         signal,
       ),
-    enabled: Boolean(token) && !["system", "health"].includes(section),
+    enabled: Boolean(token) && !["system", "health", "usage"].includes(section),
   });
   const mutation = useMutation({
     mutationFn: (action: () => Promise<void>) => action(),
@@ -665,8 +667,8 @@ export default function App({ section }: { section: string }) {
               </div>
             </>
           )}
-          {section === "health" ? (
-            <Reports kind="health" request={request} sessionId={sessionId} />
+          {["health", "usage"].includes(section) ? (
+            <Reports kind={section} request={request} sessionId={sessionId} />
           ) : section === "system" && overview ? (
             <section className="grid gap-5 xl:grid-cols-2">
               <Card className="gap-5 p-6 [&_h2]:font-semibold [&_p]:text-sm [&_p]:leading-7 [&_p]:text-muted-foreground [&_dl>div]:flex [&_dl>div]:flex-wrap [&_dl>div]:justify-between [&_dl>div]:gap-3 [&_dl>div]:border-b [&_dl>div]:py-4 [&_dl]:text-xs [&_dt]:text-muted-foreground">

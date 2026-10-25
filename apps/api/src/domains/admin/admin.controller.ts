@@ -32,6 +32,13 @@ export class AdminController {
     return this.operations.health(query);
   }
 
+  @Get("reports/usage")
+  @Header("Cache-Control", "no-store")
+  @ApiOperation({ summary: "Read project/key traffic trends and live UTC quota forecasts" })
+  usage(@Query() query: Record<string, string>) {
+    return this.operations.usage(query);
+  }
+
   @Post("history/preview")
   @ApiOperation({ summary: "Preview a retained version and current value" })
   previewHistory(@Body() body: unknown) {
