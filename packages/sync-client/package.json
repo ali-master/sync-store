@@ -28,27 +28,27 @@
     }
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "build": "bun --bun tsup",
+    "dev": "bun --bun tsup --watch",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
     "test:types": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.ts\"",
-    "lint:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\""
+    "lint": "bun --bun eslint \"src/**/*.ts\"",
+    "lint:fix": "bun --bun eslint \"src/**/*.ts\" --fix",
+    "format": "bun --bun prettier --write \"src/**/*.ts\"",
+    "format:check": "bun --bun prettier --check \"src/**/*.ts\""
   },
   "dependencies": {
-    "socket.io-client": "^4.8.1",
-    "react": "^19.1.1"
+    "socket.io-client": "^4.8.4",
+    "react": "^19.3.1"
   },
   "devDependencies": {
-    "@types/react": "^19.1.10",
-    "@types/node": "^24.3.0",
+    "@types/react": "^19.3.0",
+    "@types/node": "^26.6.5",
     "@usex/tsconfig": "workspace:*",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4",
-    "tsup": "^8.5.0"
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5",
+    "tsup": "^9.0.0"
   },
-  "packageManager": "pnpm@10.14.0"
+  "packageManager": "bun@1.4.4"
 }

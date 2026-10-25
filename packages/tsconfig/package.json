@@ -20,7 +20,6 @@
     "build": "echo \"no test specified\"",
     "dev": "echo \"no test specified\"",
     "test": "echo \"no test specified\"",
-    "preinstall": "npx only-allow pnpm",
     "test:types": "echo \"no test specified\"",
     "test:knip": "knip",
     "test:knip:fix": "knip --fix",
@@ -29,10 +28,11 @@
     "lint:fix": "echo \"no test specified\""
   },
   "engines": {
-    "node": ">=14"
+    "bun": ">=1.4.4"
   },
   "files": [
     "tsconfig.json",
     "tsconfig.lib.json"
-  ]
+  ],
+  "packageManager": "bun@1.4.4"
 }

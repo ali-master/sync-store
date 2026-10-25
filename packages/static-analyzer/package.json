@@ -19,48 +19,48 @@
   },
   "scripts": {
     "release": "standard-version",
-    "postrelease": "git push --follow-tags origin master && npm publish",
+    "postrelease": "git push --follow-tags origin master && bun publish",
     "release:beta": "standard-version --prerelease beta",
-    "postrelease:beta": "git push --follow-tags origin master && npm publish --tag beta",
-    "eslint:inspect": "npx @eslint/config-inspector --port 3000"
+    "postrelease:beta": "git push --follow-tags origin master && bun publish --tag beta",
+    "eslint:inspect": "bunx --bun @eslint/config-inspector --port 3000"
   },
   "dependencies": {
-    "@eslint/js": "^9.33.0",
-    "@eslint/json": "^0.13.1",
-    "eslint": "^9.33.0",
+    "@eslint/js": "^10.0.1",
+    "@eslint/json": "^2.1.1",
+    "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-exception-handling": "^1.5.4",
+    "eslint-plugin-exception-handling": "^1.8.0",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-prettier": "^5.5.7",
     "eslint-plugin-redos": "^4.5.0",
-    "eslint-plugin-security": "^3.0.1",
-    "eslint-plugin-sonarjs": "^3.0.4",
-    "globals": "^16.3.0",
-    "prettier": "^3.6.2",
-    "typescript-eslint": "^8.39.1"
+    "eslint-plugin-security": "^4.2.0",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript-eslint": "^8.72.0"
   },
   "devDependencies": {
-    "@eslint/config-inspector": "^1.2.0",
-    "@types/eslint-plugin-security": "^3.0.0",
+    "@eslint/config-inspector": "^3.5.0",
+    "@types/eslint-plugin-security": "^3.0.1",
     "standard-version": "^9.5.0"
   },
   "peerDependencies": {
-    "@eslint/js": "^9.16.0",
-    "@eslint/json": "^0.8.0",
-    "eslint": "^9.16.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-exception-handling": "^1.5.4",
+    "@eslint/js": "^10.0.1",
+    "@eslint/json": "^2.1.1",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-exception-handling": "^1.8.0",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^5.2.1",
-    "eslint-plugin-redos": "^4.4.5",
-    "eslint-plugin-security": "^3.0.1",
-    "eslint-plugin-sonarjs": "^3.0.1",
-    "globals": "^15.13.0",
-    "prettier": "^3.4.2",
-    "typescript-eslint": "^8.18.0"
+    "eslint-plugin-prettier": "^5.5.7",
+    "eslint-plugin-redos": "^4.5.0",
+    "eslint-plugin-security": "^4.2.0",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript-eslint": "^8.72.0"
   },
   "engines": {
-    "node": ">=23.11.x"
+    "bun": ">=1.4.4"
   },
-  "packageManager": "pnpm@10.14.0"
+  "packageManager": "bun@1.4.4"
 }

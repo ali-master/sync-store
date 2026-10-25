@@ -12,8 +12,9 @@
     "url": "git+https://github.com/ali-master/sync-store.git"
   },
   "workspaces": [
+    "packages/*",
     "apps/*",
-    "packages/*"
+    "examples/react-app"
   ],
   "scripts": {
     "build": "turbo run build",
@@ -25,59 +26,45 @@
     "format": "turbo run format",
     "test": "turbo run test",
     "clean": "turbo run clean",
-    "db:generate": "turbo run db:generate --filter=@usex/api",
-    "db:push": "turbo run db:push --filter=@usex/api",
-    "db:reset": "turbo run db:reset --filter=@usex/api",
-    "db:deploy": "turbo run db:deploy --filter=@usex/api",
-    "db:migrate": "turbo run db:migrate --filter=@usex/api",
-    "db:seed": "turbo run db:seed --filter=@usex/api",
-    "db:seed:prepare": "turbo run db:seed:prepare --filter=@usex/api",
-    "db:seed:prune": "turbo run db:seed:prune, --filter=@usex/api",
-    "db:seed:patch": "turbo run db:seed:patch --filter=@usex/api",
-    "db:setup": "pnpm db:deploy && pnpm db:seed:prune && pnpm db:seed:prepare",
-    "db:view": "turbo run db:view --filter=@usex/api",
-    "test:types": "tsc --noEmit",
-    "test:knip": "knip",
-    "test:knip:fix": "knip --fix",
-    "depcruise": "pnpm depcruise packages --include-only \"^packages/.*/src\" --exclude \"\\.spec\\.ts\" --config --output-type dot | dot -T svg | yarn depcruise-wrap-stream-in-html > dependency-graph.html"
+    "db:generate": "bun run --cwd apps/api db:generate",
+    "db:push": "bun run --cwd apps/api db:push",
+    "db:deploy": "bun run --cwd apps/api db:deploy",
+    "db:migrate": "bun run --cwd apps/api db:migrate",
+    "db:setup": "bun run --cwd apps/api db:setup",
+    "test:types": "turbo run test:types",
+    "test:knip": "bun --bun knip",
+    "test:knip:fix": "bun --bun knip --fix",
+    "depcruise": "bunx --bun depcruise packages --include-only \"^packages/.*/src\" --exclude \"\\.spec\\.ts\" --config --output-type dot | dot -T svg | bun run depcruise-wrap-stream-in-html > dependency-graph.html"
   },
   "dependencies": {
-    "@nestjs/cqrs": "^11.0.3",
-    "@nestjs/platform-socket.io": "^11.1.6",
-    "@nestjs/websockets": "^11.1.6",
-    "axios": "^1.11.0",
-    "effect": "^3.17.7",
-    "socket.io": "^4.8.1"
+    "@nestjs/cqrs": "^12.1.1",
+    "@nestjs/platform-socket.io": "^12.2.0",
+    "@nestjs/websockets": "^12.2.0",
+    "axios": "^1.20.0",
+    "effect": "^4.0.6",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
-    "@swc/core": "1.13.3",
-    "@types/node": "^24.3.0",
-    "@usex/prune-mod": "^0.0.13",
+    "@swc/core": "1.16.20",
+    "@types/node": "^26.6.5",
+    "@typescript/typescript6": "^6.0.2",
+    "@usex/prune-mod": "^0.0.14",
     "@usex/static-analyzer": "workspace:*",
-    "dependency-cruiser": "^17.0.1",
-    "eslint": "^9.33.0",
-    "prettier": "^3.6.2",
-    "tsup": "8.5.0",
-    "turbo": "^2.5.6",
-    "typescript": "^5.9.2"
+    "dependency-cruiser": "^18.7.0",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "tsup": "9.0.0",
+    "turbo": "^2.11.10",
+    "typescript": "^6.0.3",
+    "@typescript/native": "npm:typescript@^7.0.2"
   },
   "engines": {
-    "node": ">=23.11.0"
+    "bun": ">=1.4.4"
   },
   "resolutions": {
     "@usex/utils": "workspace:*",
     "@usex/tsconfig": "workspace:*",
     "@usex/static-analyzer": "workspace:*"
   },
-  "packageManager": "pnpm@10.14.0",
-  "pnpm": {
-    "peerDependencyRules": {
-      "ignoreMissing": [
-        "*"
-      ],
-      "allowAny": [
-        "*"
-      ]
-    }
-  }
+  "packageManager": "bun@1.4.4"
 }
