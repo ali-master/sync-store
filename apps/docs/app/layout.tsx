@@ -1,9 +1,10 @@
-import { RootProvider } from "fumadocs-ui/provider";
+import { RootProvider } from "fumadocs-ui/provider/next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 // Types
 import type { ReactNode } from "react";
 // Styles
 import "./global.css";
+export { siteMetadata as metadata } from "@root/lib/metadata";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,6 +24,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             enableColorScheme: true,
             enabled: true,
             enableSystem: true,
+            defaultTheme: "light",
           }}
         >
           {children}

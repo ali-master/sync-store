@@ -3,6 +3,7 @@ import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/page
 import { notFound } from "next/navigation";
 import { getMDXComponents } from "@root/mdx-components";
 import type { Metadata } from "next";
+import { siteMetadata } from "@root/lib/metadata";
 
 export default async function Page(props: { params: Promise<{ slug?: string[] }> }) {
   const params = await props.params;
@@ -16,9 +17,18 @@ export default async function Page(props: { params: Promise<{ slug?: string[] }>
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription>{page.data.description}</DocsDescription>
-      <DocsBody>
+      <header className="article-header">
+        <p className="eyebrow">
+          {params.slug?.[0] === "reference"
+            ? "REFERENCE"
+            : params.slug?.[0] === "guides"
+              ? "DEVELOPER GUIDE"
+              : "SYNC STORE ESSENTIALS"}
+        </p>
+        <DocsTitle>{page.data.title}</DocsTitle>
+        <DocsDescription>{page.data.description}</DocsDescription>
+      </header>
+      <DocsBody className="article-content">
         <MDX components={getMDXComponents()} />
       </DocsBody>
     </DocsPage>
@@ -33,17 +43,19 @@ export async function generateMetadata(props: { params: Promise<{ slug?: string[
   const params = await props.params;
   const page = source.getPage(params.slug);
   if (!page) notFound();
-  const image = ["/docs-og", ...(params.slug ?? []), "image.png"].join("/");
 
   return {
     title: page.data.title,
     description: page.data.description,
     openGraph: {
-      images: image,
+      ...siteMetadata.openGraph,
+      title: page.data.title,
+      description: page.data.description,
     },
     twitter: {
-      card: "summary_large_image",
-      images: image,
+      ...siteMetadata.twitter,
+      title: page.data.title,
+      description: page.data.description,
     },
   } satisfies Metadata;
 }

@@ -8,13 +8,9 @@ export default function RootDocsLayout({ children }: { children: ReactNode }) {
     <DocsLayout
       tree={source.pageTree}
       tabMode="sidebar"
-      nav={{ ...baseOptions.nav, mode: "top" }}
-      sidebar={
-        {
-          // banner: <div>Hello World</div>,
-        }
-      }
       {...baseOptions}
+      nav={{ ...baseOptions.nav, mode: "top" }}
+      containerProps={{ className: "docs-workspace" }}
     >
       {children}
     </DocsLayout>

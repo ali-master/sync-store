@@ -1,13 +1,12 @@
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
-import { openapi } from "@root/lib/source";
-import { APIPage } from "fumadocs-openapi/ui";
+import { APIPage } from "./components/api-page";
 import { CodeBlock, Pre } from "fumadocs-ui/components/codeblock";
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
-    APIPage: (props) => <APIPage {...openapi.getAPIPageProps(props)} />,
+    APIPage,
     pre: ({ ref: _ref, ...props }) => (
       <CodeBlock keepBackground {...props}>
         <Pre>{props.children}</Pre>

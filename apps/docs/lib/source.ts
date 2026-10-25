@@ -1,13 +1,11 @@
 import { loader } from "fumadocs-core/source";
-import { attachFile, createOpenAPI } from "fumadocs-openapi/server";
-import { docs } from "@root/.source";
+import { openapiPlugin, createOpenAPI } from "fumadocs-openapi/server";
+import { docs } from "@root/.source/server";
 
 export const source = loader({
   baseUrl: "/docs",
   source: docs.toFumadocsSource(),
-  pageTree: {
-    attachFile,
-  },
+  plugins: [openapiPlugin()],
 });
 
 export const openapi = createOpenAPI();
