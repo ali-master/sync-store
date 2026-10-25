@@ -1,354 +1,241 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Sync Storage - Basic Example</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sync Store — Basic HTTP example</title>
+    <link rel="icon" type="image/svg+xml" href="../../assets/logo.svg" />
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f5f6f9;
+        color: #252a34;
+        font:
+          15px/1.6 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 740px;
+        margin: 50px auto;
+        padding: 32px;
+        background: white;
+        border: 1px solid #e1e5ee;
+        border-radius: 16px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      header img {
+        width: 44px;
+        height: 44px;
+      }
+      h1 {
+        font-size: 23px;
+        letter-spacing: -0.6px;
+        margin: 0;
+      }
+      p {
+        color: #747d8e;
+        font-size: 13px;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 16px 0;
+      }
+      input,
+      textarea,
+      button {
+        font: inherit;
+      }
+      input,
+      textarea {
+        display: block;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #dce1eb;
+        border-radius: 6px;
+        margin-top: 6px;
+      }
+      textarea,
+      pre {
+        font:
+          12px/1.8 ui-monospace,
+          monospace;
+      }
+      textarea {
+        min-height: 160px;
+        resize: vertical;
+      }
+      button {
+        border: 1px solid #dce1eb;
+        background: white;
+        border-radius: 6px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      button:first-child {
+        color: white;
+        background: #0755f5;
+        border-color: #0755f5;
+      }
+      button:disabled {
+        opacity: 0.5;
+      }
+      input:focus,
+      textarea:focus,
+      button:focus-visible {
+        outline: 2px solid #0755f5;
+        outline-offset: 2px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      pre {
+        background: #f5f7fb;
+        border-radius: 8px;
+        padding: 18px;
+        min-height: 90px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .error {
+        color: #b53333;
+      }
+      footer {
+        font-size: 11px;
+        color: #858d9c;
+        border-top: 1px solid #eceff4;
+        padding-top: 18px;
+        margin-top: 24px;
+      }
+      @media (max-width: 600px) {
+        main {
+          margin: 16px;
+          padding: 22px;
         }
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            font-weight: bold;
+        .grid {
+          display: block;
         }
-        .connected {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .disconnected {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .loading {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #b8daff;
-        }
-        .form-group {
-            margin: 15px 0;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 8px 12px;
-            border: 2px solid #e1e5e9;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        button:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        .data-display {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 5px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-        .data-item {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 3px;
-            padding: 10px;
-            margin: 5px 0;
-        }
-        .data-item strong {
-            color: #495057;
-        }
-        #logs {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 5px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 12px;
-        }
+      }
     </style>
-</head>
-<body>
-    <h1>Remote Sync Storage - Basic Example</h1>
-    
-    <div id="status" class="status loading">Initializing...</div>
-    
-    <div class="form-group">
-        <label for="userId">User ID:</label>
-        <input type="text" id="userId" value="demo-user-123" />
-    </div>
-    
-    <div class="form-group">
-        <label for="serverUrl">Server URL:</label>
-        <input type="text" id="serverUrl" value="http://localhost:3000" />
-    </div>
-    
-    <button onclick="initializeStorage()">Connect</button>
-    <button onclick="disconnectStorage()" disabled id="disconnectBtn">Disconnect</button>
-    
-    <h2>Storage Operations</h2>
-    
-    <div class="form-group">
-        <label for="key">Key:</label>
-        <input type="text" id="key" placeholder="Enter key name" />
-    </div>
-    
-    <div class="form-group">
-        <label for="value">Value (JSON):</label>
-        <textarea id="value" rows="3" placeholder="Enter JSON value"></textarea>
-    </div>
-    
-    <button onclick="setItem()" disabled id="setBtn">Set Item</button>
-    <button onclick="getItem()" disabled id="getBtn">Get Item</button>
-    <button onclick="removeItem()" disabled id="removeBtn">Remove Item</button>
-    <button onclick="clearAll()" disabled id="clearBtn">Clear All</button>
-    <button onclick="getAllItems()" disabled id="getAllBtn">Get All Items</button>
-    
-    <h2>Current Data</h2>
-    <div id="dataDisplay" class="data-display">
-        <em>No data loaded</em>
-    </div>
-    
-    <h2>Event Log</h2>
-    <div id="logs"></div>
-    
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="../../assets/logo.svg" alt="" />
+        <h1>Sync Store <span style="font-weight: 400; color: #8d95a3">/ HTTP example</span></h1>
+      </header>
+      <p>
+        A minimal REST client. Use a disposable development key. This example sends direct HTTP
+        requests; it has no offline queue or realtime subscriptions.
+      </p>
+      <form id="storage-form">
+        <label
+          >Server origin<input id="server" type="url" value="http://localhost:3000" required
+        /></label>
+        <label
+          >API key<input
+            id="api-key"
+            type="password"
+            autocomplete="off"
+            required
+            placeholder="Development key with read/write access"
+        /></label>
+        <div class="grid">
+          <label>User ID<input id="user" value="basic-demo-user" required /></label
+          ><label>Storage key<input id="key" value="preferences" required /></label>
+        </div>
+        <label
+          >JSON value<textarea id="value" spellcheck="false">
+{"theme":"dark","notifications":true}</textarea>
+        </label>
+        <div class="actions">
+          <button type="submit">Save JSON</button><button type="button" id="read">Read key</button
+          ><button type="button" id="remove">Delete key</button>
+        </div>
+      </form>
+      <p id="status" role="status">Ready. No request sent yet.</p>
+      <pre id="result" aria-label="Server response">Responses appear here.</pre>
+      <footer>
+        Credentials stay in memory. A shared API key does not authenticate the user ID. Never expose
+        production keys in a public browser.
+      </footer>
+    </main>
     <script type="module">
-        let storage = null;
-        
-        window.log = function(message, type = 'info') {
-            const logs = document.getElementById('logs');
-            const timestamp = new Date().toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.innerHTML = `<span style="color: #569cd6">[${timestamp}]</span> ${message}`;
-            logs.appendChild(logEntry);
-            logs.scrollTop = logs.scrollHeight;
-            console.log(`[${type}] ${message}`);
-        };
-        
-        window.updateStatus = function(status, isConnected) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = status;
-            statusEl.className = `status ${isConnected ? 'connected' : 'disconnected'}`;
-            
-            // Enable/disable buttons based on connection
-            const buttons = ['setBtn', 'getBtn', 'removeBtn', 'clearBtn', 'getAllBtn'];
-            buttons.forEach(id => {
-                document.getElementById(id).disabled = !isConnected;
-            });
-            
-            document.getElementById('disconnectBtn').disabled = !isConnected;
-        };
-        
-        window.displayData = function(data) {
-            const display = document.getElementById('dataDisplay');
-            
-            if (!data || data.length === 0) {
-                display.innerHTML = '<em>No data available</em>';
-                return;
-            }
-            
-            let html = '';
-            if (Array.isArray(data)) {
-                data.forEach(item => {
-                    html += `
-                        <div class="data-item">
-                            <strong>${item.key}:</strong> ${JSON.stringify(item.value, null, 2)}
-                            <br><small>Version: ${item.version || 'N/A'} | Last Modified: ${item.lastModified || 'N/A'}</small>
-                        </div>
-                    `;
-                });
-            } else {
-                html = `<div class="data-item">${JSON.stringify(data, null, 2)}</div>`;
-            }
-            
-            display.innerHTML = html;
-        };
-        
-        window.initializeStorage = async function() {
-            const userId = document.getElementById('userId').value;
-            const serverUrl = document.getElementById('serverUrl').value;
-            
-            if (!userId) {
-                alert('Please enter a User ID');
-                return;
-            }
-            
-            try {
-                updateStatus('Connecting...', false);
-                log('Initializing remote storage...');
-                
-                // Import the RemoteStorage class
-                const { RemoteStorage } = await import('/@usex/sync-client');
-                
-                storage = new RemoteStorage({
-                    userId: userId,
-                    serverUrl: serverUrl,
-                    autoConnect: true,
-                });
-                
-                // Set up event listeners
-                storage.on('connect', () => {
-                    updateStatus('Connected', true);
-                    log('✅ Connected to server');
-                    getAllItems(); // Load initial data
-                });
-                
-                storage.on('disconnect', () => {
-                    updateStatus('Disconnected', false);
-                    log('❌ Disconnected from server');
-                });
-                
-                storage.on('error', (error) => {
-                    updateStatus('Error: ' + error.message, false);
-                    log('❌ Error: ' + error.message);
-                });
-                
-                storage.on('change', (event) => {
-                    log(`🔄 Data changed locally: ${event.key} = ${JSON.stringify(event.newValue)}`);
-                    getAllItems(); // Refresh display
-                });
-                
-                storage.on('sync', (event) => {
-                    log(`🔄 Data synced from remote: ${event.key || 'multiple items'}`);
-                    getAllItems(); // Refresh display
-                });
-                
-                // Wait for connection
-                await storage.waitForConnection();
-                
-            } catch (error) {
-                updateStatus('Connection failed: ' + error.message, false);
-                log('❌ Connection failed: ' + error.message);
-            }
-        };
-        
-        window.disconnectStorage = function() {
-            if (storage) {
-                storage.disconnect();
-                storage = null;
-                updateStatus('Disconnected', false);
-                log('Disconnected from server');
-                displayData(null);
-            }
-        };
-        
-        window.setItem = async function() {
-            if (!storage) return;
-            
-            const key = document.getElementById('key').value;
-            const valueStr = document.getElementById('value').value;
-            
-            if (!key) {
-                alert('Please enter a key');
-                return;
-            }
-            
-            let value;
-            try {
-                value = valueStr ? JSON.parse(valueStr) : null;
-            } catch (error) {
-                alert('Invalid JSON value');
-                return;
-            }
-            
-            try {
-                await storage.setItem(key, value);
-                log(`✅ Set item: ${key} = ${JSON.stringify(value)}`);
-                
-                // Clear form
-                document.getElementById('key').value = '';
-                document.getElementById('value').value = '';
-                
-            } catch (error) {
-                log(`❌ Failed to set item: ${error.message}`);
-            }
-        };
-        
-        window.getItem = function() {
-            if (!storage) return;
-            
-            const key = document.getElementById('key').value;
-            if (!key) {
-                alert('Please enter a key');
-                return;
-            }
-            
-            const value = storage.getItem(key);
-            log(`📖 Get item: ${key} = ${JSON.stringify(value)}`);
-            displayData(value);
-        };
-        
-        window.removeItem = async function() {
-            if (!storage) return;
-            
-            const key = document.getElementById('key').value;
-            if (!key) {
-                alert('Please enter a key');
-                return;
-            }
-            
-            try {
-                await storage.removeItem(key);
-                log(`🗑️ Removed item: ${key}`);
-                document.getElementById('key').value = '';
-            } catch (error) {
-                log(`❌ Failed to remove item: ${error.message}`);
-            }
-        };
-        
-        window.clearAll = function() {
-            if (!storage) return;
-            
-            if (confirm('Are you sure you want to clear all data?')) {
-                storage.clear();
-                log('🗑️ Cleared all data');
-                displayData(null);
-            }
-        };
-        
-        window.getAllItems = async function() {
-            if (!storage) return;
-            
-            try {
-                const items = await storage.getAllItems();
-                log(`📖 Retrieved ${items.length} items`);
-                displayData(items);
-            } catch (error) {
-                log(`❌ Failed to get all items: ${error.message}`);
-            }
-        };
-        
-        // Initialize on page load
-        window.addEventListener('load', () => {
-            log('Page loaded. Ready to connect.');
-        });
+      const form = document.querySelector("#storage-form");
+      const status = document.querySelector("#status");
+      const result = document.querySelector("#result");
+      const instanceId = crypto.randomUUID();
+      const field = (id) => document.getElementById(id).value;
+      // Exercise the actual response envelope and no-content behavior without an SDK wrapper.
+      async function request(method) {
+        if (!form.reportValidity()) return;
+        const buttons = [...form.querySelectorAll("button")];
+        buttons.forEach((button) => (button.disabled = true));
+        status.className = "";
+        status.textContent = "Sending request…";
+        try {
+          const origin = new URL(field("server"));
+          if (!["http:", "https:"].includes(origin.protocol) || origin.username || origin.password)
+            throw new Error("Use an HTTP(S) origin without embedded credentials.");
+          const headers = {
+            "x-api-key": field("api-key"),
+            "x-user-id": field("user"),
+            "x-instance-id": instanceId,
+          };
+          let body;
+          if (method === "PUT") {
+            body = JSON.stringify({ value: JSON.parse(field("value")) });
+            headers["content-type"] = "application/json";
+          }
+          const response = await fetch(
+            origin.origin + "/api/v1/item/" + encodeURIComponent(field("key")),
+            {
+              method,
+              headers,
+              body,
+              signal: AbortSignal.timeout(8000),
+            },
+          );
+          const text = await response.text();
+          if (!response.ok) throw new Error("HTTP " + response.status + ": " + text);
+          result.textContent =
+            response.status === 204
+              ? "Deleted. The server returned no content."
+              : JSON.stringify(JSON.parse(text), null, 2);
+          status.textContent = "HTTP " + response.status + " · " + method + " completed";
+        } catch (error) {
+          status.className = "error";
+          status.textContent =
+            error instanceof Error
+              ? error.message.replaceAll(field("api-key"), "[redacted]")
+              : "Request failed";
+        } finally {
+          buttons.forEach((button) => (button.disabled = false));
+        }
+      }
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void request("PUT");
+      });
+      document.querySelector("#read").addEventListener("click", () => void request("GET"));
+      document.querySelector("#remove").addEventListener("click", () => void request("DELETE"));
     </script>
-</body>
+  </body>
 </html>
