@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { InjectDbTransactor, type PrismaTransactor } from "@root/modules/db";
+import { InjectDatabase, type Database } from "@root/modules/db";
 import { convertBigIntToNumber } from "@root/utils/bigint-converter.util";
 
 import {
@@ -15,8 +15,8 @@ import {
 @Injectable()
 export class UserAnalyticsService {
   constructor(
-    @InjectDbTransactor()
-    private readonly dbTransactorService: PrismaTransactor,
+    @InjectDatabase()
+    private readonly database: Database,
   ) {}
 
   /**
@@ -71,20 +71,28 @@ export class UserAnalyticsService {
    * Get user engagement metrics
    */
   async getUserEngagementMetrics(userId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     // Daily active sessions
-    const dailyActiveSessions = (await db.$queryRaw`
-      SELECT 
-        DATE(connectedAt) as date,
-        CAST(COUNT(*) AS SIGNED) as session_count,
-        AVG(TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW()))) as avg_session_duration
-      FROM sync_sessions
-      WHERE userId = ${userId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY DATE(connectedAt)
-      ORDER BY date ASC
-    `) as any[];
+    const dailyActiveSessions = (await db.aggregate("sync_sessions", [
+      { $match: { userId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: { $dateTrunc: { date: "$connectedAt", unit: "day" } },
+          session_count: { $sum: 1 },
+          avg_session_duration: {
+            $avg: {
+              $divide: [
+                { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                1000,
+              ],
+            },
+          },
+        },
+      },
+      { $project: { _id: 0, date: "$_id", session_count: 1, avg_session_duration: 1 } },
+      { $sort: { date: 1 } },
+    ])) as any[];
 
     return {
       dailyActiveSessions,
@@ -99,20 +107,20 @@ export class UserAnalyticsService {
    * Get user behavior patterns
    */
   async getUserBehaviorPatterns(userId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     // Peak usage times
-    const peakUsageTimes = (await db.$queryRaw`
-      SELECT 
-        HOUR(lastModified) as hour,
-        DAYOFWEEK(lastModified) as day_of_week,
-        CAST(COUNT(*) AS SIGNED) as operation_count
-      FROM sync_storage_items
-      WHERE userId = ${userId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY HOUR(lastModified), DAYOFWEEK(lastModified)
-      ORDER BY operation_count DESC
-    `) as any[];
+    const peakUsageTimes = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: { hour: { $hour: "$lastModified" }, day: { $dayOfWeek: "$lastModified" } },
+          operation_count: { $sum: 1 },
+        },
+      },
+      { $project: { hour: "$_id.hour", day_of_week: "$_id.day", operation_count: 1 } },
+      { $sort: { operation_count: -1 } },
+    ])) as any[];
 
     return {
       peakUsageTimes,
@@ -149,19 +157,23 @@ export class UserAnalyticsService {
    * Get user cohort analysis
    */
   async getUserCohortAnalysis(timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     // Get users grouped by their signup month (cohorts)
-    const cohorts = (await db.$queryRaw`
-      SELECT
-        DATE_FORMAT(ss.connectedAt, '%Y-%m') as cohort_month,
-        CAST(COUNT(DISTINCT ss.userId) AS SIGNED) as cohort_size,
-        MIN(ss.connectedAt) as cohort_start_date
-      FROM sync_sessions ss
-      WHERE ss.connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY DATE_FORMAT(ss.connectedAt, '%Y-%m')
-      ORDER BY cohort_month ASC
-    `) as any[];
+    const cohorts = (await db.aggregate("sync_sessions", [
+      { $match: { connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: { $dateToString: { date: "$connectedAt", format: "%Y-%m" } },
+          users: { $addToSet: "$userId" },
+          cohort_start_date: { $min: "$connectedAt" },
+        },
+      },
+      {
+        $project: { cohort_month: "$_id", cohort_size: { $size: "$users" }, cohort_start_date: 1 },
+      },
+      { $sort: { cohort_month: 1 } },
+    ])) as any[];
 
     // Calculate retention rates for each cohort
     const retentionRates = await Promise.all(
@@ -188,13 +200,33 @@ export class UserAnalyticsService {
         oneMonthEnd.setMonth(oneMonthEnd.getMonth() + 1);
 
         const month1Retained = convertBigIntToNumber(
-          await db.$queryRaw`
-          SELECT CAST(COUNT(DISTINCT ss2.userId) AS SIGNED) as retained_users
-          FROM sync_sessions ss1
-          JOIN sync_sessions ss2 ON ss1.userId = ss2.userId
-          WHERE DATE_FORMAT(ss1.connectedAt, '%Y-%m') = ${cohort.cohort_month}
-            AND ss2.connectedAt BETWEEN ${oneMonthLater} AND ${oneMonthEnd}
-        `,
+          await db.aggregate("sync_sessions", [
+            {
+              $match: {
+                $expr: {
+                  $eq: [
+                    { $dateToString: { date: "$connectedAt", format: "%Y-%m" } },
+                    cohort.cohort_month,
+                  ],
+                },
+              },
+            },
+            { $group: { _id: "$userId" } },
+            {
+              $lookup: {
+                from: "sync_sessions",
+                localField: "_id",
+                foreignField: "userId",
+                pipeline: [
+                  { $match: { connectedAt: { $gte: oneMonthLater, $lte: oneMonthEnd } } },
+                  { $limit: 1 },
+                ],
+                as: "retained",
+              },
+            },
+            { $match: { "retained.0": { $exists: true } } },
+            { $count: "retained_users" },
+          ]),
         ) as any[];
 
         // Calculate 3-month retention
@@ -202,26 +234,63 @@ export class UserAnalyticsService {
         threeMonthEnd.setMonth(threeMonthEnd.getMonth() + 1);
 
         const month3Retained = convertBigIntToNumber(
-          await db.$queryRaw`
-          SELECT CAST(COUNT(DISTINCT ss2.userId) AS SIGNED) as retained_users
-          FROM sync_sessions ss1
-          JOIN sync_sessions ss2 ON ss1.userId = ss2.userId
-          WHERE DATE_FORMAT(ss1.connectedAt, '%Y-%m') = ${cohort.cohort_month}
-            AND ss2.connectedAt BETWEEN ${threeMonthsLater} AND ${threeMonthEnd}
-        `,
+          await db.aggregate("sync_sessions", [
+            {
+              $match: {
+                $expr: {
+                  $eq: [
+                    { $dateToString: { date: "$connectedAt", format: "%Y-%m" } },
+                    cohort.cohort_month,
+                  ],
+                },
+              },
+            },
+            { $group: { _id: "$userId" } },
+            {
+              $lookup: {
+                from: "sync_sessions",
+                localField: "_id",
+                foreignField: "userId",
+                pipeline: [
+                  { $match: { connectedAt: { $gte: threeMonthsLater, $lte: threeMonthEnd } } },
+                  { $limit: 1 },
+                ],
+                as: "retained",
+              },
+            },
+            { $match: { "retained.0": { $exists: true } } },
+            { $count: "retained_users" },
+          ]),
         ) as any[];
 
         // Calculate current retention (users still active in the last 30 days)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const currentRetained = (await db.$queryRaw`
-          SELECT CAST(COUNT(DISTINCT ss2.userId) AS SIGNED) as retained_users
-          FROM sync_sessions ss1
-          JOIN sync_sessions ss2 ON ss1.userId = ss2.userId
-          WHERE DATE_FORMAT(ss1.connectedAt, '%Y-%m') = ${cohort.cohort_month}
-            AND ss2.lastActivity >= ${thirtyDaysAgo}
-        `) as any[];
+        const currentRetained = (await db.aggregate("sync_sessions", [
+          {
+            $match: {
+              $expr: {
+                $eq: [
+                  { $dateToString: { date: "$connectedAt", format: "%Y-%m" } },
+                  cohort.cohort_month,
+                ],
+              },
+            },
+          },
+          { $group: { _id: "$userId" } },
+          {
+            $lookup: {
+              from: "sync_sessions",
+              localField: "_id",
+              foreignField: "userId",
+              pipeline: [{ $match: { lastActivity: { $gte: thirtyDaysAgo } } }, { $limit: 1 }],
+              as: "retained",
+            },
+          },
+          { $match: { "retained.0": { $exists: true } } },
+          { $count: "retained_users" },
+        ])) as any[];
 
         const cohortSizeNumber = convertBigIntToNumber(cohort.cohort_size);
         return {
@@ -254,21 +323,26 @@ export class UserAnalyticsService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const churnAnalysis = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(DISTINCT total_users.userId) AS SIGNED) as total_users,
-        CAST(COUNT(DISTINCT active_users.userId) AS SIGNED) as active_users
-      FROM (
-        SELECT DISTINCT userId
-        FROM sync_sessions
-        WHERE connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-      ) total_users
-      LEFT JOIN (
-        SELECT DISTINCT userId
-        FROM sync_sessions
-        WHERE lastActivity >= ${thirtyDaysAgo}
-      ) active_users ON total_users.userId = active_users.userId
-    `) as any[];
+    const churnAnalysis = (await db.aggregate("sync_sessions", [
+      { $match: { connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: "$userId" } },
+      {
+        $lookup: {
+          from: "sync_sessions",
+          localField: "_id",
+          foreignField: "userId",
+          pipeline: [{ $match: { lastActivity: { $gte: thirtyDaysAgo } } }, { $limit: 1 }],
+          as: "active",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total_users: { $sum: 1 },
+          active_users: { $sum: { $cond: [{ $gt: [{ $size: "$active" }, 0] }, 1, 0] } },
+        },
+      },
+    ])) as any[];
 
     const totalUsers = convertBigIntToNumber(churnAnalysis[0]?.total_users) || 0;
     const activeUsers = convertBigIntToNumber(churnAnalysis[0]?.active_users) || 0;
@@ -292,35 +366,40 @@ export class UserAnalyticsService {
   }
 
   private async getUserMetrics(userId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const result = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_operations,
-        CAST(COUNT(CASE WHEN isDeleted = false THEN 1 END) AS SIGNED) as active_items,
-        AVG(size) as avg_item_size,
-        MAX(lastModified) as last_activity
-      FROM sync_storage_items
-      WHERE userId = ${userId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const result = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          total_operations: { $sum: 1 },
+          active_items: { $sum: { $cond: ["$isDeleted", 0, 1] } },
+          avg_item_size: { $avg: "$size" },
+          last_activity: { $max: "$lastModified" },
+        },
+      },
+    ])) as any[];
 
     return result[0] || { total_operations: 0, active_items: 0, avg_item_size: 0 };
   }
 
   private async getStorageUsage(userId: string): Promise<StorageUsage> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const storageData = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_items,
-        CAST(SUM(size) AS SIGNED) as total_size_bytes,
-        AVG(size) as average_item_size,
-        CAST(MAX(size) AS SIGNED) as max_item_size,
-        MIN(lastModified) as oldest_item_date
-      FROM sync_storage_items
-      WHERE userId = ${userId} AND isDeleted = false
-    `) as any[];
+    const storageData = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, isDeleted: false } },
+      {
+        $group: {
+          _id: null,
+          total_items: { $sum: 1 },
+          total_size_bytes: { $sum: "$size" },
+          average_item_size: { $avg: "$size" },
+          max_item_size: { $max: "$size" },
+          oldest_item_date: { $min: "$lastModified" },
+        },
+      },
+    ])) as any[];
 
     const data = storageData[0] || {};
 
@@ -338,18 +417,26 @@ export class UserAnalyticsService {
     userId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<DeviceTypeUsage[]> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const results = (await db.$queryRaw`
-      SELECT 
-        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(device, '$.type')), 'unknown') as device_type,
-        CAST(COUNT(*) AS SIGNED) as count,
-        AVG(TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW()))) as average_session_duration
-      FROM sync_sessions
-      WHERE userId = ${userId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY device_type
-    `) as any[];
+    const results = (await db.aggregate("sync_sessions", [
+      { $match: { userId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: "$device",
+          count: { $sum: 1 },
+          average_session_duration: {
+            $avg: {
+              $divide: [
+                { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                1000,
+              ],
+            },
+          },
+        },
+      },
+      { $project: { device_type: "$_id", count: 1, average_session_duration: 1 } },
+    ])) as any[];
 
     const totalSessions = results.reduce((sum, item) => sum + Number(item.count), 0);
 
@@ -365,20 +452,26 @@ export class UserAnalyticsService {
     userId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<ActivityPattern[]> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const results = (await db.$queryRaw`
-      SELECT 
-        HOUR(lastModified) as hour,
-        DAYOFWEEK(lastModified) as day_of_week,
-        CAST(COUNT(*) AS SIGNED) as operation_count,
-        AVG(size) as average_response_time
-      FROM sync_storage_items
-      WHERE userId = ${userId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY HOUR(lastModified), DAYOFWEEK(lastModified)
-      ORDER BY operation_count DESC
-    `) as any[];
+    const results = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: { hour: { $hour: "$lastModified" }, day: { $dayOfWeek: "$lastModified" } },
+          operation_count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          hour: "$_id.hour",
+          day_of_week: "$_id.day",
+          operation_count: 1,
+          average_response_time: { $literal: null },
+        },
+      },
+      { $sort: { operation_count: -1 } },
+    ])) as any[];
 
     return results.map((item) => ({
       hour: item.hour,
@@ -389,31 +482,45 @@ export class UserAnalyticsService {
   }
 
   private async getConflictRate(userId: string, timeRange: AnalyticsTimeRange): Promise<number> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const result = (await db.$queryRaw`
-      SELECT 
-        (CAST(COUNT(DISTINCT sc.id) AS DECIMAL) / NULLIF(CAST(COUNT(DISTINCT ssi.id) AS DECIMAL), 0)) as conflict_rate
-      FROM sync_storage_items ssi
-      LEFT JOIN sync_conflicts sc ON ssi.id = sc.itemId
-      WHERE ssi.userId = ${userId}
-        AND ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const result = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $lookup: {
+          from: "sync_conflicts",
+          localField: "_id",
+          foreignField: "itemId",
+          as: "conflicts",
+        },
+      },
+      { $group: { _id: null, total: { $sum: 1 }, conflicts: { $sum: { $size: "$conflicts" } } } },
+      { $project: { conflict_rate: { $divide: ["$conflicts", "$total"] } } },
+    ])) as any[];
 
     return result[0]?.conflict_rate || 0;
   }
 
   private async getSessionMetrics(userId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const result = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_sessions,
-        AVG(TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW()))) as average_session_duration
-      FROM sync_sessions
-      WHERE userId = ${userId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const result = (await db.aggregate("sync_sessions", [
+      { $match: { userId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          total_sessions: { $sum: 1 },
+          average_session_duration: {
+            $avg: {
+              $divide: [
+                { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                1000,
+              ],
+            },
+          },
+        },
+      },
+    ])) as any[];
 
     return result[0] || { total_sessions: 0, average_session_duration: 0 };
   }
@@ -422,19 +529,15 @@ export class UserAnalyticsService {
     userId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<number[]> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const results = (await db.$queryRaw`
-      SELECT 
-        HOUR(lastModified) as hour,
-        CAST(COUNT(*) AS SIGNED) as operation_count
-      FROM sync_storage_items
-      WHERE userId = ${userId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY HOUR(lastModified)
-      ORDER BY operation_count DESC
-      LIMIT 5
-    `) as any[];
+    const results = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: { $hour: "$lastModified" }, operation_count: { $sum: 1 } } },
+      { $project: { hour: "$_id", operation_count: 1 } },
+      { $sort: { operation_count: -1 } },
+      { $limit: 5 },
+    ])) as any[];
 
     return results.map((item) => item.hour);
   }
@@ -443,14 +546,13 @@ export class UserAnalyticsService {
     userId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<SyncFrequency> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const daily = (await db.$queryRaw`
-      SELECT CAST(COUNT(DISTINCT DATE(lastModified)) AS SIGNED) as days
-      FROM sync_storage_items
-      WHERE userId = ${userId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const daily = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: { $dateTrunc: { date: "$lastModified", unit: "day" } } } },
+      { $count: "days" },
+    ])) as any[];
 
     const totalDays = Math.ceil(
       (timeRange.end.getTime() - timeRange.start.getTime()) / (1000 * 60 * 60 * 24),
@@ -470,14 +572,12 @@ export class UserAnalyticsService {
     userId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<FeatureUsage[]> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const syncOperations = (await db.$queryRaw`
-      SELECT CAST(COUNT(*) AS SIGNED) as count, MAX(lastModified) as last_used
-      FROM sync_storage_items
-      WHERE userId = ${userId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const syncOperations = (await db.aggregate("sync_storage_items", [
+      { $match: { userId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: null, count: { $sum: 1 }, last_used: { $max: "$lastModified" } } },
+    ])) as any[];
 
     return [
       {

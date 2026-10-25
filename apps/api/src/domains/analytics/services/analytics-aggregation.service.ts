@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { InjectDbTransactor, type PrismaTransactor } from "@root/modules/db";
+import { InjectDatabase, type Database } from "@root/modules/db";
 import {
   AnalyticsAggregation,
   AnalyticsTimeRange,
@@ -14,8 +14,8 @@ export class AnalyticsAggregationService {
   private readonly logger = new Logger(AnalyticsAggregationService.name);
 
   constructor(
-    @InjectDbTransactor()
-    private readonly dbTransactorService: PrismaTransactor,
+    @InjectDatabase()
+    private readonly database: Database,
   ) {}
 
   /**
@@ -139,21 +139,30 @@ export class AnalyticsAggregationService {
    * Get real-time analytics
    */
   async getRealTimeAnalytics() {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     const currentTime = new Date();
     const oneHourAgo = new Date(currentTime.getTime() - 60 * 60 * 1000);
 
-    const realTimeData = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as current_requests,
-        CAST(COUNT(DISTINCT userId) AS SIGNED) as active_users,
-        CAST(COUNT(DISTINCT instanceId) AS SIGNED) as active_instances,
-        AVG(latencyMs) as avg_response_time,
-        CAST(COUNT(CASE WHEN disconnectedAt IS NULL THEN 1 END) AS SIGNED) as current_errors
-      FROM sync_sessions
-      WHERE lastActivity >= ${oneHourAgo}
-    `) as any[];
+    const realTimeData = (await db.aggregate("sync_sessions", [
+      { $match: { lastActivity: { $gte: oneHourAgo } } },
+      {
+        $group: {
+          _id: null,
+          current_requests: { $sum: 1 },
+          users: { $addToSet: "$userId" },
+          instances: { $addToSet: "$instanceId" },
+          avg_response_time: { $avg: "$latencyMs" },
+        },
+      },
+      {
+        $set: {
+          active_users: { $size: "$users" },
+          active_instances: { $size: "$instances" },
+          current_errors: null,
+        },
+      },
+    ])) as any[];
 
     const data = realTimeData[0] || {};
 
@@ -207,28 +216,47 @@ export class AnalyticsAggregationService {
   }
 
   private async getTotalMetrics(timeRange: AnalyticsTimeRange, filters?: AnalyticsFilter) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const metrics = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(ssi.id) AS SIGNED) as total_requests,
-        CAST(COUNT(DISTINCT ssi.userId) AS SIGNED) as total_users,
-        CAST(COUNT(DISTINCT ss.instanceId) AS SIGNED) as total_instances,
-        AVG(ss.latencyMs) as average_response_time,
-        (CAST(COUNT(CASE WHEN sc.id IS NOT NULL THEN 1 END) AS DECIMAL) / COUNT(ssi.id)) as error_rate
-      FROM sync_storage_items ssi
-      LEFT JOIN sync_sessions ss ON ssi.instanceId = ss.instanceId
-      LEFT JOIN sync_conflicts sc ON ssi.id = sc.itemId
-      WHERE ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-        ${filters?.userIds ? "AND ssi.userId = ANY($3)" : ""}
-        ${filters?.instanceIds ? "AND ssi.instanceId = ANY($4)" : ""}
-    `) as any[];
+    const metrics = (await db.aggregate("sync_storage_items", [
+      {
+        $match: {
+          lastModified: { $gte: timeRange.start, $lte: timeRange.end },
+          ...(filters?.userIds ? { userId: { $in: filters.userIds } } : {}),
+          ...(filters?.instanceIds ? { instanceId: { $in: filters.instanceIds } } : {}),
+        },
+      },
+      {
+        $lookup: {
+          from: "sync_conflicts",
+          localField: "_id",
+          foreignField: "itemId",
+          as: "conflicts",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total_requests: { $sum: 1 },
+          users: { $addToSet: "$userId" },
+          instances: { $addToSet: "$instanceId" },
+          conflicts: { $sum: { $size: "$conflicts" } },
+        },
+      },
+      {
+        $set: {
+          total_users: { $size: "$users" },
+          total_instances: { $size: "$instances" },
+          error_rate: { $divide: ["$conflicts", "$total_requests"] },
+          average_response_time: null,
+        },
+      },
+    ])) as any[];
 
-    const apiKeyCount = (await db.$queryRaw`
-      SELECT CAST(COUNT(DISTINCT id) AS SIGNED) as total_api_keys
-      FROM api_keys
-      WHERE createdAt <= ${timeRange.end}
-    `) as any[];
+    const apiKeyCount = (await db.aggregate("api_keys", [
+      { $match: { createdAt: { $lte: timeRange.end } } },
+      { $count: "total_api_keys" },
+    ])) as any[];
 
     const data = metrics[0] || {};
     const apiKeys = apiKeyCount[0] || {};
@@ -244,18 +272,14 @@ export class AnalyticsAggregationService {
   }
 
   private async getTopApiKeys(timeRange: AnalyticsTimeRange, limit: number) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const results = (await db.$queryRaw`
-      SELECT 
-        ak.id,
-        ak.name,
-        ak.totalCalls as requests
-      FROM api_keys ak
-      WHERE ak.createdAt <= ${timeRange.end}
-      ORDER BY ak.totalCalls DESC
-      LIMIT ${limit}
-    `) as any[];
+    const results = (await db.aggregate("api_keys", [
+      { $match: { createdAt: { $lte: timeRange.end } } },
+      { $sort: { totalCalls: -1 } },
+      { $limit: limit },
+      { $project: { id: "$_id", name: 1, requests: "$totalCalls" } },
+    ])) as any[];
 
     return results.map((item) => ({
       id: item.id,
@@ -265,19 +289,15 @@ export class AnalyticsAggregationService {
   }
 
   private async getTopUsers(timeRange: AnalyticsTimeRange, limit: number) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const results = (await db.$queryRaw`
-      SELECT 
-        ssi.userId as id,
-        CAST(COUNT(*) AS SIGNED) as requests,
-        MAX(ssi.lastModified) as last_active
-      FROM sync_storage_items ssi
-      WHERE ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY ssi.userId
-      ORDER BY requests DESC
-      LIMIT ${limit}
-    `) as any[];
+    const results = (await db.aggregate("sync_storage_items", [
+      { $match: { lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: "$userId", requests: { $sum: 1 }, last_active: { $max: "$lastModified" } } },
+      { $sort: { requests: -1 } },
+      { $limit: limit },
+      { $set: { id: "$_id" } },
+    ])) as any[];
 
     return results.map((item) => ({
       id: item.id,
@@ -287,19 +307,15 @@ export class AnalyticsAggregationService {
   }
 
   private async getTopInstances(timeRange: AnalyticsTimeRange, limit: number) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const results = (await db.$queryRaw`
-      SELECT 
-        ssi.instanceId as id,
-        ssi.userId,
-        CAST(COUNT(*) AS SIGNED) as requests
-      FROM sync_storage_items ssi
-      WHERE ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY ssi.instanceId, ssi.userId
-      ORDER BY requests DESC
-      LIMIT ${limit}
-    `) as any[];
+    const results = (await db.aggregate("sync_storage_items", [
+      { $match: { lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: { instance: "$instanceId", user: "$userId" }, requests: { $sum: 1 } } },
+      { $sort: { requests: -1 } },
+      { $limit: limit },
+      { $set: { id: "$_id.instance", userId: "$_id.user" } },
+    ])) as any[];
 
     return results.map((item) => ({
       id: item.id,
@@ -309,23 +325,27 @@ export class AnalyticsAggregationService {
   }
 
   private async getGeographicBreakdown(timeRange: AnalyticsTimeRange): Promise<GeographicUsage[]> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const results = (await db.$queryRaw`
-      SELECT 
-        ss.country,
-        ss.city,
-        CAST(COUNT(DISTINCT ssi.id) AS SIGNED) as request_count,
-        CAST(COUNT(DISTINCT ssi.userId) AS SIGNED) as unique_users,
-        AVG(ss.latencyMs) as average_response_time
-      FROM sync_storage_items ssi
-      JOIN sync_sessions ss ON ssi.instanceId = ss.instanceId
-      WHERE ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-        AND ss.country IS NOT NULL
-      GROUP BY ss.country, ss.city
-      ORDER BY request_count DESC
-      LIMIT 50
-    `) as any[];
+    const results = (await db.aggregate("sync_sessions", [
+      {
+        $match: {
+          connectedAt: { $gte: timeRange.start, $lte: timeRange.end },
+          country: { $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: { country: "$country", city: "$city" },
+          request_count: { $sum: 1 },
+          users: { $addToSet: "$userId" },
+          average_response_time: { $avg: "$latencyMs" },
+        },
+      },
+      { $set: { country: "$_id.country", city: "$_id.city", unique_users: { $size: "$users" } } },
+      { $sort: { request_count: -1 } },
+      { $limit: 50 },
+    ])) as any[];
 
     return results.map((item) => ({
       country: item.country,
@@ -337,28 +357,29 @@ export class AnalyticsAggregationService {
   }
 
   private async getTimeSeriesData(timeRange: AnalyticsTimeRange): Promise<TimeSeriesPoint[]> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const granularity = this.getTimeGranularity(timeRange);
-
-    const results = (await db.$queryRawUnsafe(
-      `
-      SELECT 
-        ${granularity} as timestamp,
-        CAST(COUNT(ssi.id) AS SIGNED) as requests,
-        AVG(ss.latencyMs) as response_time,
-        CAST(COUNT(CASE WHEN sc.id IS NOT NULL THEN 1 END) AS SIGNED) as errors,
-        CAST(COUNT(DISTINCT ssi.userId) AS SIGNED) as active_users
-      FROM sync_storage_items ssi
-      LEFT JOIN sync_sessions ss ON ssi.instanceId = ss.instanceId
-      LEFT JOIN sync_conflicts sc ON ssi.id = sc.itemId
-      WHERE ssi.lastModified BETWEEN ? AND ?
-      GROUP BY ${granularity}
-      ORDER BY timestamp ASC
-    `,
-      timeRange.start,
-      timeRange.end,
-    )) as any[];
+    const results = (await db.aggregate("sync_storage_items", [
+      { $match: { lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $lookup: {
+          from: "sync_conflicts",
+          localField: "_id",
+          foreignField: "itemId",
+          as: "conflicts",
+        },
+      },
+      {
+        $group: {
+          _id: { $dateTrunc: { date: "$lastModified", unit: timeRange.granularity } },
+          requests: { $sum: 1 },
+          errors: { $sum: { $size: "$conflicts" } },
+          users: { $addToSet: "$userId" },
+        },
+      },
+      { $set: { timestamp: "$_id", response_time: null, active_users: { $size: "$users" } } },
+      { $sort: { timestamp: 1 } },
+    ])) as any[];
 
     return results.map((item) => ({
       timestamp: item.timestamp,
@@ -400,19 +421,26 @@ export class AnalyticsAggregationService {
   }
 
   private async getHealthMetrics(timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const health = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_operations,
-        CAST(COUNT(CASE WHEN sc.id IS NULL THEN 1 END) AS SIGNED) as successful_operations,
-        AVG(ss.latencyMs) as avg_latency,
-        CAST(COUNT(CASE WHEN ss.disconnectedAt IS NULL THEN 1 END) AS SIGNED) as active_connections
-      FROM sync_storage_items ssi
-      LEFT JOIN sync_conflicts sc ON ssi.id = sc.itemId
-      LEFT JOIN sync_sessions ss ON ssi.instanceId = ss.instanceId
-      WHERE ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const health = (await db.aggregate("sync_storage_items", [
+      { $match: { lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $lookup: {
+          from: "sync_conflicts",
+          localField: "_id",
+          foreignField: "itemId",
+          as: "conflicts",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total_operations: { $sum: 1 },
+          successful_operations: { $sum: { $cond: [{ $eq: [{ $size: "$conflicts" }, 0] }, 1, 0] } },
+        },
+      },
+    ])) as any[];
 
     const data = health[0] || {};
 
@@ -428,26 +456,35 @@ export class AnalyticsAggregationService {
     // This would integrate with the alerts system
     return {
       criticalAlerts: 0,
-      warningAlerts: 2,
-      infoAlerts: 5,
+      warningAlerts: 0,
+      infoAlerts: 0,
     };
   }
 
   private async getPerformanceInsights() {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
     const currentTime = new Date();
     const oneHourAgo = new Date(currentTime.getTime() - 60 * 60 * 1000);
 
-    const insights = (await db.$queryRaw`
-      SELECT 
-        AVG(ss.latencyMs) * 2.0 as p95_latency,
-        AVG(ss.latencyMs) * 2.5 as p99_latency,
-        MAX(ss.latencyMs) as max_latency,
-        MIN(ss.latencyMs) as min_latency
-      FROM sync_sessions ss
-      WHERE ss.connectedAt BETWEEN ${oneHourAgo} AND ${currentTime}
-        AND ss.latencyMs IS NOT NULL
-    `) as any[];
+    const insights = (await db.aggregate("sync_sessions", [
+      { $match: { connectedAt: { $gte: oneHourAgo, $lte: currentTime } } },
+      {
+        $group: {
+          _id: null,
+          quantiles: {
+            $percentile: { input: "$latencyMs", p: [0.95, 0.99], method: "approximate" },
+          },
+          max_latency: { $max: "$latencyMs" },
+          min_latency: { $min: "$latencyMs" },
+        },
+      },
+      {
+        $set: {
+          p95_latency: { $arrayElemAt: ["$quantiles", 0] },
+          p99_latency: { $arrayElemAt: ["$quantiles", 1] },
+        },
+      },
+    ])) as any[];
 
     const data = insights[0] || {};
 
@@ -461,21 +498,22 @@ export class AnalyticsAggregationService {
   }
 
   private async getUsagePatterns() {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
     const currentTime = new Date();
     const oneDayAgo = new Date(currentTime.getTime() - 24 * 60 * 60 * 1000);
 
-    const patterns = (await db.$queryRaw`
-      SELECT 
-        HOUR(ssi.lastModified) as hour,
-        DAYOFWEEK(ssi.lastModified) as day_of_week,
-        CAST(COUNT(*) AS SIGNED) as operation_count
-      FROM sync_storage_items ssi
-      WHERE ssi.lastModified BETWEEN ${oneDayAgo} AND ${currentTime}
-      GROUP BY HOUR(ssi.lastModified), DAYOFWEEK(ssi.lastModified)
-      ORDER BY operation_count DESC
-      LIMIT 10
-    `) as any[];
+    const patterns = (await db.aggregate("sync_storage_items", [
+      { $match: { lastModified: { $gte: oneDayAgo, $lte: currentTime } } },
+      {
+        $group: {
+          _id: { hour: { $hour: "$lastModified" }, day: { $dayOfWeek: "$lastModified" } },
+          operation_count: { $sum: 1 },
+        },
+      },
+      { $set: { hour: "$_id.hour", day_of_week: "$_id.day" } },
+      { $sort: { operation_count: -1 } },
+      { $limit: 10 },
+    ])) as any[];
 
     return {
       peakHours: patterns.map((p) => ({ hour: p.hour, count: p.operation_count })),
@@ -633,20 +671,5 @@ export class AnalyticsAggregationService {
     }
 
     return Math.max(0, Math.min(100, score));
-  }
-
-  private getTimeGranularity(timeRange: AnalyticsTimeRange): string {
-    const timeDiff = timeRange.end.getTime() - timeRange.start.getTime();
-    const dayInMs = 24 * 60 * 60 * 1000;
-
-    if (timeDiff <= dayInMs) {
-      return "DATE_FORMAT(ssi.lastModified, '%Y-%m-%d %H:00:00')";
-    } else if (timeDiff <= 7 * dayInMs) {
-      return "DATE_FORMAT(ssi.lastModified, '%Y-%m-%d %H:00:00')";
-    } else if (timeDiff <= 30 * dayInMs) {
-      return "DATE_FORMAT(ssi.lastModified, '%Y-%m-%d 00:00:00')";
-    } else {
-      return "DATE_FORMAT(ssi.lastModified, '%Y-%u 00:00:00')";
-    }
   }
 }

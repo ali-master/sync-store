@@ -53,7 +53,7 @@ interface EventTrackingDto {
 
 @ApiTags("Analytics")
 @Controller("analytics")
-@ApiKeyAuth()
+@ApiKeyAuth("analytics:read")
 export class AnalyticsController {
   constructor(
     private readonly apiKeyAnalyticsService: ApiKeyAnalyticsService,

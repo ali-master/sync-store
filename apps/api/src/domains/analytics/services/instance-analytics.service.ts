@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { InjectDbTransactor, type PrismaTransactor } from "@root/modules/db";
+import { InjectDatabase, type Database } from "@root/modules/db";
 import { convertBigIntToNumber } from "@root/utils/bigint-converter.util";
 
 import {
@@ -17,8 +17,8 @@ import {
 @Injectable()
 export class InstanceAnalyticsService {
   constructor(
-    @InjectDbTransactor()
-    private readonly dbTransactorService: PrismaTransactor,
+    @InjectDatabase()
+    private readonly database: Database,
   ) {}
 
   /**
@@ -28,21 +28,13 @@ export class InstanceAnalyticsService {
     instanceId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<InstanceAnalytics> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     // Get basic instance info
-    const instanceInfo = await db.syncSession.findFirst({
-      where: { instanceId },
-      orderBy: { connectedAt: "desc" },
-      select: {
-        userId: true,
-        device: true,
-        userAgent: true,
-        ipAddress: true,
-        country: true,
-        city: true,
-      },
-    });
+    const instanceInfo = await db.orm.sync_sessions
+      .where({ instanceId })
+      .orderBy({ connectedAt: -1 })
+      .first();
 
     if (!instanceInfo) {
       throw new Error(`Instance ${instanceId} not found`);
@@ -88,23 +80,24 @@ export class InstanceAnalyticsService {
    * Get instance performance trends
    */
   async getInstancePerformanceTrends(instanceId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     const trends = convertBigIntToNumber(
-      await db.$queryRaw`
-      SELECT 
-        DATE_FORMAT(lastActivity, '%Y-%m-%d %H:00:00') as time_bucket,
-        AVG(latencyMs) as avg_latency,
-        MAX(latencyMs) as max_latency,
-        CAST(COUNT(*) AS SIGNED) as operation_count,
-        CAST(SUM(packetsReceived) AS SIGNED) as total_packets_received,
-        CAST(SUM(packetsSent) AS SIGNED) as total_packets_sent
-      FROM sync_sessions
-      WHERE instanceId = ${instanceId}
-        AND lastActivity BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY DATE_FORMAT(lastActivity, '%Y-%m-%d %H:00:00')
-      ORDER BY time_bucket ASC
-    `,
+      await db.aggregate("sync_sessions", [
+        { $match: { instanceId, lastActivity: { $gte: timeRange.start, $lte: timeRange.end } } },
+        {
+          $group: {
+            _id: { $dateTrunc: { date: "$lastActivity", unit: "hour" } },
+            avg_latency: { $avg: "$latencyMs" },
+            max_latency: { $max: "$latencyMs" },
+            operation_count: { $sum: 1 },
+            total_packets_received: { $sum: "$packetsReceived" },
+            total_packets_sent: { $sum: "$packetsSent" },
+          },
+        },
+        { $set: { time_bucket: "$_id" } },
+        { $sort: { time_bucket: 1 } },
+      ]),
     ) as any[];
 
     return trends.map((trend) => ({
@@ -121,31 +114,59 @@ export class InstanceAnalyticsService {
    * Get instance reliability metrics
    */
   async getInstanceReliabilityMetrics(instanceId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     // Connection stability
-    const connectionStability = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_sessions,
-        CAST(COUNT(CASE WHEN disconnectedAt IS NOT NULL THEN 1 END) AS SIGNED) as completed_sessions,
-        AVG(TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW()))) as avg_session_duration,
-        CAST(COUNT(CASE WHEN TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW())) < 60 THEN 1 END) AS SIGNED) as short_sessions
-      FROM sync_sessions
-      WHERE instanceId = ${instanceId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const connectionStability = (await db.aggregate("sync_sessions", [
+      { $match: { instanceId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          total_sessions: { $sum: 1 },
+          completed_sessions: { $sum: { $cond: [{ $ne: ["$disconnectedAt", null] }, 1, 0] } },
+          avg_session_duration: {
+            $avg: {
+              $divide: [
+                { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                1000,
+              ],
+            },
+          },
+          short_sessions: {
+            $sum: {
+              $cond: [
+                {
+                  $lt: [
+                    {
+                      $divide: [
+                        { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                        1000,
+                      ],
+                    },
+                    60,
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ])) as any[];
 
     // Sync reliability
-    const syncReliability = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_operations,
-        CAST(COUNT(CASE WHEN isDeleted = false THEN 1 END) AS SIGNED) as successful_operations,
-        AVG(version) as avg_version_conflicts
-      FROM sync_storage_items ssi
-      JOIN sync_sessions ss ON ssi.instanceId = ss.instanceId
-      WHERE ssi.instanceId = ${instanceId}
-        AND ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const syncReliability = (await db.aggregate("sync_storage_items", [
+      { $match: { instanceId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          total_operations: { $sum: 1 },
+          successful_operations: { $sum: 1 },
+          avg_version_conflicts: { $avg: "$version" },
+        },
+      },
+    ])) as any[];
 
     // Error frequency
     const errorFrequency = await this.getErrorFrequency(instanceId, timeRange);
@@ -174,31 +195,35 @@ export class InstanceAnalyticsService {
    * Get instance resource utilization
    */
   async getInstanceResourceUtilization(instanceId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     // Storage utilization
-    const storageUtilization = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_items,
-        CAST(SUM(size) AS SIGNED) as total_size_bytes,
-        AVG(size) as avg_item_size,
-        CAST(MAX(size) AS SIGNED) as max_item_size
-      FROM sync_storage_items
-      WHERE instanceId = ${instanceId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-        AND isDeleted = false
-    `) as any[];
+    const storageUtilization = (await db.aggregate("sync_storage_items", [
+      { $match: { instanceId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $match: { isDeleted: false } },
+      {
+        $group: {
+          _id: null,
+          total_items: { $sum: 1 },
+          total_size_bytes: { $sum: "$size" },
+          avg_item_size: { $avg: "$size" },
+          max_item_size: { $max: "$size" },
+        },
+      },
+    ])) as any[];
 
     // Bandwidth utilization
-    const bandwidthUtilization = (await db.$queryRaw`
-      SELECT 
-        CAST(SUM(packetsReceived) AS SIGNED) as total_packets_received,
-        CAST(SUM(packetsSent) AS SIGNED) as total_packets_sent,
-        AVG(latencyMs) as avg_latency
-      FROM sync_sessions
-      WHERE instanceId = ${instanceId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const bandwidthUtilization = (await db.aggregate("sync_sessions", [
+      { $match: { instanceId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          total_packets_received: { $sum: "$packetsReceived" },
+          total_packets_sent: { $sum: "$packetsSent" },
+          avg_latency: { $avg: "$latencyMs" },
+        },
+      },
+    ])) as any[];
 
     const storage = storageUtilization[0] || {};
     const bandwidth = bandwidthUtilization[0] || {};
@@ -248,21 +273,27 @@ export class InstanceAnalyticsService {
    * Get instance health status
    */
   async getInstanceHealthStatus(instanceId: string) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const currentSession = await db.syncSession.findFirst({
-      where: { instanceId },
-      orderBy: { lastActivity: "desc" },
-    });
+    const currentSession = await db.orm.sync_sessions
+      .where({ instanceId })
+      .orderBy({ lastActivity: -1 })
+      .first();
 
-    const recentErrors = (await db.$queryRaw`
-      SELECT CAST(COUNT(*) AS SIGNED) as error_count
-      FROM sync_conflicts
-      WHERE itemId IN (
-        SELECT id FROM sync_storage_items WHERE instanceId = ${instanceId}
-      )
-      AND createdAt > NOW() - INTERVAL 1 HOUR
-    `) as any[];
+    const recentErrors = (await db.aggregate("sync_conflicts", [
+      {
+        $lookup: {
+          from: "sync_storage_items",
+          localField: "itemId",
+          foreignField: "_id",
+          pipeline: [{ $match: { instanceId } }],
+          as: "item",
+        },
+      },
+      { $match: { "item.0": { $exists: true } } },
+      { $match: { createdAt: { $gt: new Date(Date.now() - 3_600_000) } } },
+      { $count: "error_count" },
+    ])) as any[];
 
     const isOnline = currentSession && !currentSession.disconnectedAt;
     const lastSeen = currentSession?.lastActivity || new Date(0);
@@ -319,27 +350,46 @@ export class InstanceAnalyticsService {
     instanceId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<SessionMetrics> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const metrics = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_sessions,
-        AVG(TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW()))) as avg_session_duration,
-        MAX(TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW()))) as longest_session,
-        MIN(TIMESTAMPDIFF(SECOND, connectedAt, COALESCE(disconnectedAt, NOW()))) as shortest_session,
-        MAX(lastActivity) as lastActivity
-      FROM sync_sessions
-      WHERE instanceId = ${instanceId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
-
-    const currentSession = await db.syncSession.findFirst({
-      where: { instanceId, disconnectedAt: null },
-      select: {
-        connectedAt: true,
-        lastActivity: true,
+    const metrics = (await db.aggregate("sync_sessions", [
+      { $match: { instanceId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          total_sessions: { $sum: 1 },
+          avg_session_duration: {
+            $avg: {
+              $divide: [
+                { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                1000,
+              ],
+            },
+          },
+          longest_session: {
+            $max: {
+              $divide: [
+                { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                1000,
+              ],
+            },
+          },
+          shortest_session: {
+            $min: {
+              $divide: [
+                { $subtract: [{ $ifNull: ["$disconnectedAt", "$$NOW"] }, "$connectedAt"] },
+                1000,
+              ],
+            },
+          },
+          lastActivity: { $max: "$lastActivity" },
+        },
       },
-    });
+    ])) as any[];
+
+    const currentSession = await db.orm.sync_sessions
+      .where({ instanceId, disconnectedAt: null })
+      .first();
 
     const data = metrics[0] || {};
 
@@ -360,29 +410,42 @@ export class InstanceAnalyticsService {
     instanceId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<SyncMetrics> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const syncData = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_sync_operations,
-        CAST(COUNT(CASE WHEN isDeleted = false THEN 1 END) AS SIGNED) as successful_syncs,
-        CAST(COUNT(CASE WHEN isDeleted = true THEN 1 END) AS SIGNED) as failed_syncs,
-        CAST(SUM(size) AS SIGNED) as data_transferred,
-        AVG(version) as avg_version
-      FROM sync_storage_items
-      WHERE instanceId = ${instanceId}
-        AND lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const syncData = (await db.aggregate("sync_storage_items", [
+      { $match: { instanceId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          total_sync_operations: { $sum: 1 },
+          successful_syncs: { $sum: 1 },
+          failed_syncs: { $sum: 0 },
+          data_transferred: { $sum: "$size" },
+          avg_version: { $avg: "$version" },
+        },
+      },
+    ])) as any[];
 
-    const conflictData = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as conflicts_generated,
-        CAST(COUNT(CASE WHEN status = 'resolved' THEN 1 END) AS SIGNED) as conflicts_resolved
-      FROM sync_conflicts sc
-      JOIN sync_storage_items ssi ON sc.itemId = ssi.id
-      WHERE ssi.instanceId = ${instanceId}
-        AND sc.createdAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `) as any[];
+    const conflictData = (await db.aggregate("sync_conflicts", [
+      {
+        $lookup: {
+          from: "sync_storage_items",
+          localField: "itemId",
+          foreignField: "_id",
+          pipeline: [{ $match: { instanceId } }],
+          as: "item",
+        },
+      },
+      { $match: { "item.0": { $exists: true } } },
+      { $match: { createdAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          conflicts_generated: { $sum: 1 },
+          conflicts_resolved: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
+        },
+      },
+    ])) as any[];
 
     const sync = syncData[0] || {};
     const conflicts = conflictData[0] || {};
@@ -403,19 +466,28 @@ export class InstanceAnalyticsService {
     instanceId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<PerformanceMetrics> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const performance = (await db.$queryRaw`
-      SELECT 
-        AVG(latencyMs) as average_latency,
-        AVG(latencyMs) * 1.2 as p50_latency,
-        AVG(latencyMs) * 2.0 as p95_latency,
-        AVG(latencyMs) * 2.5 as p99_latency
-      FROM sync_sessions
-      WHERE instanceId = ${instanceId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-        AND latencyMs IS NOT NULL
-    `) as any[];
+    const performance = (await db.aggregate("sync_sessions", [
+      { $match: { instanceId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: null,
+          average_latency: { $avg: "$latencyMs" },
+          quantiles: {
+            $percentile: { input: "$latencyMs", p: [0.5, 0.95, 0.99], method: "approximate" },
+          },
+        },
+      },
+      {
+        $project: {
+          average_latency: 1,
+          p50_latency: { $arrayElemAt: ["$quantiles", 0] },
+          p95_latency: { $arrayElemAt: ["$quantiles", 1] },
+          p99_latency: { $arrayElemAt: ["$quantiles", 2] },
+        },
+      },
+    ])) as any[];
 
     const data = performance[0] || {};
 
@@ -434,18 +506,20 @@ export class InstanceAnalyticsService {
     instanceId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<NetworkMetrics> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
     const network = convertBigIntToNumber(
-      await db.$queryRaw`
-      SELECT 
-        CAST(SUM(packetsReceived) AS SIGNED) as total_packets_received,
-        CAST(SUM(packetsSent) AS SIGNED) as total_packets_sent,
-        AVG(latencyMs) as avg_latency
-      FROM sync_sessions
-      WHERE instanceId = ${instanceId}
-        AND connectedAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-    `,
+      await db.aggregate("sync_sessions", [
+        { $match: { instanceId, connectedAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+        {
+          $group: {
+            _id: null,
+            total_packets_received: { $sum: "$packetsReceived" },
+            total_packets_sent: { $sum: "$packetsSent" },
+            avg_latency: { $avg: "$latencyMs" },
+          },
+        },
+      ]),
     ) as any[];
 
     const data = network[0] || {};
@@ -470,31 +544,41 @@ export class InstanceAnalyticsService {
     instanceId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<ErrorMetrics> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const errors = (await db.$queryRaw`
-      SELECT 
-        CAST(COUNT(*) AS SIGNED) as total_errors,
-        sc.conflictType,
-        CAST(COUNT(*) AS SIGNED) as error_count
-      FROM sync_conflicts sc
-      JOIN sync_storage_items ssi ON sc.itemId = ssi.id
-      WHERE ssi.instanceId = ${instanceId}
-        AND sc.createdAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY sc.conflictType
-    `) as any[];
+    const errors = (await db.aggregate("sync_conflicts", [
+      {
+        $lookup: {
+          from: "sync_storage_items",
+          localField: "itemId",
+          foreignField: "_id",
+          pipeline: [{ $match: { instanceId } }],
+          as: "item",
+        },
+      },
+      { $match: { "item.0": { $exists: true } } },
+      { $match: { createdAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: "$conflictType", total_errors: { $sum: 1 }, error_count: { $sum: 1 } } },
+      { $set: { conflictType: "$_id" } },
+    ])) as any[];
 
-    const lastError = (await db.$queryRaw`
-      SELECT 
-        sc.conflictType as type,
-        sc.resolutionReason as message,
-        sc.createdAt as timestamp
-      FROM sync_conflicts sc
-      JOIN sync_storage_items ssi ON sc.itemId = ssi.id
-      WHERE ssi.instanceId = ${instanceId}
-      ORDER BY sc.createdAt DESC
-      LIMIT 1
-    `) as any[];
+    const lastError = (await db.aggregate("sync_conflicts", [
+      {
+        $lookup: {
+          from: "sync_storage_items",
+          localField: "itemId",
+          foreignField: "_id",
+          pipeline: [{ $match: { instanceId } }],
+          as: "item",
+        },
+      },
+      { $match: { "item.0": { $exists: true } } },
+      { $sort: { createdAt: -1 } },
+      { $limit: 1 },
+      {
+        $project: { type: "$conflictType", message: "$resolutionReason", timestamp: "$createdAt" },
+      },
+    ])) as any[];
 
     const totalErrors = errors.reduce((sum, error) => sum + error.error_count, 0);
     const errorsByType = errors.reduce((acc, error) => {
@@ -515,23 +599,29 @@ export class InstanceAnalyticsService {
     instanceId: string,
     timeRange: AnalyticsTimeRange,
   ): Promise<UsageHistoryPoint[]> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const history = (await db.$queryRaw`
-      SELECT 
-        DATE_FORMAT(ssi.lastModified, '%Y-%m-%d %H:00:00') as timestamp,
-        CAST(COUNT(*) AS SIGNED) as operations,
-        AVG(ss.latencyMs) as response_time,
-        CAST(COUNT(CASE WHEN sc.id IS NOT NULL THEN 1 END) AS SIGNED) as errors,
-        CAST(SUM(ssi.size) AS SIGNED) as storage_usage
-      FROM sync_storage_items ssi
-      LEFT JOIN sync_sessions ss ON ssi.instanceId = ss.instanceId
-      LEFT JOIN sync_conflicts sc ON ssi.id = sc.itemId
-      WHERE ssi.instanceId = ${instanceId}
-        AND ssi.lastModified BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY DATE_FORMAT(ssi.lastModified, '%Y-%m-%d %H:00:00')
-      ORDER BY timestamp ASC
-    `) as any[];
+    const history = (await db.aggregate("sync_storage_items", [
+      { $match: { instanceId, lastModified: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $lookup: {
+          from: "sync_conflicts",
+          localField: "_id",
+          foreignField: "itemId",
+          as: "conflicts",
+        },
+      },
+      {
+        $group: {
+          _id: { $dateTrunc: { date: "$lastModified", unit: "hour" } },
+          operations: { $sum: 1 },
+          errors: { $sum: { $size: "$conflicts" } },
+          storage_usage: { $sum: "$size" },
+        },
+      },
+      { $set: { timestamp: "$_id", response_time: null } },
+      { $sort: { timestamp: 1 } },
+    ])) as any[];
 
     return history.map((point) => ({
       timestamp: point.timestamp,
@@ -543,19 +633,29 @@ export class InstanceAnalyticsService {
   }
 
   private async getErrorFrequency(instanceId: string, timeRange: AnalyticsTimeRange) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const frequency = (await db.$queryRaw`
-      SELECT 
-        DATE_FORMAT(sc.createdAt, '%Y-%m-%d') as date,
-        CAST(COUNT(*) AS SIGNED) as error_count
-      FROM sync_conflicts sc
-      JOIN sync_storage_items ssi ON sc.itemId = ssi.id
-      WHERE ssi.instanceId = ${instanceId}
-        AND sc.createdAt BETWEEN ${timeRange.start} AND ${timeRange.end}
-      GROUP BY DATE_FORMAT(sc.createdAt, '%Y-%m-%d')
-      ORDER BY date ASC
-    `) as any[];
+    const frequency = (await db.aggregate("sync_conflicts", [
+      {
+        $lookup: {
+          from: "sync_storage_items",
+          localField: "itemId",
+          foreignField: "_id",
+          pipeline: [{ $match: { instanceId } }],
+          as: "item",
+        },
+      },
+      { $match: { "item.0": { $exists: true } } },
+      { $match: { createdAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      {
+        $group: {
+          _id: { $dateToString: { date: "$createdAt", format: "%Y-%m-%d" } },
+          error_count: { $sum: 1 },
+        },
+      },
+      { $set: { date: "$_id" } },
+      { $sort: { date: 1 } },
+    ])) as any[];
 
     return frequency;
   }
