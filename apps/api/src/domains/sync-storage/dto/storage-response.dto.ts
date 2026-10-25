@@ -2,6 +2,10 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { SyncMetadataDto } from "./sync-metadata.dto";
 
 export class StorageResponseDto {
+  @ApiPropertyOptional({
+    description: "Record identity used with version to deduplicate outbox events",
+  })
+  id?: string;
   @ApiProperty({
     description: "The storage key",
     example: "user-preference",

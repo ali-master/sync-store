@@ -16,6 +16,7 @@ export class StorageItem {
 
   toJSON() {
     return {
+      id: this.id,
       key: this.key,
       value: this.value,
       metadata: this.metadata,

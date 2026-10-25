@@ -1,4 +1,4 @@
-import { CommandHandler, ICommandHandler, EventBus } from "@nestjs/cqrs";
+import { CommandHandler, ICommandHandler } from "@nestjs/cqrs";
 import { Logger } from "@nestjs/common";
 import { SetItemCommand } from "../impl/set-item.command";
 import { SyncStorageRepository } from "../../repositories/sync-storage.repository";
@@ -6,7 +6,6 @@ import {
   ConflictResolutionService,
   ConflictResolutionStrategy,
 } from "../../services/conflict-resolution.service";
-import { ItemSyncedEvent } from "../../events/impl/item-synced.event";
 import { StorageItem } from "../../entities/storage-item.entity";
 
 @CommandHandler(SetItemCommand)
@@ -16,7 +15,6 @@ export class SetItemHandler implements ICommandHandler<SetItemCommand> {
   constructor(
     private readonly repository: SyncStorageRepository,
     private readonly conflictResolution: ConflictResolutionService,
-    private readonly eventBus: EventBus,
   ) {}
 
   async execute(command: SetItemCommand): Promise<StorageItem> {
@@ -92,16 +90,6 @@ export class SetItemHandler implements ICommandHandler<SetItemCommand> {
       timestamp: Date.now(),
       lastModified: new Date(),
     });
-
-    // event with conflict information
-    this.eventBus.publish(
-      new ItemSyncedEvent(userId, instanceId, key, resolvedValue, {
-        ...resolvedMetadata,
-        conflictDetected,
-        version,
-        resolvedAt: new Date().toISOString(),
-      }),
-    );
 
     this.logger.debug(
       `Set item for user ${userId}, key ${key}, version ${version}${conflictDetected ? " (conflict resolved)" : ""}`,

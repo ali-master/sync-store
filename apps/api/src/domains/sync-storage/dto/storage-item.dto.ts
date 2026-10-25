@@ -1,12 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty, IsOptional, IsObject } from "class-validator";
+import { ValidateBy, IsOptional, IsObject } from "class-validator";
 
 export class StorageItemDto {
   @ApiProperty({
     description: "The value to store",
     example: "any JSON serializable value",
   })
-  @IsNotEmpty()
+  @ValidateBy({ name: "jsonValue", validator: { validate: (value) => value !== undefined } })
   value: any;
 
   @ApiPropertyOptional({

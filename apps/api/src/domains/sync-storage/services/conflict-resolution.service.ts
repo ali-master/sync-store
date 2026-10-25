@@ -1,7 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { InjectDbTransactor, type PrismaTransactor } from "@root/modules/db";
+import { InjectDatabase, type Database } from "@root/modules/db";
 import { StorageItem } from "../entities/storage-item.entity";
-import { SyncConflict } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import type { Models } from "@root/modules/db/contract.d";
+type SyncConflict = Omit<Models.unbound_SyncConflict, "item">;
 
 export enum ConflictResolutionStrategy {
   LAST_WRITE_WINS = "last_write_wins",
@@ -56,8 +58,8 @@ export class ConflictResolutionService {
     ConflictResolutionStrategy.LAST_WRITE_WINS;
 
   constructor(
-    @InjectDbTransactor()
-    private readonly dbTransactorService: PrismaTransactor,
+    @InjectDatabase()
+    private readonly database: Database,
   ) {}
 
   /**
@@ -71,18 +73,16 @@ export class ConflictResolutionService {
     expectedVersion?: number,
     instanceId?: string,
   ): Promise<{ hasConflict: boolean; conflictData?: any }> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const currentItem = await db.syncStorageItem.findUnique({
-      where: { userId_key: { userId, key } },
-    });
+    const currentItem = await db.orm.sync_storage_items.where({ userId, key }).first();
 
     if (!currentItem) {
       return { hasConflict: false };
     }
 
     // Version-based conflict detection
-    if (expectedVersion && currentItem.version !== expectedVersion) {
+    if (expectedVersion !== undefined && currentItem.version !== expectedVersion) {
       return {
         hasConflict: true,
         conflictData: {
@@ -149,18 +149,24 @@ export class ConflictResolutionService {
     conflictData: any,
     resolutionStrategy: ConflictResolutionStrategy = ConflictResolutionStrategy.LAST_WRITE_WINS,
   ): Promise<SyncConflict> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const conflict = await db.syncConflict.create({
-      data: {
-        itemId,
-        userId,
-        conflictType: conflictData.type,
-        resolutionStrategy,
-        originalValue: conflictData.currentValue,
-        conflictingValue: conflictData.newValue,
-        status: SyncConflictStatus.PENDING,
-      },
+    const conflict = await db.orm.sync_conflicts.create({
+      id: randomUUID(),
+      humanReviewed: false,
+      resolvedValue: null,
+      resolutionReason: null,
+      confidence: null,
+      aiModel: null,
+      resolvedAt: null,
+
+      itemId,
+      userId,
+      conflictType: conflictData.type,
+      resolutionStrategy,
+      originalValue: conflictData.currentValue,
+      conflictingValue: conflictData.newValue,
+      status: SyncConflictStatus.PENDING,
     });
 
     this.logger.log(`Created conflict record ${conflict.id} for item ${itemId}`);
@@ -241,15 +247,16 @@ export class ConflictResolutionService {
    */
   async resolveConflictById(
     conflictId: string,
+    userId: string,
     strategy: ConflictResolutionStrategy,
     options: { aiModel?: string; userReview?: boolean } = {},
   ): Promise<ConflictResolutionResult> {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const conflict = await db.syncConflict.findUnique({
-      where: { id: conflictId },
-      include: { item: true },
-    });
+    const conflict = await db.orm.sync_conflicts
+      .where({ id: conflictId, userId })
+      .include("item")
+      .first();
 
     if (!conflict) {
       throw new Error(`Conflict ${conflictId} not found`);
@@ -266,6 +273,7 @@ export class ConflictResolutionService {
       lastModified: conflict.item?.lastModified || new Date(),
       metadata: conflict.item?.metadata ? JSON.parse(conflict.item.metadata) : {},
       toJSON: () => ({
+        id: conflict.itemId,
         key: conflict.item?.key || "",
         value: JSON.parse(conflict.originalValue),
         metadata: conflict.item?.metadata ? JSON.parse(conflict.item.metadata) : {},
@@ -284,19 +292,16 @@ export class ConflictResolutionService {
     const result = await this.resolve(existingItem, updateData, strategy);
 
     // Update conflict record
-    await db.syncConflict.update({
-      where: { id: conflictId },
-      data: {
-        status: result.needsManualResolution
-          ? SyncConflictStatus.PENDING
-          : SyncConflictStatus.RESOLVED,
-        resolvedValue: JSON.stringify(result.value),
-        resolutionReason: result.reason,
-        confidence: result.confidence,
-        aiModel: options.aiModel,
-        humanReviewed: options.userReview || false,
-        resolvedAt: new Date(),
-      },
+    await db.orm.sync_conflicts.where({ id: conflictId, userId }).update({
+      status: result.needsManualResolution
+        ? SyncConflictStatus.PENDING
+        : SyncConflictStatus.RESOLVED,
+      resolvedValue: JSON.stringify(result.value),
+      resolutionReason: result.reason,
+      confidence: result.confidence,
+      aiModel: options.aiModel,
+      humanReviewed: options.userReview || false,
+      resolvedAt: new Date(),
     });
 
     this.logger.log(
@@ -455,6 +460,7 @@ export class ConflictResolutionService {
     const result = { ...target };
 
     for (const key in source) {
+      if (["__proto__", "constructor", "prototype"].includes(key)) continue;
       if (Object.prototype.hasOwnProperty.call(source, key)) {
         if (this.isObject(target[key]) && this.isObject(source[key])) {
           result[key] = this.deepMerge(target[key], source[key]);
@@ -474,32 +480,34 @@ export class ConflictResolutionService {
   /**
    * Get conflict history for an item
    */
-  async getConflictHistory(itemId: string): Promise<SyncConflict[]> {
-    const db = this.dbTransactorService.tx;
+  async getConflictHistory(itemId: string, userId: string): Promise<SyncConflict[]> {
+    const db = this.database;
 
-    return db.syncConflict.findMany({
-      where: { itemId },
-      orderBy: { createdAt: "desc" },
-    });
+    return db.orm.sync_conflicts.where({ itemId, userId }).orderBy({ createdAt: -1 }).all();
   }
 
   /**
    * Get user's conflict statistics
    */
   async getUserConflictStats(userId: string, timeRange: { start: Date; end: Date }) {
-    const db = this.dbTransactorService.tx;
+    const db = this.database;
 
-    const stats = await db.syncConflict.groupBy({
-      by: ["conflictType", "status"],
-      where: {
-        userId,
-        createdAt: {
-          gte: timeRange.start,
-          lte: timeRange.end,
+    const stats = await db.aggregate<{
+      conflictType: string;
+      status: string;
+      _count: { id: number };
+    }>("sync_conflicts", [
+      { $match: { userId, createdAt: { $gte: timeRange.start, $lte: timeRange.end } } },
+      { $group: { _id: { conflictType: "$conflictType", status: "$status" }, count: { $sum: 1 } } },
+      {
+        $project: {
+          _id: 0,
+          conflictType: "$_id.conflictType",
+          status: "$_id.status",
+          _count: { id: "$count" },
         },
       },
-      _count: { id: true },
-    });
+    ]);
 
     const totalConflicts = stats.reduce((sum, stat) => sum + stat._count.id, 0);
     const resolvedConflicts = stats
