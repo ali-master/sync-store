@@ -16,9 +16,11 @@ import {
 import { BOOTSTRAP_KEY_ID } from "./bootstrap-key";
 import { identifier, keySettings } from "./admin.validation";
 import { accessPolicy } from "../sync-storage/services/access-policy";
+import { SyncStorageRepository } from "../sync-storage/repositories/sync-storage.repository";
 
 export const resources = {
   projects: "projects",
+  history: "storage_history",
   keys: "api_keys",
   storage: "sync_storage_items",
   sessions: "sync_sessions",
@@ -47,7 +49,33 @@ export class AdminService {
     private readonly storage: SyncStorageService,
     private readonly gateway: SyncStorageGateway,
     private readonly conflicts: ConflictResolutionService,
+    private readonly repository: SyncStorageRepository,
   ) {}
+
+  /** Preview history through the same tenant-scoped lookup used by application clients. */
+  async previewHistory(body: any) {
+    return this.repository.preview(
+      identifier(body?.userId, "user ID"),
+      identifier(body?.key, "key"),
+      identifier(body?.revision, "revision"),
+    );
+  }
+
+  /** A dashboard restore is a new synchronized mutation and leaves an administrator audit entry. */
+  async restoreHistory(body: any, actor: string) {
+    const userId = identifier(body?.userId, "user ID"),
+      key = identifier(body?.key, "key");
+    const result = await this.repository.restore(
+      userId,
+      "dashboard",
+      key,
+      identifier(body?.revision, "revision"),
+      body?.expected,
+      identifier(body?.requestId, "request ID"),
+    );
+    await this.audit(actor, "admin.history.restore", userId + "/" + key);
+    return result;
+  }
 
   /** Report measured database state, not fabricated traffic or uptime history. */
   async overview() {
@@ -119,6 +147,7 @@ export class AdminService {
       };
     }
     const filter: Record<string, any> = {};
+    if (resource === "history") filter.expiresAt = { $gt: new Date() };
     if (query.userId) filter.userId = identifier(query.userId, "user ID");
     if (query.q) {
       const q = identifier(query.q, "search").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -132,7 +161,7 @@ export class AdminService {
     const [items, total] = await Promise.all([
       db
         .find(filter, resource === "keys" ? { projection: { key: 0 } } : {})
-        .sort({ createdAt: -1, _id: -1 })
+        .sort(resource === "history" ? { lastModified: -1, _id: -1 } : { createdAt: -1, _id: -1 })
         .skip((page - 1) * 25)
         .limit(25)
         .toArray(),

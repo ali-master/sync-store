@@ -25,7 +25,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("atomic embedded outbox", () => 
         return typeof value === "function" ? value.bind(target) : value;
       },
     });
-    const repository = new SyncStorageRepository({ native: { collection: () => scoped } } as any);
+    const history = await native.createCollection(`history_fixture_${crypto.randomUUID()}`);
+    const repository = new SyncStorageRepository({
+      client,
+      native: { collection: (name: string) => (name === "storage_history" ? history : scoped) },
+    } as any);
     // Worker queries are scoped to this fixture so no unrelated installation work is claimed.
     const workerDb = {
       native: {
@@ -95,6 +99,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("atomic embedded outbox", () => 
     } finally {
       worker.onApplicationShutdown();
       await collection.drop();
+      await history.drop();
       await client.close();
     }
   });

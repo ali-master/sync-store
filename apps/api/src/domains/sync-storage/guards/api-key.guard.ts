@@ -150,6 +150,11 @@ export class ApiKeyGuard implements CanActivate {
     const policy = accessPolicy(apiKeyRecord);
     const scopedUser = projectUser(policy.projectId, userId);
     const key = request.params?.key ?? request.body?.key;
+    if (
+      request.url?.includes("/history/") &&
+      (!apiKeyRecord.canRead || !permits(policy, key, true))
+    )
+      throw new ForbiddenException("History requires read access to the key");
     if (typeof key === "string" && !permits(policy, key, reading))
       throw new ForbiddenException("Key is outside this API key's permitted prefixes");
     if (

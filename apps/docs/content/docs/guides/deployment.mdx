@@ -71,9 +71,14 @@ Use container DNS/networking for MongoDB; `localhost` inside the API container r
 
 ## Database topology
 
-The repository compose file is a local standalone setup, not an HA production deployment. Use a managed replica set or Atlas with TLS, authentication, least-privilege users, monitoring and a tested restore procedure.
+Storage, request receipts and version history now use multi-document transactions.
+Standalone MongoDB is not supported. The included Compose configuration initializes
+an authenticated single-node replica set; it enables transactions but not database
+failover. Use multiple replica-set members on separate hosts for database redundancy.
 
-Prisma 8 MongoDB support is early access. Multi-document ORM transactions are unavailable. Atomic single-document storage versions and quota counters do not provide transactionality across unrelated records.
+The repository Compose file uses one MongoDB member, not an HA database deployment. Use a managed multi-node replica set or Atlas with TLS, authentication, least-privilege users, monitoring and a tested restore procedure.
+
+Prisma 8 MongoDB support is early access. Storage mutations use native MongoDB driver sessions shared by receipt, conflict, history and outbox writes; the ORM is used for other queries. API-key quota counters are checked separately and retries consume quota.
 
 ## Scale WebSocket delivery
 
@@ -99,7 +104,7 @@ When Redis becomes ready again, each API closes its local sync connections at th
 
 ### Atomic server outbox
 
-Each storage document contains its pending events. A single MongoDB update changes the value or deletion flag, increments the version and appends an immutable event. This provides transactional atomicity on standalone MongoDB without a multi-document transaction. `set`, remove, clear and imports use this path. Clear remains atomic **per item**, not across the entire user storage.
+Each storage document contains its pending events. A MongoDB transaction changes the value or deletion flag, increments the version, appends an immutable event, and records retained history. When supplied, the request receipt commits in the same transaction. Set, remove, clear and imports use this path. Clear is transactional across the user's selected items; an import remains a sequence of individual writes. Very large clear operations may exceed MongoDB's transaction limits and fail without committing; use smaller individual deletes in that case.
 
 Every API runs a dispatcher. A dispatcher claims one item's queue using a 15-second lease, publishes its head to the shared Redis stream, waits for Redis AOF persistence, and only then removes that event from MongoDB. If the process dies, another replica resumes after lease expiry. Failed publication keeps the event pending. Physical cleanup cannot delete tombstones with pending events.
 

@@ -23,6 +23,7 @@ const sections = [
   ["storage", "Data explorer", "▤"],
   ["keys", "API keys", "⌘"],
   ["projects", "Projects", "◫"],
+  ["history", "Version history", "↶"],
   ["sessions", "Connections", "⇄"],
   ["conflicts", "Conflicts", "⑂"],
   ["quotas", "User quotas", "◴"],
@@ -32,6 +33,8 @@ const sections = [
   ["system", "System", "⚙"],
 ];
 const descriptions: Record<string, string> = {
+  history:
+    "Review retained versions and recover deleted data. Every restore creates a new synchronized change.",
   projects:
     "Isolated application namespaces. Bind API keys to a project to keep its data separate.",
   overview: "Your installation, at a glance. Real data from your connected backend.",
@@ -50,6 +53,7 @@ const descriptions: Record<string, string> = {
   system: "Connection health, runtime information and current operational boundaries.",
 };
 const columns: Record<string, string[]> = {
+  history: ["key", "userId", "version", "isDeleted", "lastModified", "expiresAt"],
   projects: ["name", "_id", "createdAt"],
   storage: ["key", "userId", "version", "size", "lastModified"],
   keys: ["name", "isActive", "canWrite", "totalCalls", "lastUsedAt"],
@@ -123,6 +127,7 @@ export default function App({ section }: { section: string }) {
   const [actionError, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Row | null>(null);
+  const [historyPreview, setHistoryPreview] = useState<Row | null>(null);
   const [editor, setEditor] = useState("");
   const [user, setUser] = useState("");
   const [storageKey, setStorageKey] = useState("");
@@ -243,6 +248,7 @@ export default function App({ section }: { section: string }) {
 
   /** Populate an inspector from the selected backend record. */
   function inspect(row: Row) {
+    setHistoryPreview(null);
     setSelected(row);
     setSecret("");
     setUser(row.userId || "");
@@ -823,7 +829,117 @@ export default function App({ section }: { section: string }) {
               </div>
             ) : (
               <>
-                {section === "storage" ? (
+                {section === "history" ? (
+                  <div className="space-y-5">
+                    <div className="rounded-xl border bg-muted/20 p-4 text-sm">
+                      <p>
+                        Version {selected.version} · {display(selected.lastModified)}
+                      </p>
+                      <p className="mt-2 break-all text-muted-foreground">
+                        {selected.userId} / {selected.key}
+                      </p>
+                      <p className="mt-2">
+                        {selected.isDeleted
+                          ? "This version represents a deletion."
+                          : "This version contains a stored value."}
+                      </p>
+                    </div>
+                    <Label>
+                      Retained value
+                      <Textarea
+                        readOnly
+                        rows={8}
+                        value={
+                          selected.isDeleted
+                            ? "Deleted"
+                            : JSON.stringify(JSON.parse(selected.value), null, 2)
+                        }
+                        className="font-mono text-xs"
+                      />
+                    </Label>
+                    <Button
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          const preview = await request("history/preview", "POST", {
+                            userId: selected.userId,
+                            key: selected.key,
+                            revision: selected._id,
+                          });
+                          setHistoryPreview({ ...preview, requestId: crypto.randomUUID() });
+                        })
+                      }
+                    >
+                      Preview restore
+                    </Button>
+                    {historyPreview && (
+                      <section className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-5">
+                        <h3 className="font-semibold">Review before restoring</h3>
+                        <Label>
+                          Current value
+                          <Textarea
+                            readOnly
+                            rows={6}
+                            className="font-mono text-xs"
+                            value={
+                              historyPreview.current && !historyPreview.current.isDeleted
+                                ? JSON.stringify(JSON.parse(historyPreview.current.value), null, 2)
+                                : "Deleted or missing"
+                            }
+                          />
+                        </Label>
+                        <details className="text-sm">
+                          <summary className="cursor-pointer font-medium">Metadata changes</summary>
+                          <Label className="mt-3">
+                            Current metadata
+                            <Textarea
+                              readOnly
+                              rows={3}
+                              value={historyPreview.current?.metadata || "null"}
+                            />
+                          </Label>
+                          <Label className="mt-3">
+                            Retained metadata
+                            <Textarea
+                              readOnly
+                              rows={3}
+                              value={historyPreview.snapshot.metadata || "null"}
+                            />
+                          </Label>
+                        </details>
+                        <p className="text-sm text-muted-foreground">
+                          This creates a new version and notifies connected clients. If another
+                          client changes the item, restore will stop and ask for a fresh preview.
+                        </p>
+                        <Button
+                          disabled={busy}
+                          onClick={() =>
+                            setConfirm({
+                              text: "Restore this version? Apply the previewed value as a new change. This action is recorded in the activity log.",
+                              run: async () => {
+                                await request("history/restore", "POST", {
+                                  userId: selected.userId,
+                                  key: selected.key,
+                                  revision: selected._id,
+                                  expected: historyPreview.current
+                                    ? {
+                                        id: historyPreview.current.id,
+                                        version: historyPreview.current.version,
+                                      }
+                                    : null,
+                                  requestId: historyPreview.requestId,
+                                });
+                                mutationDone("Version restored and synchronized.");
+                              },
+                            })
+                          }
+                        >
+                          Restore version
+                        </Button>
+                      </section>
+                    )}
+                  </div>
+                ) : section === "storage" ? (
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();

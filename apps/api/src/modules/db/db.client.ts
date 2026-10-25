@@ -33,6 +33,20 @@ export class Database implements OnModuleInit, OnApplicationShutdown {
   async onModuleInit() {
     await this.client.connect();
     await this.native.command({ ping: 1 });
+    const topology = await this.native.command({ hello: 1 });
+    if (!topology.setName && topology.msg !== "isdbgrid")
+      throw new Error(
+        "Sync Store requires a MongoDB replica set for atomic storage, history and request receipts",
+      );
+    const retention = Number(process.env.HISTORY_RETENTION_DAYS ?? 30);
+    if (!Number.isInteger(retention) || retention < 1 || retention > 3650)
+      throw new Error("HISTORY_RETENTION_DAYS must be an integer between 1 and 3650");
+    await this.native
+      .collection("storage_history")
+      .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await this.native
+      .collection("storage_history")
+      .createIndex({ userId: 1, key: 1, lastModified: -1, version: -1, _id: -1 });
   }
 
   /** Releases the shared pool during graceful shutdown. */

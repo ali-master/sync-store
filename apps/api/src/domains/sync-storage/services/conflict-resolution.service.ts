@@ -76,7 +76,10 @@ export class ConflictResolutionService {
   ): Promise<{ hasConflict: boolean; conflictData?: any }> {
     const db = this.database;
 
-    const currentItem = await db.orm.sync_storage_items.where({ userId, key }).first();
+    const session = mutationSession.getStore();
+    const currentItem = session
+      ? await db.native.collection("sync_storage_items").findOne({ userId, key }, { session })
+      : await db.orm.sync_storage_items.where({ userId, key }).first();
 
     if (!currentItem) {
       return { hasConflict: false };
@@ -176,8 +179,8 @@ export class ConflictResolutionService {
       const createdAt = new Date();
       await db.native
         .collection<{ _id: string; [key: string]: any }>("sync_conflicts")
-        .insertOne({ _id: id, ...fields, createdAt, updatedAt: createdAt }, { session });
-      conflict = { ...data, createdAt, updatedAt: createdAt } as SyncConflict;
+        .insertOne({ _id: id, ...fields, createdAt }, { session });
+      conflict = { ...data, createdAt } as SyncConflict;
     } else conflict = await db.orm.sync_conflicts.create(data);
 
     this.logger.log(`Created conflict record ${conflict.id} for item ${itemId}`);

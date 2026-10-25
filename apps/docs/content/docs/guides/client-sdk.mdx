@@ -82,6 +82,12 @@ The SDK now selects Socket.IO's WebSocket transport directly. Custom Socket.IO c
 
 ## Namespaces and compatibility
 
+Queued mutations now retain an idempotency ID across retries and transport switches;
+see [safe retries](/docs/guides/idempotency). Bind credentials to a
+[project and key prefixes](/docs/guides/projects), and use distinct browser cache
+namespaces for each project and permission boundary. Use `getHistory`,
+`previewRestore`, and `restoreVersion` for [version recovery](/docs/guides/history).
+
 Server events include `eventId`, `recordId` and `version` for durable outbox delivery. The SDK suppresses duplicate and stale versions. Custom clients must handle at-least-once events, retain deletion versions, and reconcile snapshots after reconnect. Mutation responses confirm that data and its event are saved; dispatch can lag during Redis outages.
 
 Use distinct cache namespaces for independent clients on the same origin. A namespace separates browser storage; it is **not** a server-side access-control boundary.

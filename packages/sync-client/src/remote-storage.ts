@@ -1,6 +1,7 @@
 import {
   createTransport,
   TransportMode,
+  HttpTransport,
   type ITransport,
   type TransportResponse,
 } from "./transport";
@@ -41,6 +42,7 @@ interface RemoteStorageEvents {
 }
 
 export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
+  private historyTransport: HttpTransport;
   private transport: ITransport;
   private connecting?: Promise<void>;
   private flushing?: Promise<void>;
@@ -125,6 +127,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       ...this.config,
       mode: (config.mode ?? TransportMode.AUTO) as TransportMode,
     });
+    this.historyTransport = new HttpTransport({ ...this.config, mode: TransportMode.HTTP });
     this.outbox = new DataStorage({
       namespace: `${config.namespace ?? "sync"}:outbox:${config.userId}`,
       maxSize: 10 * 1024 * 1024,
@@ -711,6 +714,30 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.analytics.track("force_sync", { queueSize: this.syncQueue.length });
   }
 
+  /** Fetch retained versions over HTTP even when live synchronization uses WebSocket. */
+  async getHistory(key: string, before?: string) {
+    return this.unwrap(await this.historyTransport.getHistory(key, before));
+  }
+
+  /** Preview the target version and current revision; restore requires both read and write access. */
+  async previewRestore(key: string, revision: string) {
+    return this.unwrap(await this.historyTransport.previewRestore(key, revision));
+  }
+
+  /** Restore online only, with an explicit request ID reusable after a lost acknowledgement. */
+  async restoreVersion(
+    key: string,
+    revision: string,
+    expected: { id: string; version: number } | null,
+    requestId: string,
+  ) {
+    const result = this.unwrap(
+      await this.historyTransport.restoreVersion(key, revision, expected, requestId),
+    );
+    if (this.isConnected()) await this.syncLocalStorageItems();
+    return result;
+  }
+
   // Private methods
 
   private setupEventListeners(): void {
@@ -1026,6 +1053,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   destroy(): void {
     this.disconnect();
     this.transport.destroy();
+    this.historyTransport.destroy();
     this.outbox.destroy();
     this.networkManager.destroy();
     this.analytics.destroy();

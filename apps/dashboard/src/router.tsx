@@ -24,6 +24,7 @@ const sections = [
   "storage",
   "keys",
   "projects",
+  "history",
   "sessions",
   "conflicts",
   "quotas",

@@ -6,6 +6,20 @@ import type { Database } from "@root/modules/db";
 
 export const mutationSession = new AsyncLocalStorage<ClientSession>();
 
+/** Storage and history remain atomic even for clients that do not supply a request ID. */
+export async function inMutation<T>(database: Database, work: () => Promise<T>): Promise<T> {
+  if (mutationSession.getStore()) return work();
+  const session = database.client.startSession();
+  try {
+    return (await session.withTransaction(() => mutationSession.run(session, work), {
+      readConcern: { level: "snapshot" },
+      writeConcern: { w: "majority", j: true },
+    })) as T;
+  } finally {
+    await session.endSession();
+  }
+}
+
 /** Normalize JSON object order so equivalent retries share a fingerprint. */
 function canonical(value: any): any {
   if (Array.isArray(value)) return value.map(canonical);
@@ -26,7 +40,7 @@ export async function runMutation<T>(
   payload: unknown,
   work: () => Promise<T>,
 ): Promise<T> {
-  if (requestId === undefined) return work();
+  if (requestId === undefined) return inMutation(database, work);
   if (typeof requestId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(requestId))
     throw new BadRequestException("Invalid Idempotency-Key (1–128 ASCII identifier characters)");
   const fingerprint = createHash("sha256")

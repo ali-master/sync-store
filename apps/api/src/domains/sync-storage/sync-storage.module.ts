@@ -29,6 +29,7 @@ import { ApiKeyMetricsInterceptor } from "./interceptors/api-key-metrics.interce
     OutboxService,
   ],
   exports: [
+    SyncStorageRepository,
     SyncStorageService,
     ApiKeyQuotaService,
     ApiKeyMetricsInterceptor,

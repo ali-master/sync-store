@@ -33,6 +33,11 @@ Some fields retained in the schema describe historical/planned features. Do not 
 
 ## Browser and network boundaries
 
+Keys can now be bound to an isolated project and restricted to separate read/write
+key prefixes. Configure these fields in the key form; see
+[projects and scoped keys](/docs/guides/projects) for list filtering, live-event
+permissions, and restrictions on bulk clear operations.
+
 Local CORS is currently permissive in API bootstrap. Setting a similarly named environment variable alone does not change the hard-coded CORS policy. Restrict allowed origins and configure your reverse proxy before public deployment.
 
 Use TLS and an application-specific MongoDB account. Forwarded headers are not trusted by default; HTTPS termination must be configured deliberately so protocol checks remain meaningful.

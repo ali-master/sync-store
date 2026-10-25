@@ -16,6 +16,7 @@ x-environment: &environment
   REDIS_URL: redis://redis:6379
   SOCKET_IO_PREFIX: ${SOCKET_IO_PREFIX:-sync-store}
   TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+  HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-30}
 
 services:
   redis:
@@ -32,14 +33,16 @@ services:
 
   mongodb:
     image: mongo:9.0.4
+    entrypoint: ["bash", "/opt/sync-mongo/start.sh"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: sync_store
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Generate the root .env first}
     volumes:
       - mongodb_data:/data/db
+      - ./docker/mongodb:/opt/sync-mongo:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"]
+      test: ["CMD", "mongosh", "--quiet", "/opt/sync-mongo/ready.js"]
       interval: 5s
       timeout: 5s
       retries: 30

@@ -78,6 +78,12 @@ An unknown resource or missing record returns 404; invalid settings return 400; 
 
 ## Socket.IO transport
 
+For retryable mutations, send `Idempotency-Key` over HTTP or `requestId` in Socket.IO
+messages. See [safe retries](/docs/guides/idempotency). The API also exposes
+`GET /history/:key`, `GET /history/:key/:revision`, and
+`POST /history/:key/:revision/restore` under `/api/v1`; see
+[history and recovery](/docs/guides/history) for preview tokens and pagination.
+
 Connect to namespace `/sync` with `auth: { apiKey, userId, instanceId }`. This is Socket.IO, not a raw WebSocket protocol.
 
 The SDK uses `sync:set`, `sync:get`, `sync:getAll`, `sync:remove`, `sync:clear`, `sync:subscribe` and `sync:unsubscribe`. Requests use acknowledgements with a `type: "response"` or `type: "error"` result. Prefer the SDK rather than duplicating its subscription and reconnect handling.

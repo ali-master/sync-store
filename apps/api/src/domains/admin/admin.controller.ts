@@ -21,6 +21,20 @@ import { AdminGuard } from "./admin.guard";
 export class AdminController {
   constructor(private readonly admin: AdminService) {}
 
+  @Post("history/preview")
+  @ApiOperation({ summary: "Preview a retained version and current value" })
+  previewHistory(@Body() body: unknown) {
+    return this.admin.previewHistory(body);
+  }
+
+  @Post("history/restore")
+  @ApiOperation({
+    summary: "Restore the previewed revision without overwriting a concurrent change",
+  })
+  restoreHistory(@Body() body: unknown, @Req() req: any) {
+    return this.admin.restoreHistory(body, req.apiKey.id);
+  }
+
   @Post("projects")
   @ApiOperation({ summary: "Create an isolated project namespace" })
   createProject(@Body() body: unknown, @Req() req: any) {

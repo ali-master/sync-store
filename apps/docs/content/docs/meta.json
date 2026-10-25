@@ -13,6 +13,7 @@
     "guides/offline-sync",
     "guides/idempotency",
     "guides/projects",
+    "guides/history",
     "guides/deployment",
     "---References---",
     "reference/http-api",

@@ -296,6 +296,37 @@ export class HttpTransport extends BaseTransport {
     return { success: false, error: "Server storage information is not supported" };
   }
 
+  /** Read retained versions without assuming the live item still exists. */
+  getHistory(key: string, before?: string): Promise<TransportResponse<any[]>> {
+    return this.makeRequest(
+      "GET",
+      `/history/${encodeURIComponent(key)}${before ? "?before=" + encodeURIComponent(before) : ""}`,
+    );
+  }
+
+  /** Obtain a current revision token before a destructive restore. */
+  previewRestore(key: string, revision: string): Promise<TransportResponse<any>> {
+    return this.makeRequest(
+      "GET",
+      `/history/${encodeURIComponent(key)}/${encodeURIComponent(revision)}`,
+    );
+  }
+
+  /** Keep the same request ID when retrying an uncertain restore response. */
+  restoreVersion(
+    key: string,
+    revision: string,
+    expected: { id: string; version: number } | null,
+    requestId: string,
+  ): Promise<TransportResponse<any>> {
+    return this.makeRequest(
+      "POST",
+      `/history/${encodeURIComponent(key)}/${encodeURIComponent(revision)}/restore`,
+      { expected },
+      requestId,
+    );
+  }
+
   async getConflictHistory(itemId: string): Promise<TransportResponse> {
     const startTime = Date.now();
 

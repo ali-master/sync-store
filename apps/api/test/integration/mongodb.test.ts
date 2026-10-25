@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as bunTest } from "bun:test";
 import { Database } from "../../src/modules/db/db.client";
 import { apiKeyData } from "../../src/modules/db/api-key-data";
 import { SyncStorageRepository } from "../../src/domains/sync-storage/repositories/sync-storage.repository";
@@ -13,6 +13,13 @@ import { UserAnalyticsService } from "../../src/domains/analytics/services/user-
 import { InstanceAnalyticsService } from "../../src/domains/analytics/services/instance-analytics.service";
 import { ApiKeyQuotaService } from "../../src/domains/sync-storage/services/api-key-quota.service";
 
+/** Use explicit completion for Prisma-backed asynchronous tests under Bun. */
+function test(name: string, work: () => Promise<void>) {
+  bunTest(name, (done) => {
+    void work().then(() => done(), done);
+  });
+}
+
 describe.skipIf(!process.env.TEST_DATABASE_URL)("MongoDB 9 / Prisma 8 integration", () => {
   let db: Database;
   let repository: SyncStorageRepository;
@@ -20,17 +27,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("MongoDB 9 / Prisma 8 integratio
   const instanceId = userId;
   const key = crypto.randomUUID();
   let apiKeyId: string;
-  beforeAll(async () => {
-    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
-    db = new Database();
-    await db.onModuleInit();
-    repository = new SyncStorageRepository(db);
-    const result = await db.orm.api_keys.create({
-      ...apiKeyData("integration", key),
-      canWrite: true,
-      minuteQuota: 10,
-    });
-    apiKeyId = result.id;
+  beforeAll((done) => {
+    void (async () => {
+      process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+      db = new Database();
+      await db.onModuleInit();
+      repository = new SyncStorageRepository(db);
+      const result = await db.orm.api_keys.create({
+        ...apiKeyData("integration", key),
+        canWrite: true,
+        minuteQuota: 10,
+      });
+      apiKeyId = result.id;
+    })().then(() => done(), done);
   });
   test("response metrics preserve the contract's Int32 BSON type", async () => {
     const metrics = new ApiKeyQuotaService(db);
@@ -40,15 +49,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("MongoDB 9 / Prisma 8 integratio
     expect(keyRecord?.successfulCalls).toBe(2);
     expect(keyRecord?.avgResponseTimeMs).toBe(10);
   });
-  afterAll(async () => {
-    if (!db) return;
-    await Promise.all(
-      ["sync_storage_items", "sync_conflicts", "sync_sessions"].map((name) =>
-        db.native.collection(name).deleteMany({ userId }),
-      ),
-    );
-    await db.native.collection("api_keys").deleteMany({ key });
-    await db.onApplicationShutdown();
+  afterAll((done) => {
+    void (async () => {
+      if (!db) return;
+      await Promise.all(
+        ["sync_storage_items", "sync_conflicts", "sync_sessions", "storage_history"].map((name) =>
+          db.native.collection(name).deleteMany({ userId }),
+        ),
+      );
+      await db.native.collection("api_keys").deleteMany({ key });
+      await db.onApplicationShutdown();
+    })().then(() => done(), done);
   });
 
   test("preserves falsy JSON values and literal key prefixes", async () => {

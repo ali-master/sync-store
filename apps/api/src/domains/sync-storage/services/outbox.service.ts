@@ -106,7 +106,6 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
       metadata: event.metadata ? JSON.parse(event.metadata) : undefined,
     };
     const rooms = await this.gateway.recipientRooms(event.userId, event.key);
-    if (!rooms.length) return;
     if (!this.redis) {
       this.gateway.broadcastToRooms(rooms, name, data);
       return;
@@ -122,7 +121,11 @@ export class OutboxService implements OnApplicationBootstrap, OnApplicationShutd
         type: "3",
         data: JSON.stringify({
           packet: { type: 2, nsp: "/sync", data: [name, data] },
-          opts: { rooms, except: [], flags: {} },
+          opts: {
+            rooms: rooms.length ? rooms : [`unobserved:${event.eventId}`],
+            except: [],
+            flags: {},
+          },
         }),
       },
       { TRIM: { strategy: "MAXLEN", strategyModifier: "~", threshold: 100000 } },

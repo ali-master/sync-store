@@ -1,11 +1,16 @@
-import { Injectable } from "@nestjs/common";
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { MongoFieldFilter } from "@prisma/orm-mongo/query-ast/execution";
 import type { Filter } from "mongodb";
 import { StorageItem } from "../entities/storage-item.entity";
 import { InjectDatabase, Database } from "@root/modules/db";
 import type { Models } from "@root/modules/db/contract.d";
-import { mutationSession, runMutation } from "./mutation-context";
+import { mutationSession, runMutation, inMutation } from "./mutation-context";
 
 interface StorageData {
   userId: string;
@@ -124,6 +129,15 @@ export class SyncStorageRepository {
   }
 
   async upsert(data: StorageData): Promise<StorageItem> {
+    return inMutation(this.database, () => this.save(data));
+  }
+
+  private async save(data: StorageData): Promise<StorageItem> {
+    const previous = await this.collection.findOne(
+      { userId: data.userId, key: data.key },
+      { session: mutationSession.getStore(), useBigInt64: true },
+    );
+    if (previous) await this.snapshot(previous);
     const value = JSON.stringify(data.value);
     if (value === undefined) throw new TypeError("Storage values must be JSON serializable");
     const document = await this.collection.findOneAndUpdate(
@@ -159,20 +173,167 @@ export class SyncStorageRepository {
       },
     );
     if (!document) throw new Error("MongoDB did not return the saved item");
+    await this.snapshot(document);
     const { _id, ...fields } = document;
     return this.toEntity({ ...fields, id: _id } as Item);
   }
 
   async delete(userId: string, key: string, instanceId = "server"): Promise<void> {
-    await this.collection.updateOne({ userId, key, isDeleted: false }, this.deletion(instanceId), {
-      ...this.writeOptions(),
+    await inMutation(this.database, async () => {
+      const previous = await this.collection.findOne(
+        { userId, key, isDeleted: false },
+        { session: mutationSession.getStore(), useBigInt64: true },
+      );
+      if (previous) await this.snapshot(previous);
+      const document = await this.collection.findOneAndUpdate(
+        { userId, key, isDeleted: false },
+        this.deletion(instanceId),
+        {
+          ...this.writeOptions(),
+          returnDocument: "after",
+          useBigInt64: true,
+        },
+      );
+      if (document) await this.snapshot(document);
     });
   }
 
   async clearAll(userId: string, instanceId = "server"): Promise<void> {
-    await this.collection.updateMany({ userId, isDeleted: false }, this.deletion(instanceId), {
-      ...this.writeOptions(),
+    await inMutation(this.database, async () => {
+      const session = mutationSession.getStore();
+      const items = await this.collection
+        .find({ userId, isDeleted: false }, { session, projection: { key: 1 } })
+        .toArray();
+      for (const item of items) await this.delete(userId, item.key, instanceId);
     });
+  }
+
+  /** Retain immutable versions separately so item documents do not grow with history. */
+  private async snapshot(document: ItemDocument) {
+    const days = Number(process.env.HISTORY_RETENTION_DAYS ?? 30);
+    if (!Number.isInteger(days) || days < 1 || days > 3650)
+      throw new Error("HISTORY_RETENTION_DAYS must be an integer between 1 and 3650");
+    const { _id, userId, key, value, metadata, version, isDeleted, lastModified, instanceId } =
+      document;
+    const snapshot = {
+      _id: `${_id}:${version}`,
+      recordId: _id,
+      userId,
+      key,
+      value,
+      metadata,
+      version,
+      isDeleted,
+      lastModified,
+      instanceId,
+      expiresAt: new Date(Date.now() + days * 86400000),
+    };
+    await this.database.native
+      .collection<{ _id: string; [key: string]: any }>("storage_history")
+      .updateOne(
+        { _id: snapshot._id },
+        { $setOnInsert: snapshot },
+        { upsert: true, session: mutationSession.getStore() },
+      );
+  }
+
+  /** Page retained versions, including tombstones for deleted keys. */
+  async history(userId: string, key: string, before?: string) {
+    const history = this.database.native.collection<{ _id: string; [key: string]: any }>(
+      "storage_history",
+    );
+    const cursor = before ? await history.findOne({ _id: before, userId, key }) : null;
+    if (before && !cursor) throw new BadRequestException("History cursor expired; reload history");
+    return history
+      .find({
+        userId,
+        key,
+        expiresAt: { $gt: new Date() },
+        ...(cursor
+          ? {
+              $or: [
+                { lastModified: { $lt: cursor.lastModified } },
+                { lastModified: cursor.lastModified, version: { $lt: cursor.version } },
+                {
+                  lastModified: cursor.lastModified,
+                  version: cursor.version,
+                  _id: { $lt: cursor._id },
+                },
+              ],
+            }
+          : {}),
+      })
+      .sort({ lastModified: -1, version: -1, _id: -1 })
+      .limit(50)
+      .toArray();
+  }
+
+  /** Preview a retained version together with the exact current revision required by restore. */
+  async preview(userId: string, key: string, revision: string) {
+    const snapshot = await this.database.native
+      .collection<{ _id: string; [key: string]: any }>("storage_history")
+      .findOne(
+        { _id: revision, userId, key, expiresAt: { $gt: new Date() } },
+        { session: mutationSession.getStore() },
+      );
+    if (!snapshot) throw new NotFoundException("Retained version not found");
+    const current = await this.collection.findOne(
+      { userId, key },
+      { session: mutationSession.getStore(), useBigInt64: true },
+    );
+    return {
+      snapshot,
+      current: current
+        ? {
+            id: current._id,
+            version: current.version,
+            value: current.value,
+            metadata: current.metadata,
+            isDeleted: current.isDeleted,
+          }
+        : null,
+    };
+  }
+
+  /** Restore as a new version; reject a stale preview instead of overwriting a concurrent edit. */
+  async restore(
+    userId: string,
+    instanceId: string,
+    key: string,
+    revision: string,
+    expected: { id: string; version: number } | null,
+    requestId?: string,
+  ) {
+    if (
+      expected !== null &&
+      (!expected || typeof expected.id !== "string" || !Number.isInteger(expected.version))
+    )
+      throw new BadRequestException("Expected current revision is required");
+    return this.mutate(
+      userId,
+      requestId,
+      { type: "restore", key, revision, expected },
+      async () => {
+        const { snapshot, current } = await this.preview(userId, key, revision);
+        if (current?.id !== expected?.id || current?.version !== expected?.version)
+          throw new ConflictException("Item changed since preview; preview again before restoring");
+        if (snapshot.isDeleted) {
+          await this.delete(userId, key, instanceId);
+          return { restored: true, isDeleted: true };
+        }
+        const item = await this.upsert({
+          userId,
+          instanceId,
+          key,
+          value: JSON.parse(snapshot.value),
+          metadata: snapshot.metadata ? JSON.parse(snapshot.metadata) : undefined,
+          timestamp: Date.now(),
+          lastModified: new Date(),
+          version: 1,
+        });
+        return { restored: true, item };
+      },
+    );
   }
 
   /** Clear is atomic per item; every deleted item retains its own durable remove event. */

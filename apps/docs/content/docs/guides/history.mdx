@@ -1,0 +1,76 @@
+---
+title: History and recovery
+description: Inspect retained versions and safely restore overwritten or deleted data.
+---
+
+## Restore from the dashboard
+
+1. Open **Version history** and search for the key or user.
+2. Select a version. Deleted versions are marked explicitly.
+3. Choose **Preview restore** to compare the retained value with the current value.
+4. Choose **Restore version** and confirm the change.
+
+Restoring creates a new version and durable outbox event. Connected authorized
+clients receive the change through the normal synchronization pipeline. The
+administrator activity log records who requested the restore. Selecting a deletion
+version deletes the current value; selecting an earlier value recovers a deleted key.
+
+If another client edits the item after preview, restoration returns **409** and
+does not overwrite the new change. Preview again to review that change before retrying.
+
+## Retention
+
+`HISTORY_RETENTION_DAYS` defaults to **30**, with a supported range of **1–3650**.
+Set the same value on every backend replica. Each snapshot receives its expiry
+when first captured; changing this setting affects subsequently captured snapshots.
+MongoDB's TTL index removes expired history asynchronously. Expired versions are
+unavailable for reading or restoration even before physical deletion.
+
+History, storage and outbox writes share a MongoDB transaction. A failure rolls all
+three back. Receipts make retried restores safe too. A replica set is required.
+Compose automatically initializes an authenticated single-node replica set. For
+an external MongoDB server, configure a replica set before deploying this version.
+History is stored separately in `storage_history`, avoiding growth of item documents.
+
+Existing data gains a baseline snapshot when first changed after this upgrade.
+Changes made before history was enabled cannot be reconstructed. Retained history
+survives physical cleanup of a deleted item, until its expiry.
+
+This is recovery for individual keys. It is not a full installation backup or a
+point-in-time rollback of an entire project. Back up MongoDB, including history,
+receipts, credentials and project records, to recover from database loss.
+
+## SDK
+
+History and restoration use HTTP even if live synchronization uses WebSocket.
+Restores require an online connection and both read and write access to the key;
+they are not placed in the offline queue.
+
+```ts
+const versions = await store.getHistory('settings/theme');
+const revision = versions[0]._id;
+const preview = await store.previewRestore('settings/theme', revision);
+const expected = preview.current
+  ? { id: preview.current.id, version: preview.current.version }
+  : null;
+const requestId = crypto.randomUUID();
+
+await store.restoreVersion('settings/theme', revision, expected, requestId);
+// If the response was lost, retry with the same revision, expected and requestId.
+```
+
+`getHistory` returns at most 50 versions. To fetch the next page, pass the last
+entry's `_id` as the second argument. If that cursor expires, restart from the first page.
+Stored `value` and `metadata` in snapshots are JSON strings; parse them for display.
+
+## HTTP API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/history/:key?before=:revision` | Retained versions |
+| GET | `/api/v1/history/:key/:revision` | Preview and current revision |
+| POST | `/api/v1/history/:key/:revision/restore` | Restore with `{ "expected": { "id": "CURRENT_ID", "version": 3 } }` |
+
+Use `expected: null` only when preview reports no current item. URL-encode key and
+revision path segments. Send `Idempotency-Key` on restore, along with the usual
+API-key and user/instance headers. Project and prefix restrictions apply to history.

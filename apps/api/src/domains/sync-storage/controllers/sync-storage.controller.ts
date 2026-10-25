@@ -10,6 +10,7 @@ import {
   Query,
   Headers,
   Req,
+  Post,
 } from "@nestjs/common";
 import { CommandBus, QueryBus } from "@nestjs/cqrs";
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiHeader } from "@nestjs/swagger";
@@ -24,6 +25,7 @@ import { StorageResponseDto } from "../dto/storage-response.dto";
 import { ApiKeyAuth } from "../decorators/api-key-auth.decorator";
 import { getUserId, getInstanceId } from "@root/modules/context/context.storage";
 import { permits } from "../services/access-policy";
+import { SyncStorageRepository } from "../repositories/sync-storage.repository";
 
 @ApiTags("Sync Storage")
 @Controller()
@@ -38,7 +40,38 @@ export class SyncStorageController {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
+    private readonly repository: SyncStorageRepository,
   ) {}
+
+  @Get("history/:key")
+  @ApiOperation({ summary: "List up to 50 retained versions; pass the last _id as before" })
+  history(@Param("key") key: string, @Query("before") before?: string) {
+    return this.repository.history(getUserId(), key, before);
+  }
+
+  @Get("history/:key/:revision")
+  @ApiOperation({ summary: "Preview a retained version and current revision before restore" })
+  preview(@Param("key") key: string, @Param("revision") revision: string) {
+    return this.repository.preview(getUserId(), key, revision);
+  }
+
+  @Post("history/:key/:revision/restore")
+  @ApiOperation({ summary: "Restore a retained version; rejects stale expected revision with 409" })
+  restore(
+    @Param("key") key: string,
+    @Param("revision") revision: string,
+    @Body() body: any,
+    @Headers("idempotency-key") requestId?: string,
+  ) {
+    return this.repository.restore(
+      getUserId(),
+      getInstanceId(),
+      key,
+      revision,
+      body?.expected,
+      requestId,
+    );
+  }
 
   @Get("item/:key")
   @ApiOperation({ summary: "Get a stored item by key" })

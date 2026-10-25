@@ -3,6 +3,13 @@ title: Self hosted
 description: Run Sync Store with Docker. No Bun, Node.js or database installation required.
 ---
 
+MongoDB runs as an authenticated single-node replica set in the included Compose
+configuration. This enables atomic writes, safe retries and version history. It
+does not provide database failover; use a multi-node replica set for that requirement.
+When upgrading an older standalone installation, back up the existing MongoDB
+volume first. Compose retains the volume and initializes its replica-set configuration
+on restart. Do not delete the volume or change its database password during upgrade.
+
 ## What you need
 
 Install **Docker with Docker Compose**. Download this repository from GitHub and extract it, or clone it with Git. Open a terminal in the repository folder.

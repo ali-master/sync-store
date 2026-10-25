@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { MongoClient } from "mongodb";
 import { io, type Socket } from "socket.io-client";
+import { RemoteStorage } from "../../../../packages/sync-client/src/remote-storage";
 
 describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
   "project access over HTTP and Socket.IO",
@@ -22,7 +23,11 @@ describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
         body?: unknown,
         requestId?: string,
       ) => {
-        const response = await fetch(`${base}/api/v1/${path}`, {
+        const origin =
+          method === "PUT" && path.startsWith("item/")
+            ? process.env.TEST_WRITE_API_URL || base
+            : base;
+        const response = await fetch(`${origin}/api/v1/${path}`, {
           method,
           headers: {
             "x-api-key": key,
@@ -112,9 +117,66 @@ describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
             .status,
         ).toBe(409);
         await call(admin, `admin/keys/${restricted.id}`, "PATCH", { isActive: false });
-        await call(full.key, "item/public%2Ftheme", "PUT", { value: "light" }, "public-write-2");
+        expect(
+          (await call(full.key, "item/public%2Ftheme", "PUT", { value: "light" }, "public-write-2"))
+            .status,
+        ).toBe(200);
         await Bun.sleep(400);
         expect(events).toHaveLength(1);
+        const versions = await call(full.key, "history/public%2Ftheme");
+        expect(versions.status).toBe(200);
+        expect(versions.data).toHaveLength(2);
+        const revision = versions.data.find((row: any) => row.version === 1)._id;
+        expect((await call(other.key, `history/public%2Ftheme/${revision}`)).status).toBe(404);
+        const preview = await call(full.key, `history/public%2Ftheme/${revision}`);
+        const expected = { id: preview.data.current.id, version: preview.data.current.version };
+        const restored = await call(
+          full.key,
+          `history/public%2Ftheme/${revision}/restore`,
+          "POST",
+          { expected },
+          "restore",
+        );
+        expect(restored.status).toBe(201);
+        expect(restored.data.item.value).toBe("dark");
+        expect(restored.data.item.version).toBe(3);
+        expect(
+          (
+            await call(
+              full.key,
+              `history/public%2Ftheme/${revision}/restore`,
+              "POST",
+              { expected },
+              "restore-stale",
+            )
+          ).status,
+        ).toBe(409);
+        expect(
+          (await call(full.key, "item/public%2Ftheme", "PUT", { value: false }, "type-change"))
+            .status,
+        ).toBe(200);
+        const sdk = new RemoteStorage({
+          serverUrl: base,
+          apiKey: full.key,
+          userId: user,
+          namespace: projectId,
+          autoConnect: false,
+        });
+        try {
+          expect(await sdk.getHistory("public/theme")).toHaveLength(4);
+          const preview = await sdk.previewRestore("public/theme", revision);
+          const expected = { id: preview.current.id, version: preview.current.version };
+          const result = await sdk.restoreVersion(
+            "public/theme",
+            revision,
+            expected,
+            "sdk-restore",
+          );
+          expect(result.item.value).toBe("dark");
+          expect(result.item.version).toBe(5);
+        } finally {
+          sdk.destroy();
+        }
       } finally {
         sockets.forEach((socket) => socket.disconnect());
         await db.close();

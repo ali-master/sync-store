@@ -18,7 +18,7 @@ export MONGO_ROOT_PASSWORD='replace-with-a-random-password'
 docker compose -f docker/compose.yml up -d
 ```
 
-The compose server is standalone and exposed on loopback only. Supply a URL with the matching password; URI-encode special characters.
+The development Compose server is an authenticated single-node replica set exposed on loopback only. Supply a URL with the matching password; URI-encode special characters.
 
 ```sh
 export DATABASE_URL='mongodb://sync_store:YOUR_PASSWORD@127.0.0.1:27017/sync_store_dev?authSource=admin'
