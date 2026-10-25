@@ -1,7 +1,15 @@
-**/dist
+node_modules
 **/node_modules
+**/dist
+**/.next
+**/.turbo
+.git
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+coverage
 **/docker-compose.yml
 **/Dockerfile
 **/README.md
-apps/dashboard
 apps/mcp

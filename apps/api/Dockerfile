@@ -1,28 +1,16 @@
-FROM node:24.4.1-alpine
-
+FROM oven/bun:1.4.4 AS build
 WORKDIR /app
-
-RUN apk add --no-cache dumb-init curl openssl
-RUN npm install -g pnpm@10
-
 COPY . .
+RUN bun install --frozen-lockfile --ignore-scripts
+RUN bun run --cwd apps/api db:generate
+RUN bun run --cwd packages/utils build && bun run --cwd apps/api build
 
-RUN pnpm install
-
-RUN pnpm run db:generate && pnpm run build
-
-# Remove unnecessary files to reduce image size
-RUN curl -sf https://gobinaries.com/tj/node-prune | sh && \
-    node-prune --exclude **/*.mmdb
-
-
+FROM oven/bun:1.4.4
+WORKDIR /app
+COPY --from=build --chown=bun:bun /app /app
 ENV NODE_ENV=production
 ENV PORT=3000
-
-EXPOSE 3000
-
-ENTRYPOINT ["dumb-init", "--"]
-
+USER bun
 WORKDIR /app/apps/api
-
-CMD ["node", "dist/src/main.js"]
+EXPOSE 3000
+CMD ["bun", "--tsconfig-override", "tsconfig.runtime.json", "dist/main.js"]

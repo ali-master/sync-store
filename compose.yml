@@ -1,0 +1,70 @@
+name: sync-store
+
+x-api: &api
+  image: sync-store:local
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+
+x-environment: &environment
+  DATABASE_URL: mongodb://sync_store:${MONGO_ROOT_PASSWORD:?Generate the root .env first}@mongodb:27017/sync_store?authSource=admin
+  API_URL: ${API_URL:-http://localhost:3000}
+  JWT_SECRET: ${JWT_SECRET:?Generate the root .env first}
+  CSRF_SECRET: ${CSRF_SECRET:?Generate the root .env first}
+  NODE_ENV: production
+  PORT: "3000"
+  REDIS_URL: redis://redis:6379
+  SOCKET_IO_PREFIX: ${SOCKET_IO_PREFIX:-sync-store}
+  TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+
+services:
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongodb:
+    image: mongo:9.0.4
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: sync_store
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Generate the root .env first}
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  init:
+    <<: *api
+    environment: *environment
+    command: ["bun", "run", "db:deploy"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *api
+    environment: *environment
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  redis_data:
