@@ -4,7 +4,7 @@ import type { RemoteStorageConfig, StorageItem, SyncEvent, StorageEventType } fr
 // Core exports
 export { RemoteStorage };
 export type { RemoteStorageConfig, StorageItem, SyncEvent, StorageEventType };
-export type { SyncStatus, ClientLogger } from "./types";
+export type { SyncStatus, ClientLogger, StoreSnapshot } from "./types";
 
 // Factory function
 export function createRemoteStorage(config: RemoteStorageConfig) {

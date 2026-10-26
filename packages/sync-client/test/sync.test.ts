@@ -278,3 +278,47 @@ test("flush never reports delivery after a disconnect leaves queued operations",
   await expect(client.flush()).rejects.toThrow("Disconnected");
   expect(client.getStatus().pendingCount).toBe(1);
 });
+
+test("invalid JSON and schema values never enter the outbox or optimistic cache", async () => {
+  const client = new RemoteStorage<{ count: number }>({
+    userId: crypto.randomUUID(),
+    autoConnect: false,
+    schema: {
+      count: (value) => {
+        if (typeof value !== "number") throw new Error("Count must be a number");
+      },
+    },
+  });
+  resources.push(client);
+  await expect(client.setItem("count", "wrong" as any)).rejects.toThrow("number");
+  await expect(client.setItem("count", NaN)).rejects.toThrow("JSON");
+  expect(client.getStatus().pendingCount).toBe(0);
+  expect(client.getItem("count")).toBeNull();
+});
+
+test("bootstrap is scoped, preserves null, and does not claim server acknowledgement", async () => {
+  const identity = { userId: "bootstrap-user", namespace: crypto.randomUUID(), autoConnect: false };
+  const source = new RemoteStorage(identity);
+  resources.push(source);
+  await (source as any).handleRemoteUpdate({
+    key: "empty",
+    value: null,
+    type: "sync",
+    timestamp: 1,
+    source: "remote",
+  });
+  const snapshot = source.dehydrate();
+  const browser = new RemoteStorage({ ...identity, initialSnapshot: snapshot });
+  resources.push(browser);
+  expect(await browser.hasItem("empty")).toBe(true);
+  expect(browser.getStatus()).toMatchObject({
+    ready: false,
+    lastAcknowledgedAt: null,
+    pendingCount: 0,
+  });
+  expect(
+    () => new RemoteStorage({ ...identity, userId: "other-user", initialSnapshot: snapshot }),
+  ).toThrow("scope");
+  await source.setItem("draft", "pending");
+  expect(source.dehydrate().items.some((item) => item.key === "draft")).toBe(false);
+});

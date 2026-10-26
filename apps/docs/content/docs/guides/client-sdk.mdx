@@ -171,3 +171,45 @@ client before connecting as another user.
 Session renewal is explicit: before `expiresAt`, close the old client and call
 `connectBrowser` again. Persisted queued work is recovered with the same scope.
 No automatic renewal or cross-scope transfer of queued writes is performed.
+
+## Typed keys and runtime validation
+
+```ts
+const storage = new RemoteStorage<{ count: number }>({
+  serverUrl,
+  apiKey,
+  userId,
+  namespace: "my-isolated-scope",
+  autoConnect: false,
+  schema: {
+    count(value) {
+      if (typeof value !== "number" || !Number.isInteger(value)) {
+        throw new Error("Count must be an integer");
+      }
+    },
+  },
+});
+await storage.setItem("count", 3);
+```
+
+The generic checks key names and values at compile time. Optional schema callbacks
+validate writes and incoming values at runtime; unknown keys are rejected when a
+schema is supplied. Validation happens before a local write enters the queue. All
+writes reject non-JSON data such as NaN, undefined and cyclic or class instances.
+Client validation is not a server security boundary: other clients can still write
+JSON through the API. Server-enforced project schemas and code generation are not
+implemented.
+
+## Bootstrap the first render
+
+After a request-scoped server client is ready, call `dehydrate()` and pass the result
+as `initialSnapshot` when creating the corresponding browser client. Endpoint,
+namespace, user and branch must match. Serialize snapshots with your framework's
+safe data serializer, never by interpolating JSON into an HTML script tag.
+Only send the authenticated user's permitted data; snapshots are visible to the browser.
+
+Bootstrap seeds missing cache entries without enqueueing writes or claiming readiness.
+Existing cache and pending local work win. Pending keys are omitted from snapshots.
+Call `ready()` to reconcile with the server. A snapshot is a first-render cache, not
+a backup or a guarantee of freshness. For isolated tests, pass a Web Storage-compatible
+memory implementation through `storage.adapter`; this also stores the pending queue.

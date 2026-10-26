@@ -1,6 +1,9 @@
 // Core types and interfaces for the sync-client library
 
 export interface RemoteStorageConfig {
+  /** Optional per-key validators; throw to reject a value. Unknown keys are rejected when provided. */
+  schema?: Record<string, (value: unknown) => void>;
+  initialSnapshot?: StoreSnapshot;
   mode?: import("../transport/types").TransportMode | "http" | "websocket" | "auto";
   /**
    * Storage namespace
@@ -300,4 +303,12 @@ export interface SyncStatus {
   pendingCount: number;
   lastAcknowledgedAt: number | null;
   error: string | null;
+}
+
+/** Cache bootstrap data is not proof of current connectivity or server acknowledgement. */
+export interface StoreSnapshot {
+  format: 1;
+  scope: string;
+  capturedAt: number;
+  items: Array<{ key: string; value: unknown }>;
 }

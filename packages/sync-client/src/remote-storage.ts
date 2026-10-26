@@ -1,3 +1,4 @@
+import { assertJson } from "./utils/json";
 import {
   createTransport,
   TransportMode,
@@ -19,6 +20,7 @@ import type {
   RetryConfig,
   ClientLogger,
   SyncStatus,
+  StoreSnapshot,
 } from "./types";
 import { ConnectionState, ConflictStrategy } from "./types";
 import { EventEmitter } from "./core/event-emitter";
@@ -44,7 +46,9 @@ interface RemoteStorageEvents {
   "performance-warning": { metric: string; value: number; threshold: number };
 }
 
-export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
+export class RemoteStorage<
+  Values extends Record<string, any> = Record<string, any>,
+> extends EventEmitter<RemoteStorageEvents> {
   private initialized = false;
   private closed = false;
   private status: Readonly<SyncStatus> = Object.freeze({
@@ -208,6 +212,13 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       void this.ready().catch((error) => this.handleConnectionError(error));
     });
 
+    try {
+      if (config.initialSnapshot) this.hydrate(config.initialSnapshot);
+    } catch (error) {
+      this.destroy();
+      throw error;
+    }
+
     // Auto-connect if enabled
     if (this.config.autoConnect) {
       void this.connect().catch((error) => this.handleConnectionError(error));
@@ -282,8 +293,16 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   /**
    * Set an item with conflict resolution
    */
-  async setItem(key: string, value: any, metadata?: Record<string, any>): Promise<void> {
+  async setItem<Key extends keyof Values & string>(
+    key: Key,
+    value: Values[Key],
+    metadata?: Record<string, any>,
+  ): Promise<void> {
     const startTime = performance.now();
+    this.validateValue(key, value);
+    if (metadata !== undefined) assertJson(metadata);
+    value = JSON.parse(JSON.stringify(value));
+    if (metadata !== undefined) metadata = JSON.parse(JSON.stringify(metadata));
 
     this.logger.debug(`Setting item: ${key}`);
 
@@ -349,11 +368,11 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   /**
    * Get an item
    */
-  getItem(key: string): any {
+  getItem<Key extends keyof Values & string>(key: Key): Values[Key] | null {
     const startTime = performance.now();
 
     try {
-      const result = this.localStorage.getItem(key);
+      const result = this.localStorage.getItem<Values[Key]>(key);
       if (result === null) return null;
 
       this.analytics.trackStorageOperation("get", key, undefined, true);
@@ -511,7 +530,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    */
   async extendTTL(key: string, additionalMs: number): Promise<void> {
     // Check if item exists locally
-    let item = this.localStorage.getItemWithMetadata(key);
+    let item = this.localStorage.getItemWithMetadata<Values[string]>(key);
 
     // If not found locally but connected, try to get from server
     if (!item && this.isConnected()) {
@@ -528,7 +547,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
             version: serverItem.version,
             source: "remote",
           });
-          item = this.localStorage.getItemWithMetadata(key);
+          item = this.localStorage.getItemWithMetadata<Values[string]>(key);
         }
       } catch (error) {
         this.logger.warn(`Failed to fetch item from server for TTL extension: ${key}`, { error });
@@ -832,6 +851,58 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     return result;
   }
 
+  /** Capture cache values for a scoped first render; never include credentials or pending writes. */
+  dehydrate(): StoreSnapshot {
+    return {
+      format: 1,
+      scope: this.snapshotScope(),
+      capturedAt: Date.now(),
+      items: this.getAllKeys()
+        .filter((key) => !this.hasPendingKey(key))
+        .map((key) => ({ key, value: this.getItem(key) })),
+    };
+  }
+
+  /** Seed an empty cache before connecting. Existing local or pending work always wins. */
+  private hydrate(snapshot: StoreSnapshot): void {
+    if (
+      snapshot.format !== 1 ||
+      snapshot.scope !== this.snapshotScope() ||
+      !Number.isFinite(snapshot.capturedAt) ||
+      !Array.isArray(snapshot.items)
+    )
+      throw new Error("Snapshot scope does not match this client");
+    for (const item of snapshot.items) {
+      if (typeof item.key !== "string" || !item.key) throw new Error("Invalid snapshot key");
+      this.validateValue(item.key, item.value);
+    }
+    for (const { key, value } of snapshot.items) {
+      if (!this.hasPendingKey(key) && !this.localStorage.hasItem(key))
+        this.localStorage.setItem(key, value);
+    }
+  }
+
+  /** Match bootstrap state to the same endpoint, explicit cache scope, identity and branch. */
+  private snapshotScope(): string {
+    const url = new URL(this.config.serverUrl);
+    return JSON.stringify([
+      url.origin,
+      url.pathname.replace(/\/$/, ""),
+      this.config.namespace ?? "sync",
+      this.config.userId,
+      this.config.branch ?? "main",
+    ]);
+  }
+
+  private validateValue(key: string, value: unknown): void {
+    assertJson(value);
+    if (this.config.schema) {
+      if (!Object.prototype.hasOwnProperty.call(this.config.schema, key))
+        throw new Error(`Unknown schema key: ${key}`);
+      this.config.schema[key](value);
+    }
+  }
+
   // Private methods
 
   private setupEventListeners(): void {
@@ -896,6 +967,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     }
     if (this.obsoleteEvent(data)) return;
 
+    this.validateValue(data.key, data.value);
     const currentValue = this.getItem(data.key);
 
     // Apply remote update - let DataStorage handle metadata wrapping
