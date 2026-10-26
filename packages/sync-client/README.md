@@ -91,7 +91,8 @@ state. See [React integration](../../apps/docs/content/docs/guides/react.mdx), t
 An API key is an application credential, not authentication for the supplied user ID.
 Authorize users in a trusted backend; never distribute an administrator or unrestricted
 shared key in a public browser app. Local cache encryption is not implemented, and
-setting `encryptionKey` throws rather than providing a false encryption guarantee.
+unsupported encryption and compression options are rejected. React hooks are available
+from `@usex/sync-client/react`; transport and diagnostic utilities use `/advanced`.
 
 ## Work on the client
 

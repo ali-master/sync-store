@@ -17,8 +17,9 @@ import type {
   ChangeEvent,
   NetworkChangeEvent,
   RetryConfig,
+  ClientLogger,
 } from "./types";
-import { ConnectionState, ConflictStrategy, MergeStrategy } from "./types";
+import { ConnectionState, ConflictStrategy } from "./types";
 import { EventEmitter } from "./core/event-emitter";
 import { ConflictResolver } from "./core/conflict-resolver";
 import { NetworkManager } from "./core/network-manager";
@@ -62,7 +63,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   private conflictResolver: ConflictResolver;
   private networkManager: NetworkManager;
   private analytics: Analytics;
-  private logger: Logger;
+  private logger: ClientLogger;
   private subscriptions = new Set<string>();
   private syncFilter?: SyncFilter;
   private syncInProgress = new Map<string, Promise<any>>();
@@ -73,6 +74,16 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
   constructor(config: RemoteStorageConfig) {
     super();
+    const removed = config as unknown as Record<string, any>;
+    for (const field of ["debug", "network"]) {
+      if (removed[field] !== undefined) throw new Error(`Unsupported SDK option: ${field}`);
+    }
+    for (const field of ["encryptionKey", "compressionEnabled", "cleanupStrategy", "maxItemSize"]) {
+      if (removed.storage?.[field] !== undefined)
+        throw new Error(`Unsupported SDK option: storage.${field}`);
+    }
+    if (removed.conflict?.mergeStrategy !== undefined)
+      throw new Error("Unsupported SDK option: conflict.mergeStrategy");
 
     // Merge with defaults
     this.config = {
@@ -90,7 +101,6 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
           ((async () => {
             throw new Error("No conflict resolver provided");
           }) as (conflict: ConflictData) => Promise<any>),
-        mergeStrategy: config.conflict?.mergeStrategy || MergeStrategy.DEEP_MERGE,
       },
       analytics: {
         enabled: config.analytics?.enabled ?? false,
@@ -104,21 +114,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       },
       storage: {
         maxSize: config.storage?.maxSize ?? 10 * 1024 * 1024, // 10MB
-        compressionEnabled: config.storage?.compressionEnabled ?? false,
-        encryptionKey: config.storage?.encryptionKey,
-        cleanupStrategy: config.storage?.cleanupStrategy ?? "lru",
-        maxItemSize: config.storage?.maxItemSize ?? 1024 * 1024, // 1MB
         ttl: config.storage?.ttl,
-      },
-      debug: {
-        logLevel: config.debug?.logLevel ?? "info",
-        performanceMonitoring: config.debug?.performanceMonitoring ?? false,
-        networkLogging: config.debug?.networkLogging ?? false,
-        enableDevTools: config.debug?.enableDevTools,
-      },
-      network: {
-        backgroundSync: config.network?.backgroundSync ?? false,
-        backgroundInterval: config.network?.backgroundInterval ?? 30000,
       },
       ...config,
     };
@@ -134,12 +130,13 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.historyTransport = new HttpTransport({ ...this.config, mode: TransportMode.HTTP });
     this.outbox = new DataStorage({
       namespace: `${cacheNamespace}:outbox:${config.userId}`,
+      storage: config.storage?.adapter,
       maxSize: 10 * 1024 * 1024,
     });
     this.syncQueue = this.outbox.getItem<typeof this.syncQueue>("pending") ?? [];
 
     // Initialize logger
-    this.logger = new Logger("RemoteStorage");
+    this.logger = config.logger ?? new Logger("RemoteStorage");
     this.logger.info("Initializing RemoteStorage", {
       userId: this.config.userId,
       instanceId: this.config.instanceId,
@@ -156,17 +153,14 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     this.localStorage = new DataStorage({
       namespace: `${cacheNamespace}:${this.config.userId}`,
       maxSize: this.config.storage?.maxSize ?? 10 * 1024 * 1024,
-      compressionEnabled: this.config.storage?.compressionEnabled ?? false,
-      encryptionKey: this.config.storage?.encryptionKey,
+      storage: config.storage?.adapter,
       autoCleanup: true,
     });
 
     this.conflictResolver = new ConflictResolver(
       this.config.conflict?.strategy ?? ConflictStrategy.LAST_WRITE_WINS,
     );
-    this.networkManager = new NetworkManager(
-      this.config.network ?? { backgroundSync: false, backgroundInterval: 30000 },
-    );
+    this.networkManager = new NetworkManager();
     this.analytics = new Analytics(
       this.config.analytics ?? {
         enabled: false,

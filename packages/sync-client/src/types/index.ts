@@ -21,8 +21,8 @@ export interface RemoteStorageConfig {
   conflict?: ConflictConfig;
   analytics?: AnalyticsConfig;
   storage?: StorageConfig;
-  debug?: DebugConfig;
-  network?: NetworkConfig;
+  /** Receive client lifecycle logs without enabling a separate analytics service. */
+  logger?: ClientLogger;
 }
 
 export interface RetryConfig {
@@ -37,7 +37,6 @@ export interface ConflictConfig {
   strategy: ConflictStrategy;
   autoResolve: boolean;
   onConflict?: (conflict: ConflictData) => Promise<any>;
-  mergeStrategy?: MergeStrategy;
 }
 
 export interface AnalyticsConfig {
@@ -52,19 +51,17 @@ export interface AnalyticsConfig {
 }
 
 export interface StorageConfig {
-  maxSize: number;
-  compressionEnabled: boolean;
-  encryptionKey?: string;
-  cleanupStrategy: "lru" | "fifo" | "manual";
-  maxItemSize: number;
+  maxSize?: number;
   ttl?: number;
+  /** Supply isolated memory storage for tests or another Web Storage implementation. */
+  adapter?: Storage;
 }
 
-export interface DebugConfig {
-  logLevel: "none" | "error" | "warn" | "info" | "debug";
-  performanceMonitoring: boolean;
-  networkLogging: boolean;
-  enableDevTools?: boolean;
+export interface ClientLogger {
+  debug(message: string, data?: unknown): void;
+  info(message: string, data?: unknown): void;
+  warn(message: string, data?: unknown): void;
+  error(message: string, data?: unknown): void;
 }
 
 export interface NetworkConfig {

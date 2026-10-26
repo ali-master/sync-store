@@ -25,6 +25,21 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
+    },
+    "./legacy": {
+      "types": "./dist/legacy.d.ts",
+      "import": "./dist/legacy.mjs",
+      "require": "./dist/legacy.js"
+    },
+    "./advanced": {
+      "types": "./dist/advanced.d.ts",
+      "import": "./dist/advanced.mjs",
+      "require": "./dist/advanced.js"
     }
   },
   "scripts": {
@@ -39,8 +54,7 @@
     "format:check": "bun --bun prettier --check \"src/**/*.ts\""
   },
   "dependencies": {
-    "socket.io-client": "^4.8.4",
-    "react": "^19.3.1"
+    "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
@@ -48,7 +62,16 @@
     "@usex/tsconfig": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5",
-    "tsup": "^9.0.0"
+    "tsup": "^9.0.0",
+    "react": "^19.3.1"
   },
-  "packageManager": "bun@1.4.4"
+  "packageManager": "bun@1.4.4",
+  "peerDependencies": {
+    "react": "^19.3.1"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
 }

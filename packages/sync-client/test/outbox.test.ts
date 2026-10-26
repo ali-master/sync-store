@@ -51,3 +51,19 @@ test("outbox duplicates and delayed versions cannot resurrect a removed value", 
     client.destroy();
   }
 });
+
+test("unsupported options fail explicitly for JavaScript consumers", () => {
+  for (const config of [
+    { debug: {} },
+    { network: {} },
+    { storage: { encryptionKey: "secret" } },
+    { storage: { compressionEnabled: true } },
+    { storage: { cleanupStrategy: "fifo" } },
+    { storage: { maxItemSize: 1 } },
+    { conflict: { mergeStrategy: "custom" } },
+  ]) {
+    expect(
+      () => new RemoteStorage({ userId: "test", autoConnect: false, ...config } as any),
+    ).toThrow("Unsupported SDK option");
+  }
+});

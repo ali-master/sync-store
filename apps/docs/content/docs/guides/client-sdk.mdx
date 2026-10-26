@@ -92,7 +92,16 @@ Server events include `eventId`, `recordId` and `version` for durable outbox del
 
 Use distinct cache namespaces for independent clients on the same origin. A namespace separates browser storage; it is **not** a server-side access-control boundary.
 
-The former `encryptionKey` option throws because it did not encrypt values. Compression, browser background execution and every historical configuration field are not promises of implemented behavior. The supported core flow is explicit connection, JSON mutations, subscriptions and the persistent outbox.
+The core package exposes storage operations. React hooks live in `@usex/sync-client/react`,
+and transport and diagnostics tools live in `@usex/sync-client/advanced`. Deprecated hooks
+are available only from `@usex/sync-client/legacy`.
+
+Unsupported configuration has been removed: `debug`, `network`,
+`storage.encryptionKey`, `storage.compressionEnabled`, `storage.cleanupStrategy`,
+`storage.maxItemSize`, and `conflict.mergeStrategy`. JavaScript callers receive an
+explicit error for these options. Use `logger` for client lifecycle logging and
+`storage.maxSize` for the enforced local capacity limit. Cache encryption and
+browser background execution are not supported.
 
 ## Tenants and branches
 
