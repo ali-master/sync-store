@@ -4,7 +4,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Checkbox } from "./ui/checkbox";
-import { NativeSelect } from "./ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { httpMethods, localExpiry, quotaPeriods } from "../lib/key-policy";
 
 /** Present every supported policy setting without exposing its storage format. */
@@ -109,15 +109,27 @@ export function KeyPolicyFields({
         <div className="mt-5 space-y-4">
           <div className="space-y-2">
             <Label htmlFor={restrictionModeId}>IP rule behavior</Label>
-            <NativeSelect
-              id={restrictionModeId}
+            <Select
+              items={[
+                { value: "allow", label: "Allow only listed IP addresses" },
+                { value: "deny", label: "Block listed IP addresses" },
+              ]}
+
               name="restrictionMode"
               defaultValue={policy.restrictionMode}
-              className="w-full"
             >
-              <option value="allow">Allow only listed IP addresses</option>
-              <option value="deny">Block listed IP addresses</option>
-            </NativeSelect>
+              <SelectTrigger
+                id={restrictionModeId}
+                aria-label="IP rule behavior"
+                className="w-full min-w-36"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectItem value="allow">Allow only listed IP addresses</SelectItem>
+                <SelectItem value="deny">Block listed IP addresses</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {lists.slice(0, 2).map(([field, title, placeholder, help]) => (
             <Label key={field}>

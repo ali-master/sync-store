@@ -4,7 +4,7 @@ import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
-import { NativeSelect } from "./ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 
 type Scope = { userId: string; projectId: string; tenantId: string; branch: string };
@@ -69,21 +69,28 @@ export function Versioning({
             <div className="flex flex-wrap items-end justify-between gap-4">
               <Label className="grid gap-2">
                 Current branch
-                <NativeSelect
+                <Select
+                  items={query.data.branches.map((b: any) => ({ value: b.name, label: b.name }))}
                   value={branch}
-                  onChange={(e) => {
-                    setBranch(e.target.value);
-                    onBranchChange?.(e.target.value);
+                  onValueChange={(value) => {
+                    if (value === null) return;
+                    setBranch(value);
+                    onBranchChange?.(value);
                     setRestore(null);
                     mutation.reset();
                   }}
                 >
-                  {query.data.branches.map((b: any) => (
-                    <option key={b.name} value={b.name}>
-                      {b.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger aria-label="Current branch" className="w-full min-w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    {query.data.branches.map((b: any) => (
+                      <SelectItem key={b.name} value={b.name}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Label>
               <Button variant="outline" onClick={() => void query.refetch()}>
                 Refresh

@@ -17,7 +17,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
-import { NativeSelect } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import logo from "../../../assets/logo.svg";
@@ -1200,21 +1206,32 @@ export default function App({ section }: { section: string }) {
                               }
                             />
                           )}
-                          <select
+                          <Select
+                            items={[
+                              { value: "default", label: "Default (existing data)" },
+                              ...(projectsQuery.data?.items || []).map((project) => ({
+                                value: project._id,
+                                label: project.name,
+                              })),
+                            ]}
                             name="projectId"
-                            className="h-11 w-full rounded-md border bg-background px-3 text-sm"
                             disabled={!selected._new || busy}
                             defaultValue={
                               JSON.parse(selected.metadata || "{}").access?.projectId || "default"
                             }
                           >
-                            <option value="default">Default (existing data)</option>
-                            {projectsQuery.data?.items.map((project) => (
-                              <option key={project._id} value={project._id}>
-                                {project.name}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger aria-label="Project" className="w-full min-w-36">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectItem value="default">Default (existing data)</SelectItem>
+                              {projectsQuery.data?.items.map((project) => (
+                                <SelectItem key={project._id} value={project._id}>
+                                  {project.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </Label>
                         <p className="text-xs text-muted-foreground">
                           Project binding cannot change after creation. Create projects from the
@@ -1401,14 +1418,29 @@ export default function App({ section }: { section: string }) {
                       <div>
                         <Label>
                           Resolution strategy
-                          <NativeSelect
+                          <Select
+                            items={[
+                              { value: "last_write_wins", label: "Use conflicting value" },
+                              { value: "first_write_wins", label: "Keep original value" },
+                              { value: "merge", label: "Merge values" },
+                            ]}
                             value={strategy}
-                            onChange={(e) => setStrategy(e.target.value)}
+                            onValueChange={(value) => {
+                              if (value !== null) setStrategy(value);
+                            }}
                           >
-                            <option value="last_write_wins">Use conflicting value</option>
-                            <option value="first_write_wins">Keep original value</option>
-                            <option value="merge">Merge values</option>
-                          </NativeSelect>
+                            <SelectTrigger
+                              aria-label="Resolution strategy"
+                              className="w-full min-w-36"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectItem value="last_write_wins">Use conflicting value</SelectItem>
+                              <SelectItem value="first_write_wins">Keep original value</SelectItem>
+                              <SelectItem value="merge">Merge values</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </Label>
                         <p className="text-sm leading-6 text-muted-foreground">
                           Records a proposal only. Review resolvedValue, then apply it explicitly in

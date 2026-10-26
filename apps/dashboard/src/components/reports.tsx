@@ -5,7 +5,7 @@ import { Activity, RefreshCw } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { NativeSelect } from "./ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { RecordsTable } from "./records-table";
 
 type Row = Record<string, any>;
@@ -178,35 +178,59 @@ export function Reports({
       <Card className="flex-row flex-wrap items-end gap-4 p-5">
         <label className="grid gap-2 text-xs font-medium">
           Time range
-          <NativeSelect
+          <Select
+            items={[
+              { value: "1", label: "Last hour" },
+              { value: "24", label: "Last 24 hours" },
+              { value: "168", label: "Last 7 days" },
+              { value: "720", label: "Last 30 days" },
+            ]}
             value={hours}
-            onChange={(e) => {
-              setHours(e.target.value);
+            onValueChange={(value) => {
+              if (value === null) return;
+              setHours(value);
               setPage(1);
               setSelected(null);
             }}
           >
-            <option value="1">Last hour</option>
-            <option value="24">Last 24 hours</option>
-            <option value="168">Last 7 days</option>
-            <option value="720">Last 30 days</option>
-          </NativeSelect>
+            <SelectTrigger aria-label="Time range" className="w-full min-w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value="1">Last hour</SelectItem>
+              <SelectItem value="24">Last 24 hours</SelectItem>
+              <SelectItem value="168">Last 7 days</SelectItem>
+              <SelectItem value="720">Last 30 days</SelectItem>
+            </SelectContent>
+          </Select>
         </label>
         {kind === "health" && (
           <label className="grid gap-2 text-xs font-medium">
             Replica
-            <NativeSelect
+            <Select
+              items={[
+                { value: "", label: "All replicas" },
+                ...(data?.replicas || []).map((name: string) => ({ value: name, label: name })),
+              ]}
               value={replica}
-              onChange={(e) => {
-                setReplica(e.target.value);
+              onValueChange={(value) => {
+                if (value === null) return;
+                setReplica(value);
                 setPage(1);
               }}
             >
-              <option value="">All replicas</option>
-              {data?.replicas?.map((name: string) => (
-                <option key={name}>{name}</option>
-              ))}
-            </NativeSelect>
+              <SelectTrigger aria-label="Replica" className="w-full min-w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectItem value="">All replicas</SelectItem>
+                {data?.replicas?.map((name: string) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         )}
         <Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>
@@ -623,16 +647,26 @@ export function Reports({
             {kind !== "usage" && (
               <label className="grid gap-2 text-xs">
                 Table source
-                <NativeSelect
+                <Select
+                  items={[
+                    { value: "events", label: "Event counts" },
+                    { value: "snapshots", label: "Cluster snapshots" },
+                  ]}
                   value={tableSource}
-                  onChange={(event) => {
-                    setTableSource(event.target.value);
+                  onValueChange={(value) => {
+                    if (value === null) return;
+                    setTableSource(value);
                     setPage(1);
                   }}
                 >
-                  <option value="events">Event counts</option>
-                  <option value="snapshots">Cluster snapshots</option>
-                </NativeSelect>
+                  <SelectTrigger aria-label="Table source" className="w-full min-w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="events">Event counts</SelectItem>
+                    <SelectItem value="snapshots">Cluster snapshots</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
             )}
             <RecordsTable
