@@ -1,49 +1,108 @@
-# @usex/sync-client
+# Sync Store client
 
-Synchronize JSON values through HTTP or Socket.IO with a local cache and persistent pending writes.
+**Give your application a consistent view of its data, even across reconnects.**
+
+The client connects your application to Sync Store, keeps a local cache and manages
+pending writes. Save JSON values, receive changes from other clients and recover
+from connection interruptions without building a separate retry queue for each
+application feature.
+
+Use it for preferences, settings and other application state shared across connected
+tabs or devices. It also exposes recovery tools for inspecting history, creating
+checkpoints and working with branches.
+
+## Connect and save a value
+
+Install `@usex/sync-client` in your application:
 
 ```sh
 bun add @usex/sync-client
 ```
+
+Create an application key in your running service's dashboard, then connect:
 
 ```ts
 import { RemoteStorage } from "@usex/sync-client";
 
 const store = new RemoteStorage({
   serverUrl: "https://sync.example.com",
-  apiKey: "issued-key",
-  userId: "user-id",
-  instanceId: "device-id",
-  mode: "auto", // "http" | "websocket" | "auto"
+  apiKey: applicationKey,
+  userId: authenticatedUserId,
+  namespace: "production:customer-a:project-a",
   autoConnect: false,
 });
+
 await store.connect();
 await store.setItem("settings", { theme: "dark" });
-await store.getItem("settings");
-await store.removeItem("settings");
-await store.clear();
+const settings = await store.getItem("settings");
+
+// When the application no longer needs this client:
 store.destroy();
 ```
 
-`setItem`, `removeItem` and `clear` persist pending operations before sending.
-A failed online write rejects and stays queued for retry. Offline writes are queued locally.
-`connect()` flushes pending operations, downloads the server snapshot and restores subscriptions.
-Remote deletions remove stale local entries. Quota errors do not evict unrelated pending data.
+The key selects the tenant and project on the server. Choose a stable, distinct local
+`namespace` for each backend, tenant and project so cached data and queued work do
+not mix when switching workspaces.
 
-HTTP uses `/api/v1` by default and accepts a custom path in `serverUrl`.
-Socket.IO uses WebSocket-only transport, allowing connections through a load balancer without sticky sessions. API replicas must share MongoDB and the Redis Streams adapter. After reconnect, the SDK reconciles persisted state from the server.
-Credentials use headers for HTTP and the Socket.IO auth handshake for WebSocket.
-Retries of mutations are controlled by the outbox; delivery is at least once, not exactly once.
+## Keep work through a disconnect
 
-The package exports `useSyncStore` and `useSyncValue` for React.
-Call `destroy()` when manually owned clients are no longer needed.
-The old `encryptionKey` option now throws instead of silently storing plaintext.
+`setItem`, `removeItem` and `clear` persist pending operations before sending them.
+Offline writes remain queued locally. A failed online write rejects and stays queued
+for retry; handle the error rather than treating it as confirmed delivery.
 
-An API key is an application credential, not proof of the supplied user's identity.
-Use a trusted application backend for authorization; do not ship unrestricted shared keys to public browsers.
+On `connect()`, the client flushes pending operations, downloads current server state
+and restores subscriptions. Remote deletions remove stale local entries. Delivery is
+at least once, and mutation retries retain their request IDs. Keep the same namespace
+to recover persisted pending work after a reload. Clearing browser storage removes
+that local recovery path.
+
+See [offline and reconnect behavior](../../apps/docs/content/docs/guides/offline-sync.mdx)
+and [safe retries](../../apps/docs/content/docs/guides/idempotency.mdx).
+
+## Recover and experiment safely
+
+- Inspect retained key versions with `getHistory()` and preview a recovery with
+  `previewRestore()` before calling `restoreVersion()`.
+- Read branch heads with `getBranches()` and create a named checkpoint with `commit()`.
+- Fork a snapshot with `createBranch()` and connect a separate client using its
+  `branch` option. The default is `main`.
+- Use `restoreCommit()` to restore a whole tree with an expected head, so a concurrent
+  change is rejected instead of silently overwritten.
+
+Branches belong to a tenant, project and user. Keep a separate client for each branch
+so pending writes retain their destination. Whole-tree version operations require
+unrestricted read access, and mutations also require write access.
+
+The [branches and commits guide](../../apps/docs/content/docs/guides/branches-and-commits.mdx)
+includes complete examples and current limits.
+
+## Fit the client into your application
+
+Use `mode: "auto"` for live synchronization with an HTTP fallback, `"websocket"` for
+live connections only, or `"http"` for request-based access. HTTP defaults to `/api/v1`;
+a custom API path can be supplied in `serverUrl`. Multiple service replicas require
+the shared delivery setup in the [deployment guide](../../apps/docs/content/docs/guides/deployment.mdx).
+
+For React applications, `useSyncStore` and `useSyncValue` connect storage to component
+state. See [React integration](../../apps/docs/content/docs/guides/react.mdx), the
+[client guide](../../apps/docs/content/docs/guides/client-sdk.mdx) and the
+[two-client playground](../../examples/README.md).
+
+An API key is an application credential, not authentication for the supplied user ID.
+Authorize users in a trusted backend; never distribute an administrator or unrestricted
+shared key in a public browser app. Local cache encryption is not implemented, and
+setting `encryptionKey` throws rather than providing a false encryption guarantee.
+
+## Work on the client
+
+From the repository root:
 
 ```sh
-bun run build
-bun run test:types
-bun test
+bun run --cwd packages/sync-client test
+bun run --cwd packages/sync-client test:types
+bun run --cwd packages/sync-client build
 ```
+
+Default tests cover client behavior locally. Live synchronization tests require their
+configured test services; see the service's integration tests for cross-replica and
+tenant-isolation scenarios.

@@ -1,50 +1,74 @@
-# Examples
+# See Sync Store in action
 
-## React playground
+**Try the behaviors your application needs before integrating them.**
 
-The main demo uses two real SDK clients, each with its own cache and connection.
-It requires a running API and a disposable, write-enabled API key.
+These examples let you watch changes move between clients, inspect stored values
+and understand what happens when a connection disappears. They use a real running
+Sync Store service rather than simulated synchronization.
+
+## Two-client playground
+
+The playground puts two independent clients side by side. Each has its own local
+cache and connection, making delivery and reconnect behavior visible.
+
+Try this sequence:
+
+1. Enter your API origin and a disposable application key with write access.
+2. Connect both clients, save JSON on client A and watch client B receive it.
+3. Disconnect A and make another change. Reconnect it to send the pending write.
+4. Delete the selected key and check that the other client reflects the removal.
+
+Clearing the activity log does not delete stored data. Credentials stay in memory;
+cached values and pending operations remain in browser storage. Ending a session
+does not discard its queue. Keep the same client configuration and cache namespace
+when recovering pending work.
+
+### Run the playground
+
+Start the service with the [self-hosting guide](../apps/docs/content/docs/guides/self-hosted.mdx)
+or [development setup](../apps/docs/content/docs/getting-started.mdx), then run these
+commands from the repository root:
 
 ```sh
-# From the repository root
 bun install --frozen-lockfile
 bun run --cwd packages/sync-client build
 bun run --cwd examples/react-app dev
 ```
 
-Open Vite's printed URL, enter the API origin and key, and connect both clients.
-Save JSON on A and watch B receive it. Disconnect A, save locally, then reconnect
-to verify pending delivery. Delete affects only the selected key; clearing the log
-does not delete data.
+Open the URL printed in the terminal. The
+[playground walkthrough](../apps/docs/content/docs/playground.mdx) explains its controls
+and how to interpret connection and delivery status.
 
-Credentials stay in memory. Cached values and pending operations persist in browser
-storage. Ending a session does not delete that outbox. Keep the same tab/server/user
-to recover pending work.
+## Basic request example
+
+[Basic usage](basic-usage/index.html) shows the smallest request-and-response workflow:
+connect with an application key, send storage requests and inspect the response
+envelope. Use it to understand the API independently of the client's cache and live
+subscriptions. This example does not queue offline work or receive live updates.
+
+To serve it locally after installing workspace dependencies:
 
 ```sh
+cd examples/react-app
+bun ./node_modules/vite/bin/vite.js ../..
+# Open /examples/basic-usage/index.html at the printed URL.
+```
+
+## Adapt an example for your application
+
+Use disposable data and credentials while experimenting. A shared API key does not
+authenticate individual users; these examples are not a production browser
+authorization pattern. Keep unrestricted keys behind a trusted application backend.
+
+When deploying the playground, set `VITE_DOCS_URL` to a documentation URL ending in
+`/docs`. Never put an API secret in a frontend environment variable.
+
+```sh
+# From the repository root
 bun run --cwd examples/react-app test:types
 bun run --cwd examples/react-app build
 bun run --cwd examples/react-app preview
 ```
 
-Set `VITE_DOCS_URL` to a docs URL ending in `/docs` when deploying the playground.
-Never put an API secret in a Vite environment variable.
-
-## Basic HTTP example
-
-Serve `examples/basic-usage/index.html` from the repository using a static server.
-This standalone page sends direct authenticated REST calls and shows the response
-envelope. It deliberately has no SDK, realtime subscription or offline outbox.
-
-For local use, Vite can serve the repository:
-
-```sh
-cd examples/react-app
-bun ./node_modules/vite/bin/vite.js ../..
-# Open /examples/basic-usage/index.html on the printed local URL.
-```
-
-See [Getting started](../apps/docs/content/docs/getting-started.mdx) for API setup
-and [the playground guide](../apps/docs/content/docs/playground.mdx) for its behavior.
-A shared API key is not end-user authentication; these demos are for development,
-not a production browser authorization pattern.
+Continue with the [SDK guide](../packages/sync-client/README.md) when you are ready
+to build synchronization into your own application.
