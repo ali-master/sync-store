@@ -159,14 +159,12 @@ console.log(storage.getStatus());
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="min-w-0 space-y-5">
+    <div className="grid overflow-hidden rounded-xl border bg-card lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0 space-y-5 p-4 sm:p-6">
         <Card className="gap-0 overflow-hidden">
           <div className="border-b p-5">
             <p className="text-xs font-medium text-primary">01 · CONNECT</p>
-            <h2 className="mt-2 text-lg font-semibold">
-              A small client. A shared source of truth.
-            </h2>
+            <h2 className="mt-2 text-sm font-semibold">Connect your application</h2>
             <p className="mt-2 text-xs leading-6 text-muted-foreground">
               Create an application key, keep it in your backend, and issue a short-lived session
               for each signed-in user.
@@ -214,7 +212,7 @@ console.log(storage.getStatus());
         </Card>
         <Card className="p-5 sm:p-6">
           <p className="text-xs font-medium text-primary">02 · VERIFY</p>
-          <h2 className="text-lg font-semibold">See a change arrive.</h2>
+          <h2 className="text-sm font-semibold">See a change arrive.</h2>
           <p className="text-xs leading-6 text-muted-foreground">
             Use a test application key with read/write access to <code>__sync_check__/</code>. This
             creates and removes one temporary value in the selected user's branch. History and audit
@@ -268,7 +266,7 @@ console.log(storage.getStatus());
           )}
         </Card>
       </div>
-      <aside className="space-y-5">
+      <aside className="connection-canvas space-y-5 border-t p-5 lg:border-l lg:border-t-0">
         <Card className="gap-0 p-5">
           <h2 className="mb-5 text-xs font-semibold">Connection checklist</h2>
           {[

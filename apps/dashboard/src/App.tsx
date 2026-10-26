@@ -1,3 +1,4 @@
+import { ThemePicker } from "./components/theme-provider";
 import { ConsoleNav } from "./components/console-nav";
 import { DataScopeBar } from "./components/data-scope";
 import { ConnectApp } from "./components/connect-app";
@@ -379,6 +380,9 @@ export default function App({ section }: { section: string }) {
   if (!token)
     return (
       <main className="mx-auto grid min-h-screen max-w-6xl items-center gap-12 px-6 py-12 lg:grid-cols-[1.2fr_1fr] lg:gap-24">
+        <div className="absolute right-4 top-4 z-10">
+          <ThemePicker />
+        </div>
         <div className="space-y-7 [&>img]:size-14 [&_h1]:text-5xl [&_h1]:font-semibold [&_h1]:leading-[1.12] [&_h1]:tracking-tight [&_h1_span]:text-muted-foreground [&>p:not(:first-of-type)]:max-w-md [&>p:not(:first-of-type)]:leading-7 [&>p:not(:first-of-type)]:text-muted-foreground">
           <img src={logo} alt="Sync Store" />
           <p className="text-[10px] font-semibold tracking-[0.24em] text-muted-foreground">
@@ -460,20 +464,6 @@ export default function App({ section }: { section: string }) {
 
   const sidebarContent = (
     <>
-      <a
-        href="/dashboard/"
-        className="flex h-12 shrink-0 items-center gap-2.5 border-b px-3 text-sm font-semibold"
-        onClick={(event) => {
-          event.preventDefault();
-          navigate("overview");
-        }}
-      >
-        <img src={logo} alt="" className="size-6" />
-        Sync Store
-        <span className="ml-auto rounded border px-1.5 py-0.5 text-[9px] font-normal text-muted-foreground">
-          CONSOLE
-        </span>
-      </a>
       <ConsoleNav
         section={section}
         platform={overview?.tenantId === null}
@@ -512,7 +502,7 @@ export default function App({ section }: { section: string }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r bg-card px-2 lg:flex">
+      <aside className="fixed bottom-0 top-[52px] left-0 z-30 hidden w-[248px] flex-col border-r bg-card px-2 lg:flex">
         {sidebarContent}
       </aside>
       <Sheet open={mobileMenu} onOpenChange={setMobileMenu}>
@@ -523,8 +513,8 @@ export default function App({ section }: { section: string }) {
         </SheetContent>
       </Sheet>
 
-      <div className="min-w-0 lg:ml-56">
-        <header className="sticky top-0 z-20 flex min-h-12 items-center justify-between gap-3 border-b bg-card/95 px-4 backdrop-blur sm:px-6">
+      <div className="min-w-0 pt-[52px] lg:ml-[248px]">
+        <header className="fixed inset-x-0 top-0 z-40 flex h-[52px] items-center justify-between gap-2 border-b bg-card px-3 sm:px-4">
           <div className="flex min-w-0 items-center gap-2 text-xs">
             <Button
               variant="ghost"
@@ -536,11 +526,26 @@ export default function App({ section }: { section: string }) {
             >
               <Menu />
             </Button>
+            <Link
+              to="/"
+              search={{ ...dataScope, page: 1, q: "" }}
+              className="mr-1 flex shrink-0 items-center gap-2 text-sm font-semibold"
+            >
+              <img src={logo} alt="" className="size-5" />
+              Sync Store
+            </Link>
+            <span aria-hidden="true" className="hidden text-lg font-light text-border sm:inline">
+              /
+            </span>
             <span className="hidden text-muted-foreground sm:inline">
               {overview?.tenantId ? "Tenant workspace" : "Your installation"}
             </span>
-            <ChevronRight className="hidden size-3 text-muted-foreground sm:block" />
-            <span className="truncate font-medium">{title}</span>
+            <span aria-hidden="true" className="hidden text-lg font-light text-border sm:inline">
+              /
+            </span>
+            <span className="hidden truncate font-medium text-muted-foreground md:inline">
+              {dataScope.projectId || "default"}
+            </span>
             {scopedView && dataScope.scopeUser && (
               <span className="hidden items-center gap-1 rounded-md bg-primary/5 px-2 py-1 text-primary sm:flex">
                 <GitBranch className="size-3" />
@@ -548,8 +553,9 @@ export default function App({ section }: { section: string }) {
               </span>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+            <ThemePicker />
+            <span className="hidden items-center gap-1.5 text-[10px] text-muted-foreground sm:flex">
               <span
                 className={
                   "size-1.5 rounded-full " +
@@ -569,11 +575,18 @@ export default function App({ section }: { section: string }) {
             </Button>
           </div>
         </header>
-        <main className="mx-auto max-w-[1500px] space-y-5 px-4 py-6 sm:px-7 sm:py-7">
+        <main
+          className={
+            "console-workspace mx-auto space-y-5 px-4 py-6 sm:px-8 sm:py-10 " +
+            (section === "versioning" || section === "projects" || section === "tenants"
+              ? "max-w-[920px]"
+              : "max-w-[1120px]")
+          }
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-              <p className="mt-2 max-w-2xl text-[13px] leading-6 text-muted-foreground">
+              <h1 className="text-sm font-semibold">{title}</h1>
+              <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">
                 {descriptions[section]}
               </p>
             </div>

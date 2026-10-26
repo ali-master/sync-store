@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Activity,
@@ -77,6 +77,21 @@ export function ConsoleNav({
   onNavigate: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const search = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const focus = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k" &&
+        search.current?.getClientRects().length
+      ) {
+        event.preventDefault();
+        search.current.focus();
+      }
+    };
+    window.addEventListener("keydown", focus);
+    return () => window.removeEventListener("keydown", focus);
+  }, []);
   function items(group: (typeof groups)[number]) {
     return group.items
       .filter(
@@ -99,16 +114,20 @@ export function ConsoleNav({
       ));
   }
   return (
-    <nav aria-label="Console navigation" className="min-h-0 flex-1 overflow-y-auto py-3">
+    <nav aria-label="Console navigation" className="min-h-0 flex-1 overflow-y-auto py-2">
       <label className="mx-1 mb-4 flex items-center gap-2 rounded-md border bg-background px-2.5 py-2 text-muted-foreground">
         <Search className="size-3.5" />
         <input
+          ref={search}
           className="min-w-0 w-full bg-transparent text-xs outline-none"
           aria-label="Find a page"
-          placeholder="Find a page…"
+          placeholder="Search…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        <kbd aria-hidden="true" className="shrink-0 rounded bg-muted px-1 text-[10px]">
+          ⌘K
+        </kbd>
       </label>
       <Link
         to="/connect"
@@ -133,10 +152,8 @@ export function ConsoleNav({
             {items(group)}
           </details>
         ) : (
-          <div key={group.label} className="mb-4">
-            <p className="px-3 pb-2 pt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              {group.label}
-            </p>
+          <div key={group.label} className="mb-2">
+            <p className="sr-only">{group.label}</p>
             {items(group)}
           </div>
         ),
