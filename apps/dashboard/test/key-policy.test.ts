@@ -42,3 +42,14 @@ test("expiry preserves unchanged values and validates changed dates", () => {
   data.set("expiresAt", "2099-01-01T12:00");
   expect(readKeyPolicy(data).expiresAt).toBe(new Date("2099-01-01T12:00").toISOString());
 });
+
+test("calendar wall time round-trips through API expiry and clearing removes it", () => {
+  const data = new FormData();
+  const selected = "2099-10-28T14:35";
+  data.set("expiresAt", selected);
+  const policy = readKeyPolicy(data);
+  expect(localExpiry(policy.expiresAt as string)).toBe(selected);
+  expect(readKeyPolicy(data, policy.expiresAt as string)).not.toHaveProperty("expiresAt");
+  data.set("expiresAt", "");
+  expect(readKeyPolicy(data, policy.expiresAt as string).expiresAt).toBeNull();
+});

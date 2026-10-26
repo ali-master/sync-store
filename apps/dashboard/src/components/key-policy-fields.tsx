@@ -1,3 +1,4 @@
+import { DateTimePicker } from "./date-time-picker";
 import { useId } from "react";
 import { Gauge, Globe2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { Input } from "./ui/input";
@@ -85,15 +86,12 @@ export function KeyPolicyFields({
             </span>
           </span>
         </Label>
-        <Label>
-          Expiration date
-          <Input
-            name="expiresAt"
-            type="datetime-local"
-            defaultValue={localExpiry(policy.expiresAt)}
-            className="h-10"
-          />
-        </Label>
+        <DateTimePicker
+          key={policy.expiresAt || "none"}
+          name="expiresAt"
+          defaultValue={localExpiry(policy.expiresAt)}
+          disabled={disabled}
+        />
         <p className="text-xs text-muted-foreground">
           Your local time zone. Leave empty for a key that never expires.
         </p>

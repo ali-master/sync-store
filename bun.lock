@@ -104,10 +104,13 @@
         "@tanstack/react-query": "^5.104.5",
         "@tanstack/react-router": "^1.170.46",
         "@tanstack/react-table": "^9.3.1",
+        "@usex/sync-client": "workspace:*",
         "class-variance-authority": "^0.7.1",
         "cn": "^0.5.0",
+        "date-fns": "^4.4.0",
         "lucide-react": "^1.61.0",
         "react": "^19.3.1",
+        "react-day-picker": "^10.0.2",
         "react-dom": "^19.3.1",
         "shadcn": "^4.22.1",
         "tailwindcss": "^4.3.3",
@@ -212,17 +215,23 @@
       "name": "@usex/sync-client",
       "version": "0.0.0",
       "dependencies": {
-        "react": "^19.3.1",
         "socket.io-client": "^4.8.4",
       },
       "devDependencies": {
         "@types/node": "^26.6.5",
         "@types/react": "^19.3.0",
         "@usex/tsconfig": "workspace:*",
+        "react": "^19.3.1",
         "tsup": "^9.0.0",
         "typescript": "^6.0.3",
         "vitest": "^5.0.5",
       },
+      "peerDependencies": {
+        "react": "^19.3.1",
+      },
+      "optionalPeers": [
+        "react",
+      ],
     },
     "packages/tsconfig": {
       "name": "@usex/tsconfig",
@@ -417,6 +426,8 @@
     "@content-collections/mdx": ["@content-collections/mdx@0.2.2", "", { "dependencies": { "esbuild": "0.25.10", "mdx-bundler": "10.1.1", "unified": "11.0.5" }, "peerDependencies": { "@content-collections/core": "0.x", "react": ">= 18", "react-dom": ">= 18" } }, "sha512-7Xx8AohrSuq1jn/k44qWIq1s666KnksGPk64nnoY/T9mFZ7fZkdEtYezBsNpzkDMMKTnf65CNIvyFHtwTD2muA=="],
 
     "@dabh/diagnostics": ["@dabh/diagnostics@2.0.8", "", { "dependencies": { "@so-ric/colorspace": "1.1.6", "enabled": "2.0.0", "kuler": "2.0.0" } }, "sha512-R4MSXTVnuMzGD7bzHdW2ZhhdPC/igELENcq5IjEverBvq5hn1SXCWcsi6eSsdWP0/Ur+SItRRjAktmdoX/8R/Q=="],
+
+    "@date-fns/tz": ["@date-fns/tz@1.5.0", "", {}, "sha512-lwYN/vDPeNRULcepoE/LO2Pgx+7/RV+S9ARfbc9lr2DtGkOD7pAiruHvbR1RX3Qyf6ja47EWJDMsNK5vK08DJg=="],
 
     "@devframes/agentic": ["@devframes/agentic@1.2.6", "", { "dependencies": { "@modelcontextprotocol/client": "^2.3.1", "@modelcontextprotocol/server": "^2.3.1", "h3": "^2.0.1", "pathe": "^2.0.3" }, "peerDependencies": { "devframe": "1.2.6" } }, "sha512-MNUuFdkWBYsLv8/GToerFYUEjBloNVm8jyNKH7Sm0PNyU/vtiYgIgh1vv4CBIFDsdwaj5aTbmIu92S1UhPddXA=="],
 
@@ -3419,6 +3430,8 @@
     "rc9": ["rc9@3.1.0", "", { "dependencies": { "defu": "^6.1.7", "destr": "^2.0.5" } }, "sha512-ufjkNVzbRHKcCOmTahZkmVsyc3W+MSk3jY03m+a7tGHkIsdVMG9l10/3HvFbWkkKzY5VFp3pkRsIo/UYgmFL7Q=="],
 
     "react": ["react@19.3.1", "", {}, "sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw=="],
+
+    "react-day-picker": ["react-day-picker@10.0.2", "", { "dependencies": { "@date-fns/tz": "^1.4.1", "date-fns": "^4.1.0" }, "peerDependencies": { "@types/react": ">=16.8.0", "react": ">=16.8.0" }, "optionalPeers": ["@types/react"] }, "sha512-QetiKtZWE9Uaw/pM/SYNv6WPYOTRnSJ2puL0GgwkmUFMIwiY0dtjH1W4B7DOVXVNQM0ZOClGpH/heOfBSzWeiA=="],
 
     "react-dom": ["react-dom@19.3.1", "", { "dependencies": { "scheduler": "^0.28.0" }, "peerDependencies": { "react": "^19.3.1" } }, "sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ=="],
 
