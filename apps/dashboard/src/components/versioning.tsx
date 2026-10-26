@@ -13,14 +13,18 @@ export function Versioning({
   request,
   sessionId,
   tenantId,
+  initialScope,
+  onBranchChange,
 }: {
   request: (path: string, method?: string, body?: unknown) => Promise<any>;
   sessionId: string;
   tenantId?: string | null;
+  initialScope?: Scope;
+  onBranchChange?: (branch: string) => void;
 }) {
   const client = useQueryClient();
-  const [scope, setScope] = useState<Scope | null>(null);
-  const [branch, setBranch] = useState("main");
+  const scope = initialScope ?? null;
+  const [branch, setBranch] = useState(initialScope?.branch || "main");
   const [restore, setRestore] = useState<any>(null);
   const [notice, setNotice] = useState("");
   const query = useQuery({
@@ -40,43 +44,11 @@ export function Versioning({
   });
   return (
     <div className="grid min-w-0 gap-5">
-      <Card className="p-5 sm:p-7">
-        <form
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const d = new FormData(e.currentTarget);
-            setBranch("main");
-            setRestore(null);
-            setNotice("");
-            mutation.reset();
-            setScope({
-              userId: String(d.get("userId")),
-              projectId: String(d.get("projectId") || "default"),
-              tenantId: tenantId ?? String(d.get("tenantId") || ""),
-              branch: "main",
-            });
-          }}
-        >
-          <Label className="grid gap-2">
-            User ID
-            <Input name="userId" required maxLength={128} placeholder="customer-42" />
-          </Label>
-          <Label className="grid gap-2">
-            Project ID
-            <Input name="projectId" placeholder="default" />
-          </Label>
-          {!tenantId && (
-            <Label className="grid gap-2">
-              Tenant ID
-              <Input name="tenantId" placeholder="Default installation" />
-            </Label>
-          )}
-          <Button className="self-end" type="submit">
-            Open history
-          </Button>
-        </form>
-      </Card>
+      {!scope && (
+        <Card className="p-7 text-sm text-muted-foreground">
+          Choose a user in Data scope above to inspect their branches and immutable commit history.
+        </Card>
+      )}
       {(query.error || mutation.error) && (
         <p
           role="alert"
@@ -101,6 +73,7 @@ export function Versioning({
                   value={branch}
                   onChange={(e) => {
                     setBranch(e.target.value);
+                    onBranchChange?.(e.target.value);
                     setRestore(null);
                     mutation.reset();
                   }}

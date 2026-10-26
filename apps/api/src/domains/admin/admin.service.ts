@@ -219,6 +219,13 @@ export class AdminService {
     const tenant = await this.tenant(actor);
     const collection = resources[resource as keyof typeof resources];
     if (!Object.hasOwn(resources, resource)) throw new NotFoundException("Unknown resource");
+    const scopedUser =
+      query.scopeUser &&
+      ["storage", "history", "sessions", "conflicts", "audits", "archives", "quotas"].includes(
+        resource,
+      )
+        ? await this.versionUser({ ...query, userId: query.scopeUser }, actor)
+        : undefined;
     const page = Number(query.page || 1);
     if (!Number.isInteger(page) || page < 1 || page > 10000)
       throw new BadRequestException("Invalid page");
@@ -228,7 +235,7 @@ export class AdminService {
         .filter(
           (session) =>
             (!tenant || storageTenant(session.userId) === tenant) &&
-            (!query.userId || session.userId === query.userId) &&
+            (!(scopedUser || query.userId) || session.userId === (scopedUser || query.userId)) &&
             [session.userId, session.instanceId, session.socketId].some((value) =>
               value.toLowerCase().includes(q),
             ),
@@ -244,8 +251,10 @@ export class AdminService {
       };
     }
     const filter: Record<string, any> = tenantFilter(resource, tenant);
+    if (resource === "storage") filter.isDeleted = false;
     if (resource === "history") filter.expiresAt = { $gt: new Date() };
-    if (query.userId) filter.userId = this.adminUser(query.userId, tenant);
+    if (scopedUser) filter.userId = scopedUser;
+    else if (query.userId) filter.userId = this.adminUser(query.userId, tenant);
     if (query.q) {
       const q = identifier(query.q, "search").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const fields =
@@ -373,8 +382,10 @@ export class AdminService {
   async write(body: any, actor: string) {
     if (!body || !Object.hasOwn(body, "value"))
       throw new BadRequestException("JSON value is required");
-    const userId = this.adminUser(body.userId, await this.tenant(actor)),
-      key = identifier(body.key, "storage key");
+    const userId = body.scope
+      ? await this.versionUser({ ...body.scope, userId: body.userId }, actor)
+      : this.adminUser(body.userId, await this.tenant(actor));
+    const key = identifier(body.key, "storage key");
     const result = await this.storage.setItem(userId, "dashboard", key, body.value);
     await this.audit(actor, "admin.storage.write", userId + "/" + key);
     return result;

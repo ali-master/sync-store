@@ -20,6 +20,7 @@ const rootRoute = createRootRoute({
   ),
 });
 const sections = [
+  "connect",
   "health",
   "usage",
   "changes",

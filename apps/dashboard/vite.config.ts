@@ -6,5 +6,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": new URL("./src", import.meta.url).pathname } },
   base: "/dashboard/",
-  server: { proxy: { "/api": process.env.API_PROXY_TARGET || "http://localhost:3000" } },
+  server: {
+    proxy: {
+      "/api": process.env.API_PROXY_TARGET || "http://localhost:3000",
+      "/socket.io": { target: process.env.API_PROXY_TARGET || "http://localhost:3000", ws: true },
+    },
+  },
 });

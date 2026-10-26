@@ -1,3 +1,7 @@
+import { ConsoleNav } from "./components/console-nav";
+import { DataScopeBar } from "./components/data-scope";
+import { ConnectApp } from "./components/connect-app";
+import { ChevronRight, RefreshCw, Menu, LogOut, BookOpen, Database, GitBranch } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch, Link } from "@tanstack/react-router";
@@ -21,6 +25,7 @@ import logo from "../../../assets/logo.svg";
 type Row = Record<string, any>;
 type Page = { items: Row[]; total: number; page: number; pageSize: number };
 const sections = [
+  ["connect", "Connect your app", "↗"],
   ["health", "Sync health", "◉"],
   ["usage", "Usage & quotas", "◴"],
   ["changes", "Changes & growth", "↗"],
@@ -40,6 +45,8 @@ const sections = [
   ["system", "System", "⚙"],
 ];
 const descriptions: Record<string, string> = {
+  connect:
+    "From your first credential to a verified change on another client. Follow each step with your own backend.",
   tenants:
     "Separate customer workspaces, each with its own administrator, projects, data and reports.",
   versioning: "Branch your data, inspect immutable commits and restore a complete snapshot safely.",
@@ -136,7 +143,20 @@ export default function App({ section }: { section: string }) {
   const { token, setToken, sessionId, logout: endSession } = useSession();
   const queryClient = useQueryClient();
   const routerNavigate = useNavigate();
-  const { page, q: query } = useSearch({ strict: false }) as { page: number; q: string };
+  const routeSearch = useSearch({ strict: false }) as ReturnType<
+    typeof import("./lib/search").validateSearch
+  >;
+  const { q: query, page, ...dataScope } = routeSearch;
+  const scopedView = [
+    "storage",
+    "history",
+    "sessions",
+    "conflicts",
+    "audits",
+    "archives",
+    "quotas",
+    "versioning",
+  ].includes(section);
   const [credential, setCredential] = useState("");
   const [search, setSearch] = useState(query);
   const [actionError, setError] = useState("");
@@ -153,13 +173,18 @@ export default function App({ section }: { section: string }) {
   const [strategy, setStrategy] = useState("last_write_wins");
   const [mobileMenu, setMobileMenu] = useState(false);
   const instance = useRef(crypto.randomUUID());
-  const [confirm, setConfirm] = useState<{ text: string; run: () => Promise<void> } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    text: string;
+    before?: string;
+    after?: string;
+    run: () => Promise<void>;
+  } | null>(null);
   useEffect(() => {
     setSearch(query);
     setSelected(null);
     setSecret("");
     setConfirm(null);
-  }, [query, page]);
+  }, [query, page, dataScope.scopeUser, dataScope.projectId, dataScope.tenantId, dataScope.branch]);
 
   /** Call only this dashboard's API origin; never persist credentials in web storage. */
   async function request(
@@ -200,17 +225,25 @@ export default function App({ section }: { section: string }) {
     enabled: Boolean(token),
   });
   const recordsQuery = useQuery<Page>({
-    queryKey: ["console", sessionId, "records", resource, page, query],
+    queryKey: ["console", sessionId, "records", resource, page, query, dataScope],
     queryFn: ({ signal }) =>
       request(
-        "resources/" + resource + "?page=" + page + "&q=" + encodeURIComponent(query),
+        "resources/" +
+          resource +
+          "?" +
+          new URLSearchParams({
+            page: String(page),
+            q: query,
+            ...(dataScope.scopeUser ? (dataScope as Record<string, string>) : {}),
+          }),
         "GET",
         undefined,
         token,
         signal,
       ),
     enabled:
-      Boolean(token) && !["system", "health", "usage", "changes", "versioning"].includes(section),
+      Boolean(token) &&
+      !["system", "health", "usage", "changes", "versioning", "connect"].includes(section),
   });
   const mutation = useMutation({
     mutationFn: (action: () => Promise<void>) => action(),
@@ -253,12 +286,15 @@ export default function App({ section }: { section: string }) {
   }
 
   function navigate(next: string) {
-    void routerNavigate({ to: next === "overview" ? "/" : "/" + next, search: { page: 1, q: "" } });
+    void routerNavigate({
+      to: next === "overview" ? "/" : "/" + next,
+      search: { ...dataScope, page: 1, q: "" },
+    });
   }
   function setPage(next: number) {
     void routerNavigate({
       to: section === "overview" ? "/" : "/" + section,
-      search: { page: next, q: query },
+      search: { ...dataScope, page: next, q: query },
     });
   }
 
@@ -317,6 +353,7 @@ export default function App({ section }: { section: string }) {
       _new: true,
       value: "{}",
       name: "",
+      userId: dataScope.scopeUser || "",
       canRead: true,
       canWrite: false,
       allowedMethods: '["GET","POST","PUT","PATCH","DELETE"]',
@@ -417,71 +454,50 @@ export default function App({ section }: { section: string }) {
 
   const sidebarContent = (
     <>
-      {" "}
       <a
-        className="flex items-center gap-2 px-1 text-base font-semibold whitespace-nowrap tracking-tight [&_img]:size-7 [&_span]:ml-auto [&_span]:rounded [&_span]:border [&_span]:px-1.5 [&_span]:py-0.5 [&_span]:text-[9px] [&_span]:font-normal [&_span]:uppercase [&_span]:tracking-widest"
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
+        href="/dashboard/"
+        className="flex h-12 shrink-0 items-center gap-2.5 border-b px-3 text-sm font-semibold"
+        onClick={(event) => {
+          event.preventDefault();
           navigate("overview");
         }}
       >
-        <img src={logo} alt="" />
-        Sync Store<span>console</span>
-      </a>
-      <div className="my-8 flex items-center gap-3 rounded-xl border bg-muted/40 p-3 [&_b]:block [&_b]:text-xs [&_small]:mt-1 [&_small]:block [&_small]:max-w-36 [&_small]:truncate [&_small]:text-[10px] [&_small]:text-muted-foreground">
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-primary/5 text-sm text-primary">
-          S
+        <img src={logo} alt="" className="size-6" />
+        Sync Store
+        <span className="ml-auto rounded border px-1.5 py-0.5 text-[9px] font-normal text-muted-foreground">
+          CONSOLE
         </span>
-        <div>
-          <b>{overview?.tenantId ? "Tenant workspace" : "Your installation"}</b>
-          <small>{overview?.database || "Connecting…"}</small>
-        </div>
-        <span className="inline-block size-1.5 shrink-0 rounded-full bg-emerald-500" />
-      </div>
-      <p className="mb-3 mt-6 px-3 text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
-        WORKSPACE
-      </p>
-      <nav aria-label="Console navigation">
-        {sections
-          .filter(([id]) => id !== "tenants" || overview?.tenantId === null)
-          .map(([id, label, icon], i) => (
-            <div key={id}>
-              {i === 6 && (
-                <p className="mb-3 mt-6 px-3 text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
-                  OBSERVABILITY
-                </p>
-              )}
-              <Link
-                to={id === "overview" ? "/" : "/" + id}
-                search={{ page: 1, q: "" }}
-                disabled={busy}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
-                aria-current={section === id ? "page" : undefined}
-              >
-                <span aria-hidden="true">{icon}</span>
-                {label}
-                {id === "conflicts" && overview && overview.counts.conflicts > 0 && (
-                  <em>{overview.counts.conflicts}</em>
-                )}
-              </Link>
-            </div>
-          ))}
-      </nav>
-      <div className="mt-auto space-y-5 pt-12 text-xs [&>a]:text-muted-foreground [&>div]:flex [&>div]:items-center [&>div]:gap-3 [&>div]:border-t [&>div]:pt-5 [&_b]:block [&_small]:mt-1 [&_small]:block [&_small]:text-[10px] [&_small]:text-muted-foreground">
-        <a href="/api/docs" target="_blank" rel="noreferrer">
-          API reference ↗
+      </a>
+      <ConsoleNav
+        section={section}
+        platform={overview?.tenantId === null}
+        busy={busy}
+        scope={dataScope}
+        onNavigate={() => setMobileMenu(false)}
+      />
+      <div className="shrink-0 space-y-2 border-t px-2 py-3">
+        <a className="console-nav-link" href="/api/docs" target="_blank" rel="noreferrer">
+          <BookOpen className="size-4" />
+          API reference
         </a>
-        <div>
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/5 text-[10px] text-primary">
+        <div className="flex items-center gap-2 px-2 pt-2">
+          <span className="grid size-7 place-items-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
             AD
           </span>
-          <div>
-            <b>{overview?.tenantId ? "Tenant administrator" : "Administrator"}</b>
-            <small>{overview?.tenantId ? "Tenant access" : "Installation access"}</small>
+          <div className="min-w-0 flex-1 text-xs">
+            <b className="font-medium">Administrator</b>
+            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+              {overview?.tenantId ? "Tenant workspace" : "Installation access"}
+            </p>
           </div>
-          <Button variant="outline" onClick={logout} disabled={busy} aria-label="Sign out">
-            ↗
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={logout}
+            disabled={busy}
+            aria-label="Sign out"
+          >
+            <LogOut className="size-4" />
           </Button>
         </div>
       </div>
@@ -490,57 +506,70 @@ export default function App({ section }: { section: string }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-card p-5 lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r bg-card px-2 lg:flex">
         {sidebarContent}
       </aside>
       <Sheet open={mobileMenu} onOpenChange={setMobileMenu}>
-        <SheetContent side="left" className="w-72 gap-0 p-5" showCloseButton={false}>
+        <SheetContent side="left" className="w-72 gap-0 p-3" showCloseButton={false}>
           <SheetTitle className="sr-only">Console navigation</SheetTitle>
           <SheetDescription className="sr-only">Choose an installation view.</SheetDescription>
           {sidebarContent}
         </SheetContent>
       </Sheet>
 
-      <div className="min-w-0 lg:ml-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b bg-background/90 px-5 backdrop-blur sm:px-8 [&>span]:text-xs [&>span]:text-muted-foreground [&_i]:mx-3 [&_i]:not-italic [&>div]:flex [&>div]:items-center [&>div]:gap-4">
-          <Button
-            variant="outline"
-            className="lg:hidden"
-            aria-label="Toggle navigation"
-            aria-expanded={mobileMenu}
-            onClick={() => setMobileMenu((v) => !v)}
-          >
-            ☰
-          </Button>
-          <span>
-            Workspace <i>/</i> <b>{title}</b>
-          </span>
-          <div>
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="inline-block size-1.5 shrink-0 rounded-full bg-emerald-500" />
-              Authenticated
+      <div className="min-w-0 lg:ml-56">
+        <header className="sticky top-0 z-20 flex min-h-12 items-center justify-between gap-3 border-b bg-card/95 px-4 backdrop-blur sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 text-xs">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              aria-label="Toggle navigation"
+              aria-expanded={mobileMenu}
+              onClick={() => setMobileMenu((v) => !v)}
+            >
+              <Menu />
+            </Button>
+            <span className="hidden text-muted-foreground sm:inline">
+              {overview?.tenantId ? "Tenant workspace" : "Your installation"}
+            </span>
+            <ChevronRight className="hidden size-3 text-muted-foreground sm:block" />
+            <span className="truncate font-medium">{title}</span>
+            {scopedView && dataScope.scopeUser && (
+              <span className="hidden items-center gap-1 rounded-md bg-primary/5 px-2 py-1 text-primary sm:flex">
+                <GitBranch className="size-3" />
+                {dataScope.branch || "main"}
+              </span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span
+                className={
+                  "size-1.5 rounded-full " +
+                  (error ? "bg-amber-500" : overview ? "bg-emerald-500" : "bg-slate-300")
+                }
+              />
+              {error ? "Needs attention" : overview ? "API connected" : "Connecting"}
             </span>
             <Button
-              variant="outline"
-              disabled={busy || loading}
+              variant="ghost"
+              size="icon"
+              disabled={loading}
               onClick={refresh}
               aria-label="Refresh data"
             >
-              ↻
+              <RefreshCw className={"size-3.5 " + (loading ? "animate-spin" : "")} />
             </Button>
           </div>
         </header>
-        <main className="mx-auto max-w-[1600px] space-y-7 px-5 py-10 sm:px-8 lg:px-10">
-          <div className="flex flex-wrap items-center justify-between gap-5 [&_h1]:mt-3 [&_h1]:text-4xl [&_h1]:font-semibold [&_h1]:tracking-tight [&_h1_span]:text-primary [&_h1+p]:mt-3 [&_h1+p]:max-w-2xl [&_h1+p]:text-sm [&_h1+p]:leading-6 [&_h1+p]:text-muted-foreground">
+        <main className="mx-auto max-w-[1500px] space-y-5 px-4 py-6 sm:px-7 sm:py-7">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold tracking-[0.24em] text-muted-foreground">
-                SYNC STORE / {section === "overview" ? "CONTROL CENTER" : "WORKSPACE"}
+              <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+              <p className="mt-2 max-w-2xl text-[13px] leading-6 text-muted-foreground">
+                {descriptions[section]}
               </p>
-              <h1>
-                {title}
-                <span>.</span>
-              </h1>
-              <p>{descriptions[section]}</p>
             </div>
             {["storage", "keys"].includes(section) && (
               <Button variant="default" disabled={busy} onClick={newRecord}>
@@ -548,6 +577,22 @@ export default function App({ section }: { section: string }) {
               </Button>
             )}
           </div>
+          {scopedView && (
+            <DataScopeBar
+              key={JSON.stringify(dataScope)}
+              scope={dataScope}
+              tenantId={overview?.tenantId}
+              onChange={(scope) => {
+                void routerNavigate({ to: "/" + section, search: { ...scope, page: 1, q: "" } });
+              }}
+            />
+          )}
+          {!scopedView && dataScope.scopeUser && (
+            <p className="text-xs text-muted-foreground">
+              This page shows the administrator's permitted workspace. Data scope is retained for
+              data and history pages.
+            </p>
+          )}
           {(section === "projects" || (section === "tenants" && overview?.tenantId === null)) && (
             <form
               className="flex flex-wrap items-end gap-4 rounded-2xl border bg-card p-5"
@@ -689,8 +734,31 @@ export default function App({ section }: { section: string }) {
               </div>
             </>
           )}
-          {section === "versioning" ? (
-            <Versioning request={request} sessionId={sessionId} tenantId={overview?.tenantId} />
+          {section === "connect" ? (
+            <ConnectApp />
+          ) : section === "versioning" ? (
+            <Versioning
+              onBranchChange={(branch) =>
+                void routerNavigate({
+                  to: "/versioning",
+                  search: { ...dataScope, branch, page: 1, q: "" },
+                })
+              }
+              key={JSON.stringify(dataScope)}
+              request={request}
+              sessionId={sessionId}
+              tenantId={overview?.tenantId}
+              initialScope={
+                dataScope.scopeUser
+                  ? {
+                      userId: dataScope.scopeUser,
+                      projectId: dataScope.projectId || "default",
+                      tenantId: overview?.tenantId || dataScope.tenantId || "",
+                      branch: dataScope.branch || "main",
+                    }
+                  : undefined
+              }
+            />
           ) : ["health", "usage", "changes"].includes(section) ? (
             <Reports kind={section} request={request} sessionId={sessionId} />
           ) : section === "system" && overview ? (
@@ -748,7 +816,7 @@ export default function App({ section }: { section: string }) {
                     e.preventDefault();
                     void routerNavigate({
                       to: section === "overview" ? "/" : "/" + section,
-                      search: { page: 1, q: search },
+                      search: { ...dataScope, page: 1, q: search },
                     });
                   }}
                 >
@@ -993,7 +1061,19 @@ export default function App({ section }: { section: string }) {
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
+                      let value: unknown;
+                      try {
+                        value = JSON.parse(editor);
+                      } catch {
+                        setError("Enter valid JSON before reviewing this change.");
+                        return;
+                      }
+                      setError("");
                       setConfirm({
+                        before: selected._new
+                          ? "New item"
+                          : JSON.stringify(JSON.parse(selected.value), null, 2),
+                        after: JSON.stringify(value, null, 2),
                         text:
                           "Save this value to " +
                           user +
@@ -1001,10 +1081,10 @@ export default function App({ section }: { section: string }) {
                           storageKey +
                           "? This overwrites the current value and synchronizes it to clients.",
                         run: async () => {
-                          const value = JSON.parse(editor);
                           await request("storage", "POST", {
                             userId: user,
                             key: storageKey,
+                            ...(selected._new && dataScope.scopeUser ? { scope: dataScope } : {}),
                             value,
                           });
                           mutationDone("Storage value saved.");
@@ -1381,6 +1461,22 @@ export default function App({ section }: { section: string }) {
         <DialogContent showCloseButton={false}>
           <DialogTitle>Confirm action</DialogTitle>
           <DialogDescription>{confirm?.text}</DialogDescription>
+          {confirm?.after !== undefined && (
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <div className="min-w-0">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">When opened</p>
+                <pre className="max-h-72 overflow-auto rounded-lg border bg-muted/30 p-3 text-xs">
+                  {confirm.before}
+                </pre>
+              </div>
+              <div className="min-w-0">
+                <p className="mb-2 text-xs font-medium text-primary">After</p>
+                <pre className="max-h-72 overflow-auto rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+                  {confirm.after}
+                </pre>
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" disabled={busy} onClick={() => setConfirm(null)}>
               Cancel

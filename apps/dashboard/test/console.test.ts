@@ -44,3 +44,19 @@ test("sign-out cancellation and cache clearing discard pending private data", as
   expect(client.getQueryCache().getAll()).toEqual([]);
   expect(client.getDefaultOptions().mutations?.retry).toBe(false);
 });
+
+test("data scope survives navigation as bounded strings and resets without a user", () => {
+  expect(
+    validateSearch({
+      scopeUser: " customer ",
+      projectId: "app",
+      branch: "preview",
+      tenantId: "team",
+    }),
+  ).toMatchObject({ scopeUser: "customer", projectId: "app", branch: "preview", tenantId: "team" });
+  expect(validateSearch({ scopeUser: { $ne: null }, tenantId: "other" })).toEqual({
+    page: 1,
+    q: "",
+  });
+  expect(validateSearch({ scopeUser: "x".repeat(200) }).scopeUser).toHaveLength(128);
+});

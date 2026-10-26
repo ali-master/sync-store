@@ -5,13 +5,13 @@
 @custom-variant dark (&:is(.dark *));
 :root {
   --muted: oklch(0.97 0 0);
-  --background: oklch(0.985 0.003 260);
+  --background: oklch(0.99 0.001 290);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.55 0.22 265);
+  --primary: oklch(0.55 0.19 285);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -27,7 +27,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -141,5 +141,17 @@
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
     }
+  }
+}
+
+@layer components {
+  .console-nav-link {
+    @apply flex min-h-9 items-center gap-2.5 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground;
+  }
+  .console-nav-link[aria-current="page"] {
+    @apply bg-primary/8 font-medium text-primary;
+  }
+  .scope-bar summary::-webkit-details-marker {
+    display: none;
   }
 }

@@ -61,18 +61,18 @@ Surface the returned message without exposing credentials. Inspect request trace
 
 The console uses `/api/v1/admin` with `Authorization: Bearer YOUR_ADMIN_KEY`, `x-user-id` and `x-instance-id` headers. Installation and tenant administrators have `admin` scope; tenant credentials are restricted to their own workspace. Responses use the same `payload` envelope. Never put this credential in a public client or URL.
 
-| Method and path | Request / behavior |
-| --- | --- |
-| `GET /overview` | Current collection counts, live sockets and database health. |
+| Method and path                            | Request / behavior                                                                                                                                                                                                                      |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /overview`                            | Current collection counts, live sockets and database health.                                                                                                                                                                            |
 | `GET /resources/:resource?page=1&q=search` | 25 records per page; resources: `projects`, `history`, `tenants` (platform only), `keys`, `storage`, `sessions`, `conflicts`, `quotas`, `audits`, `analytics`, `archives`. Key secrets are excluded. Optional `userId` filters by user. |
-| `POST /keys` | `{ "name": "My app", "canRead": true, "canWrite": false }`; returns `{ id, key }` once. |
-| `PATCH /keys/:id` | Editable permission/restriction settings only. Credentials, scopes and counters cannot be assigned. |
-| `POST /keys/:id/rotate` | No body; returns the replacement `{ key }` once. |
-| `POST /storage` | `{ "userId": "user-1", "key": "preferences", "value": { "theme": "light" } }`; overwrites through normal synchronization. |
-| `POST /storage/delete` | `{ "userId": "user-1", "key": "preferences" }`. |
-| `POST /sessions/:id/disconnect` | No body; disconnects a live socket on its owning replica. |
-| `POST /conflicts/:id/resolve` | `{ "strategy": "last_write_wins" }`; also supports `first_write_wins` and `merge`. Records a proposal only. |
-| `PATCH /quotas/:id` | Updates existing stored quota configuration; `maxStorageBytes` is a decimal string. |
+| `POST /keys`                               | `{ "name": "My app", "canRead": true, "canWrite": false }`; returns `{ id, key }` once.                                                                                                                                                 |
+| `PATCH /keys/:id`                          | Editable permission/restriction settings only. Credentials, scopes and counters cannot be assigned.                                                                                                                                     |
+| `POST /keys/:id/rotate`                    | No body; returns the replacement `{ key }` once.                                                                                                                                                                                        |
+| `POST /storage`                            | `{ "userId": "user-1", "key": "preferences", "value": { "theme": "light" } }`; overwrites through normal synchronization.                                                                                                               |
+| `POST /storage/delete`                     | `{ "userId": "user-1", "key": "preferences" }`.                                                                                                                                                                                         |
+| `POST /sessions/:id/disconnect`            | No body; disconnects a live socket on its owning replica.                                                                                                                                                                               |
+| `POST /conflicts/:id/resolve`              | `{ "strategy": "last_write_wins" }`; also supports `first_write_wins` and `merge`. Records a proposal only.                                                                                                                             |
+| `PATCH /quotas/:id`                        | Updates existing stored quota configuration; `maxStorageBytes` is a decimal string.                                                                                                                                                     |
 
 An unknown resource or missing record returns 404; invalid settings return 400; restricting the installation administrator returns 409. Do not send an empty JSON body with a JSON content type for bodyless operations. See [dashboard](/docs/guides/dashboard) for operational limits and recovery.
 
@@ -98,15 +98,15 @@ Versioning routes are under `/api/v1/versioning`. Send the usual application key
 user and instance headers, plus optional `X-Branch` (default `main`). Ownership is
 always derived from the credential. All responses use the `payload` envelope.
 
-| Method and path | Body or behavior |
-| --- | --- |
-| `GET /branches` | Branch names and heads for this tenant/project/user. |
-| `POST /branches` | `{ name, commitId }`; atomically fork an existing committed tree. |
-| `GET /commits?before=ID` | Latest 50 commits recorded on the branch, with a stable cursor. |
-| `GET /commits/:id` | An owned immutable commit and its key-to-blob tree manifest. |
-| `POST /commits` | `{ message, expectedHead }`; create a checkpoint; head can be `null` initially. |
-| `POST /commits/:id/restore` | `{ message, expectedHead }`; replace the branch tree and create a new commit. |
-| `GET /timeline` | Deduplicated time-series metadata for recent branch commits; may lag. |
+| Method and path             | Body or behavior                                                                |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `GET /branches`             | Branch names and heads for this tenant/project/user.                            |
+| `POST /branches`            | `{ name, commitId }`; atomically fork an existing committed tree.               |
+| `GET /commits?before=ID`    | Latest 50 commits recorded on the branch, with a stable cursor.                 |
+| `GET /commits/:id`          | An owned immutable commit and its key-to-blob tree manifest.                    |
+| `POST /commits`             | `{ message, expectedHead }`; create a checkpoint; head can be `null` initially. |
+| `POST /commits/:id/restore` | `{ message, expectedHead }`; replace the branch tree and create a new commit.   |
+| `GET /timeline`             | Deduplicated time-series metadata for recent branch commits; may lag.           |
 
 Checkpoint and restore support `Idempotency-Key`. A stale `expectedHead` returns 409.
 Whole-tree operations require unrestricted read access and write operations require
@@ -122,3 +122,17 @@ commits and timeline. A platform admin can add `tenantId`; tenant admins cannot
 select another tenant. `POST /admin/versioning/commit`, `/fork` and `/restore` accept
 that scope plus the equivalent versioning fields. Checkpoint/restore accept a
 `requestId` in this administrative body.
+
+## User-bound client sessions
+
+`POST /api/v1/client-sessions` delegates a server-held application key to the
+`x-user-id` and `x-branch` supplied by your authenticated backend. The response
+payload contains `token`, `expiresAt` (Unix milliseconds), `userId`, `branch` and
+`cacheScope`. Send the returned token through the SDK's API-key authentication
+channel. It inherits the parent's live restrictions and expires within 15 minutes.
+It cannot access administrator scopes or mint another session. See the
+[client session guide](/docs/guides/client-sdk#connect-a-browser-without-exposing-your-application-key).
+
+Administrator resource lists accept `scopeUser`, `projectId`, `tenantId` and `branch`
+for data-related views. These filters resolve through the same tenant ownership
+checks as branch operations; they never widen the administrator's authorization.

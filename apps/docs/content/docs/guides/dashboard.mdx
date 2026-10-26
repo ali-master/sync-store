@@ -36,7 +36,7 @@ Advanced settings accept JSON for expiration, request quotas, allowed HTTP metho
 | Overview      | Inspect live database counts, stored bytes, active sockets, uptime and database response time.                                                                               |
 | Data explorer | Search stored records, inspect JSON, create or edit a user's value, or delete an item. Writes use the same event path as the SDK, notifying connected clients.               |
 | API keys      | Create, inspect, edit, disable and rotate application credentials.                                                                                                           |
-| Connections   | Inspect live Socket.IO connections across replicas and disconnect a session. Clients may reconnect unless their key is also disabled. |
+| Connections   | Inspect live Socket.IO connections across replicas and disconnect a session. Clients may reconnect unless their key is also disabled.                                        |
 | Conflicts     | Inspect both values and record a deterministic resolution proposal. Review the result, then explicitly apply it in Data explorer. A proposal does not overwrite stored data. |
 | Quotas        | Inspect and edit existing user quota records. These are stored configuration; not every storage limit is currently enforced.                                                 |
 | Audit log     | Inspect recorded administrative changes without exposing credential secrets or stored values.                                                                                |
@@ -76,3 +76,48 @@ Platform administrators can create and suspend customer workspaces under **Tenan
 Each workspace has its own administrator key. **Branches & commits** provides user-scoped
 checkpoints, forks and whole-tree restores. See [Multi-tenancy](/docs/guides/multi-tenancy)
 and [Branches and commits](/docs/guides/branches-and-commits).
+
+## Find your workspace
+
+The console groups pages into **Workspace**, **Access**, **Monitor**, and a collapsed
+**Advanced** section. Search the navigation by page name. On smaller screens, open
+the navigation drawer; selecting a page closes it automatically.
+
+Use **Data scope** to select a tenant, project, user and branch. The selection is
+preserved in the URL when moving between data, history, connections and branch
+pages. Tenant administrators remain limited to their own tenant; the server validates
+scope changes. Overview, access management and monitoring retain their own workspace
+scope and explicitly say so when a data filter is retained. Reset returns to all
+permitted data. Data explorer excludes deletion tombstones; retained changes remain
+available in Version history.
+
+![Scoped branches and commits in the management console](/screenshots/console-branches.jpg)
+
+## Connect your application
+
+Open **Connect your app** for JavaScript and React examples, then run the optional
+connection check using a **test application key**. The check obtains a short-lived
+user session, opens two independent SDK clients, writes one uniquely named value,
+and waits for a remote event on the second client. A connected socket alone never
+marks delivery complete.
+
+The key must allow reads, writes, POST and DELETE, and access to `__sync_check__/`.
+Use a dedicated test user and an existing branch. The temporary value is removed
+after the check; its history, audit records and quota consumption remain. If cleanup
+cannot be confirmed, the console shows the exact key and user to inspect. Credentials
+are cleared after the test and never included in the generated code.
+
+![Verified session, connection, write and receipt steps](/screenshots/connect-app.jpg)
+
+Your production backend must authenticate the user before issuing their session.
+See [browser sessions](/docs/guides/client-sdk#connect-a-browser-without-exposing-your-application-key).
+The console's verification form is an operator tool, not an application login flow.
+
+## Review a data edit
+
+Saving a JSON value opens a before-and-after review. Invalid JSON is rejected before
+confirmation. The previous value is the record as opened; ordinary edits can still
+overwrite intervening writes. Version restore uses its existing expected-revision
+check to reject concurrent changes.
+
+![Mobile console with scoped data and a confirmed edit](/screenshots/console-mobile.jpg)
