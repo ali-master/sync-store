@@ -1,3 +1,4 @@
+import { readClientSession, verifyClientSession } from "../services/client-session";
 import {
   Injectable,
   CanActivate,
@@ -113,7 +114,10 @@ export class ApiKeyGuard implements CanActivate {
     };
     client.data.branch = branchName((request.headers as any)["x-branch"]);
     client.data.apiKeyId = record.id;
-    client.data.credentialHash = createHash("sha256").update(apiKey).digest("hex");
+    client.data.credentialHash = createHash("sha256")
+      .update(record.key ?? apiKey)
+      .digest("hex");
+    client.data.sessionExpiresAt = (request as any).clientSession?.expiresAt;
     client.data.access = accessPolicy(record);
     return true;
   }
@@ -127,10 +131,24 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     // Validate API key exists and is active
-    const apiKeyRecord = await this.database.orm.api_keys.where({ key: apiKey }).first();
+    const session = apiKey.startsWith("ss_session.") ? readClientSession(apiKey) : null;
+    const apiKeyRecord = await this.database.orm.api_keys
+      .where(session ? { id: session.keyId } : { key: apiKey })
+      .first();
 
     if (!apiKeyRecord || !apiKeyRecord.isActive) {
       throw new UnauthorizedException("Invalid or inactive API key");
+    }
+    if (session) {
+      verifyClientSession(apiKey, apiKeyRecord.key);
+      if (requiredScope || request.url?.includes("/client-sessions"))
+        throw new ForbiddenException("Client sessions cannot administer or delegate credentials");
+      if (
+        request.headers["x-user-id"] !== session.userId ||
+        (request.headers["x-branch"] ?? "main") !== session.branch
+      )
+        throw new ForbiddenException("Client session identity does not match");
+      (request as any).clientSession = session;
     }
     if (
       apiKeyRecord.tenantId &&
@@ -153,7 +171,10 @@ export class ApiKeyGuard implements CanActivate {
     if (typeof userId !== "string" || !userId || typeof instanceId !== "string" || !instanceId) {
       throw new UnauthorizedException("User and instance identifiers are required");
     }
-    const reading = request.method === "GET" || request.method === "HEAD";
+    const reading =
+      request.method === "GET" ||
+      request.method === "HEAD" ||
+      (request.method === "POST" && request.url?.endsWith("/client-sessions"));
     if (reading ? !apiKeyRecord.canRead : !apiKeyRecord.canWrite) {
       throw new ForbiddenException(
         reading ? "Read permission is required" : "Write permission is required",
@@ -200,7 +221,12 @@ export class ApiKeyGuard implements CanActivate {
       )
     )
       throw new ForbiddenException("Subscription is outside permitted prefixes");
-    if (!key && !reading && policy.writePrefixes.length)
+    if (
+      !key &&
+      !reading &&
+      policy.writePrefixes.length &&
+      !request.url?.endsWith("/client-sessions")
+    )
       throw new ForbiddenException("Bulk operations require unrestricted write access");
     if (
       request.url?.includes("/conflicts") &&
@@ -245,6 +271,7 @@ export class ApiKeyGuard implements CanActivate {
   /** Recheck current credentials and read policy before dispatching a queued event. */
   async canReceive(data: any, key: string): Promise<boolean> {
     if (!data.apiKeyId || !data.credentialHash) return false;
+    if (data.sessionExpiresAt && data.sessionExpiresAt <= Date.now()) return false;
     const record = await this.database.orm.api_keys.where({ id: data.apiKeyId }).first();
     return Boolean(
       record &&

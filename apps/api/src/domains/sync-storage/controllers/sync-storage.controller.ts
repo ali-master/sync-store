@@ -1,3 +1,5 @@
+import { issueClientSession } from "../services/client-session";
+import { createHash } from "node:crypto";
 import {
   Controller,
   Get,
@@ -42,6 +44,39 @@ export class SyncStorageController {
     private readonly queryBus: QueryBus,
     private readonly repository: SyncStorageRepository,
   ) {}
+
+  @Post("client-sessions")
+  @ApiOperation({
+    summary:
+      "Trusted backend: delegate this application key to the authenticated x-user-id and x-branch for 15 minutes",
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      "Short-lived token, expiry and stable cache scope. Never call with an administrator key in browser code.",
+  })
+  clientSession(@Req() request: any) {
+    const key = request.apiKey;
+    const userId = request.headers["x-user-id"];
+    const branch = request.headers["x-branch"] ?? "main";
+    return {
+      ...issueClientSession(key, userId, branch),
+      userId,
+      branch,
+      cacheScope: createHash("sha256")
+        .update(
+          JSON.stringify([
+            key.id,
+            key.tenantId,
+            request.access,
+            key.canRead,
+            key.canWrite,
+            request.storageUserId,
+          ]),
+        )
+        .digest("hex"),
+    };
+  }
 
   @Get("history/:key")
   @ApiOperation({ summary: "List up to 50 retained versions; pass the last _id as before" })

@@ -43,3 +43,10 @@ Local CORS is currently permissive in API bootstrap. Setting a similarly named e
 Use TLS and an application-specific MongoDB account. Forwarded headers are not trusted by default; HTTPS termination must be configured deliberately so protocol checks remain meaningful.
 
 Never put credentials in a URL, version control, a screenshot or a frontend build-time `VITE_*` variable. Avoid logging values stored by users. The demo keeps keys only in memory, but its SDK cache contains JSON data in browser storage.
+
+## Browser credentials
+
+Use [short-lived client sessions](/docs/guides/client-sdk#connect-a-browser-without-exposing-your-application-key)
+for direct browser connections. Your authenticated backend delegates an application
+key to one user and branch. Keep the application key server-side. Delegated sessions
+inherit the parent's current policy and expire after at most fifteen minutes.

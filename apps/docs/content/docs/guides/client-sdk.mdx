@@ -132,3 +132,42 @@ Acknowledgement confirms server persistence, not receipt by every other device.
 `flush()` rejects if disconnected with pending work. A failed `close({ flush: true })`
 leaves the client open for retry. Plain `close()` releases resources while retaining
 persisted pending work; memory-only storage cannot survive a process or page exit.
+
+## Connect a browser without exposing your application key
+
+Your authenticated application backend calls `POST /api/v1/client-sessions` with its
+server-held application key, `x-user-id` derived from the authenticated session,
+`x-instance-id`, and an optional `x-branch`. Never trust a user ID submitted by the
+browser. The parent key must permit reads and the POST method; its existing
+origin, IP, HTTPS, prefix and quota rules continue to apply.
+
+Return only the response payload to that authenticated user, with `Cache-Control:
+no-store`. It contains `token`, `expiresAt`, `userId`, `branch` and `cacheScope`.
+The token lasts at most 15 minutes and cannot outlive its parent key. It cannot
+create another session or access administrator endpoints. Parent-key deactivation,
+rotation and current policy restrictions are checked on subsequent operations and
+event delivery, including across replicas.
+
+```ts
+import { connectBrowser } from "@usex/sync-client";
+
+const { storage, expiresAt } = await connectBrowser({
+  serverUrl: "https://sync.example.com",
+  session: async () => {
+    const response = await fetch("/my-app/sync-session", { cache: "no-store" });
+    if (!response.ok) throw new Error("Sign in to connect");
+    return response.json();
+  },
+});
+```
+
+`/my-app/sync-session` is an endpoint you implement in your application, not a Sync
+Store endpoint. Use HTTPS and keep tokens out of URLs and persistent browser storage.
+The helper derives cache isolation from the backend URL and server-issued scope;
+renewing a session or rotating the same parent key retains that scope. A different
+user, branch, key or access policy uses another scope. On logout, close the old
+client before connecting as another user.
+
+Session renewal is explicit: before `expiresAt`, close the old client and call
+`connectBrowser` again. Persisted queued work is recovered with the same scope.
+No automatic renewal or cross-scope transfer of queued writes is performed.
