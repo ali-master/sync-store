@@ -78,6 +78,15 @@ function fixture(basePath = "/api/v1") {
 }
 
 describe("storage synchronization", () => {
+  test("offline item listing preserves null values", async () => {
+    const client = new RemoteStorage(fixture().config);
+    resources.push(client);
+    await client.setItem("empty", null);
+    expect((await client.getAllItems()).map(({ key, value }) => ({ key, value }))).toEqual([
+      { key: "empty", value: null },
+    ]);
+  });
+
   test("HTTP accepts an explicit API base path with a trailing slash", async () => {
     const f = fixture("/custom/api");
     const client = new RemoteStorage({

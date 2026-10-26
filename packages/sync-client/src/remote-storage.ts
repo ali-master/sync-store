@@ -464,13 +464,11 @@ export class RemoteStorage<
     }
 
     const keys = this.getAllKeys();
-    return keys
-      .map((key) => ({
-        key,
-        value: this.getItem(key),
-        metadata: this.getItemMetadata(key),
-      }))
-      .filter((item) => item.value !== null);
+    return keys.map((key) => ({
+      key,
+      value: this.getItem(key),
+      metadata: this.getItemMetadata(key),
+    }));
   }
 
   /**
