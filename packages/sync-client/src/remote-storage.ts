@@ -18,6 +18,7 @@ import type {
   NetworkChangeEvent,
   RetryConfig,
   ClientLogger,
+  SyncStatus,
 } from "./types";
 import { ConnectionState, ConflictStrategy } from "./types";
 import { EventEmitter } from "./core/event-emitter";
@@ -30,6 +31,7 @@ import { retryConfigs } from "./utils/retry";
 import { generateInstanceId } from "./utils/base";
 
 interface RemoteStorageEvents {
+  status: Readonly<SyncStatus>;
   change: ChangeEvent;
   sync: SyncEvent;
   connect: Record<string, never>;
@@ -43,6 +45,15 @@ interface RemoteStorageEvents {
 }
 
 export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
+  private initialized = false;
+  private closed = false;
+  private status: Readonly<SyncStatus> = Object.freeze({
+    state: "offline",
+    ready: false,
+    pendingCount: 0,
+    lastAcknowledgedAt: null,
+    error: null,
+  });
   private historyTransport: HttpTransport;
   private transport: ITransport;
   private connecting?: Promise<void>;
@@ -134,6 +145,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       maxSize: 10 * 1024 * 1024,
     });
     this.syncQueue = this.outbox.getItem<typeof this.syncQueue>("pending") ?? [];
+    this.updateStatus();
 
     // Initialize logger
     this.logger = config.logger ?? new Logger("RemoteStorage");
@@ -192,9 +204,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       void this.handlePendingUpdates(events).catch((error) => this.handleConnectionError(error));
     });
     this.transport.on("reconnect", () => {
-      void this.processSyncQueue()
-        .then(() => this.syncLocalStorageItems())
-        .catch((error) => this.handleConnectionError(error));
+      this.initialized = false;
+      void this.ready().catch((error) => this.handleConnectionError(error));
     });
 
     // Auto-connect if enabled
@@ -209,19 +220,63 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    * Connect to the remote server
    */
   async connect(): Promise<void> {
+    if (this.closed) throw new Error("Client is closed");
     if (this.connecting) return this.connecting;
-    if (this.isConnected()) return;
-    this.connecting = this.transport
-      .connect()
-      .then(async () => {
-        await this.processSyncQueue();
-        await this.syncLocalStorageItems();
-        await this.transport.subscribe([...this.subscriptions]);
+    if (this.isConnected() && this.initialized) return;
+    this.updateStatus({ state: "initializing", error: null });
+    this.connecting = (async () => {
+      await this.transport.connect();
+      await this.processSyncQueue();
+      await this.syncLocalStorageItems();
+      await this.transport.subscribe([...this.subscriptions]);
+      if (!this.isConnected() || this.closed) throw new Error("Disconnected during initialization");
+      this.initialized = true;
+      this.updateStatus({
+        state: this.syncQueue.length ? "syncing" : "synced",
+        ready: true,
+        error: null,
+      });
+    })()
+      .catch((error) => {
+        this.updateStatus({ state: "error", error: error.message });
+        throw error;
       })
       .finally(() => {
         this.connecting = undefined;
       });
     return this.connecting;
+  }
+
+  /** Wait for queued work and the initial server snapshot, including after a failed initialization. */
+  ready(): Promise<void> {
+    return this.connect();
+  }
+
+  /** Read a stable snapshot suitable for a connection badge or React external store. */
+  getStatus(): Readonly<SyncStatus> {
+    return this.status;
+  }
+
+  /** Wait for server acknowledgement of queued writes; offline interruption rejects and preserves work. */
+  async flush(): Promise<void> {
+    if (this.closed) throw new Error("Client is closed");
+    if (!this.isConnected()) throw new Error("Cannot flush while offline");
+    await this.processSyncQueue();
+    if (this.syncQueue.length)
+      throw new Error("Disconnected before queued writes were acknowledged");
+  }
+
+  /** Optionally finish delivery before releasing resources; a failed flush leaves the client usable. */
+  async close(options: { flush?: boolean } = {}): Promise<void> {
+    if (this.closed) return;
+    if (options.flush) await this.flush();
+    this.destroy();
+  }
+
+  private updateStatus(patch: Partial<SyncStatus> = {}): void {
+    if (this.closed && patch.state !== "closed") return;
+    this.status = Object.freeze({ ...this.status, pendingCount: this.syncQueue.length, ...patch });
+    void this.emit("status", this.status);
   }
 
   /**
@@ -257,6 +312,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
     value: any,
     metadata?: Record<string, any>,
   ): Promise<void> {
+    if (this.closed) throw new Error("Client is closed");
     const timestamp = Date.now();
     const version = this.getNextVersion(key);
 
@@ -271,6 +327,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       syncMetadata: true,
     };
 
+    this.queueSync("setItem", [key, value, metadata, version, timestamp]);
     this.localStorage.setItem(key, value, {
       metadata: customMetadata,
       ttl: metadata?.ttl ?? this.config.storage?.ttl,
@@ -286,7 +343,6 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       metadata,
     });
 
-    this.queueSync("setItem", [key, value, metadata, version, timestamp]);
     if (this.isConnected()) await this.processSyncQueue();
   }
 
@@ -695,6 +751,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    * Disconnect from server
    */
   disconnect(): void {
+    this.initialized = false;
+    this.updateStatus({ state: "offline", ready: false });
     this.transport.disconnect();
     this.connectionInfo.state = ConnectionState.DISCONNECTED;
     this.analytics.track("disconnected");
@@ -708,7 +766,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
       throw new Error("Not connected to server");
     }
 
-    await this.processSyncQueue();
+    await this.flush();
     this.analytics.track("force_sync", { queueSize: this.syncQueue.length });
   }
 
@@ -803,6 +861,8 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   }
 
   private handleDisconnect(reason: string): void {
+    this.initialized = false;
+    this.updateStatus({ state: "offline", ready: false });
     this.logger.debug(`Socket disconnected: ${reason}`);
     this.connectionInfo.state = ConnectionState.DISCONNECTED;
 
@@ -816,6 +876,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   private handleConnectionError(error: any): void {
     this.connectionInfo.reconnectAttempts++;
     this.connectionInfo.error = error.message || String(error);
+    this.updateStatus({ state: "error", error: this.connectionInfo.error });
 
     void this.emit("error", {
       type: "connection",
@@ -934,6 +995,7 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
   /** Keep failed operations in order; only acknowledged writes leave the durable outbox. */
   private async processSyncQueue(): Promise<void> {
     if (this.flushing) return this.flushing;
+    this.updateStatus({ state: "syncing", error: null });
     this.flushing = (async () => {
       while (this.syncQueue.length && this.isConnected()) {
         const operation = this.syncQueue[0];
@@ -959,10 +1021,26 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
         const remaining = this.syncQueue.slice(1);
         this.outbox.setItem("pending", remaining);
         this.syncQueue = remaining;
+        this.updateStatus({ lastAcknowledgedAt: Date.now() });
       }
-    })().finally(() => {
-      this.flushing = undefined;
-    });
+    })()
+      .catch((error) => {
+        this.updateStatus({ state: "error", error: error.message });
+        throw error;
+      })
+      .finally(() => {
+        this.flushing = undefined;
+        if (!this.status.error)
+          this.updateStatus({
+            state: !this.isConnected()
+              ? "offline"
+              : !this.initialized
+                ? "initializing"
+                : this.syncQueue.length
+                  ? "syncing"
+                  : "synced",
+          });
+      });
     return this.flushing;
   }
 
@@ -993,12 +1071,14 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
 
   /** Persist pending changes before reporting them as queued; never silently truncate writes. */
   private queueSync(method: string, args: any[]): void {
+    if (this.closed) throw new Error("Client is closed");
     const queue = [
       ...this.syncQueue,
       { method, args, timestamp: Date.now(), requestId: crypto.randomUUID() },
     ];
     this.outbox.setItem("pending", queue);
     this.syncQueue = queue;
+    this.updateStatus({ state: this.isConnected() ? "syncing" : "offline" });
   }
 
   /** Protect locally pending values from older remote events. */
@@ -1087,6 +1167,9 @@ export class RemoteStorage extends EventEmitter<RemoteStorageEvents> {
    * Clean up resources
    */
   destroy(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.updateStatus({ state: "closed", ready: false });
     this.disconnect();
     this.transport.destroy();
     this.historyTransport.destroy();

@@ -208,3 +208,73 @@ test("branch clients send fixed HTTP identity and partition caches without chang
   expect((await feature.getBranches()).branch).toBe("feature/a");
   expect((await main.getBranches()).branch).toBe("main");
 });
+
+test("readiness waits for a snapshot and can retry after a snapshot failure", async () => {
+  const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
+  resources.push(client);
+  const internal = client as any;
+  let snapshots = 0;
+  internal.transport.destroy();
+  internal.transport = {
+    connect: async () => {},
+    isConnected: () => true,
+    getAllItems: async () =>
+      ++snapshots === 1
+        ? { success: false, error: "Snapshot unavailable" }
+        : { success: true, data: [] },
+    subscribe: async () => {},
+    disconnect() {},
+    destroy() {},
+  };
+  await expect(client.ready()).rejects.toThrow("Snapshot unavailable");
+  expect(client.getStatus().ready).toBe(false);
+  await client.ready();
+  expect(snapshots).toBe(2);
+  expect(client.getStatus().state).toBe("synced");
+});
+
+test("queued work, failed delivery, acknowledgement and shutdown have distinct states", async () => {
+  const f = fixture();
+  const client = new RemoteStorage(f.config);
+  resources.push(client);
+  await client.setItem("draft", false);
+  expect(client.getStatus()).toMatchObject({
+    state: "offline",
+    pendingCount: 1,
+    lastAcknowledgedAt: null,
+  });
+  await expect(client.close({ flush: true })).rejects.toThrow("offline");
+  await client.ready();
+  expect(client.getStatus()).toMatchObject({ state: "synced", ready: true, pendingCount: 0 });
+  expect(client.getStatus().lastAcknowledgedAt).toBeNumber();
+  f.fail(true);
+  await expect(client.setItem("draft", 2)).rejects.toThrow();
+  expect(client.getStatus()).toMatchObject({ state: "error", pendingCount: 1 });
+  f.fail(false);
+  await client.flush();
+  expect(client.getStatus()).toMatchObject({ state: "synced", pendingCount: 0, error: null });
+  await client.close({ flush: true });
+  expect(client.getStatus().state).toBe("closed");
+  await expect(client.setItem("draft", 3)).rejects.toThrow("closed");
+});
+
+test("flush never reports delivery after a disconnect leaves queued operations", async () => {
+  const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
+  resources.push(client);
+  await client.setItem("one", 1);
+  await client.setItem("two", 2);
+  const internal = client as any;
+  internal.transport.destroy();
+  let connected = true;
+  internal.transport = {
+    isConnected: () => connected,
+    setItem: async () => {
+      connected = false;
+      return { success: true };
+    },
+    disconnect() {},
+    destroy() {},
+  };
+  await expect(client.flush()).rejects.toThrow("Disconnected");
+  expect(client.getStatus().pendingCount).toBe(1);
+});

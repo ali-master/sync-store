@@ -109,3 +109,26 @@ The credential selects the tenant and project. Set a unique cache namespace for 
 backend/tenant/project. Use the `branch` option (default `main`) to bind both HTTP
 and WebSocket traffic to a branch. See [Multi-tenancy](/docs/guides/multi-tenancy) and
 [Branches and commits](/docs/guides/branches-and-commits) for isolation and snapshot APIs.
+
+## Know when work is safe
+
+`await storage.ready()` waits for pending delivery, the initial server snapshot and
+subscriptions. A connected socket alone is not readiness. Failed initialization
+can be retried by calling `ready()` again.
+
+```ts
+const stop = storage.on("status", ({ state, pendingCount, lastAcknowledgedAt }) => {
+  console.log(state, pendingCount, lastAcknowledgedAt);
+});
+await storage.ready();
+await storage.flush();
+await storage.close({ flush: true });
+stop();
+```
+
+`getStatus()` exposes `offline`, `initializing`, `syncing`, `synced`, `error`, or
+`closed`, plus `ready`, `pendingCount`, `lastAcknowledgedAt` and `error`.
+Acknowledgement confirms server persistence, not receipt by every other device.
+`flush()` rejects if disconnected with pending work. A failed `close({ flush: true })`
+leaves the client open for retry. Plain `close()` releases resources while retaining
+persisted pending work; memory-only storage cannot survive a process or page exit.

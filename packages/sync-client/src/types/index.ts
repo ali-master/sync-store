@@ -292,3 +292,12 @@ export type Awaitable<T> = T | Promise<T>;
 export type EventListener<T = any> = (event: T) => void | Promise<void>;
 
 export type UnsubscribeFn = () => void;
+
+/** Delivery state concerns server acknowledgement, not whether another device has received it. */
+export interface SyncStatus {
+  state: "offline" | "initializing" | "syncing" | "synced" | "error" | "closed";
+  ready: boolean;
+  pendingCount: number;
+  lastAcknowledgedAt: number | null;
+  error: string | null;
+}

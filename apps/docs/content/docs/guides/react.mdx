@@ -51,3 +51,33 @@ A write can update local state and still reject because delivery failed. Show th
 Do not use the legacy `useOfflineSupport().queuedOperations` value as an authoritative queue count: it is currently a placeholder. Connection state should come from the client, not just `navigator.onLine`.
 
 The playground owns two `RemoteStorage` instances directly to make their lifecycles and independent caches visible. Both approaches use the same transport and outbox implementation.
+
+## Share one client
+
+Create one client per authenticated scope outside component rendering and pass it
+to a provider. The application owns it and calls `close()` on logout or final teardown.
+Do not share a server-side singleton between authenticated users.
+
+```tsx
+import { SyncProvider, useSyncClient, useSyncStatus, useSyncValue } from "@usex/sync-client/react";
+
+function Preferences() {
+  const client = useSyncClient();
+  const status = useSyncStatus();
+  const [value, setValue] = useSyncValue(client, "theme", "light");
+  return (
+    <button onClick={() => void setValue("dark").catch(console.error)}>
+      {value} · {status.pendingCount ? "Waiting to sync" : status.state}
+    </button>
+  );
+}
+
+// client was created for this authenticated user with autoConnect: false.
+<SyncProvider client={client}>
+  <Preferences />
+</SyncProvider>;
+```
+
+The provider connects the supplied client and shares it; mounting another consumer
+does not create another connection. `useSyncStatus` subscribes to delivery changes.
+Legacy hooks are available from `@usex/sync-client/legacy` for existing applications.

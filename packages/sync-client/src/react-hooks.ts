@@ -67,7 +67,12 @@ export interface SyncStoreHookResult {
  * Main hook for using sync storage with React
  */
 export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult {
-  const { config, autoConnect = true, subscribeToKeys = [], syncFilter } = options;
+  const {
+    config,
+    autoConnect = config.autoConnect ?? true,
+    subscribeToKeys = [],
+    syncFilter,
+  } = options;
 
   // Create storage instance (only once) - use stable config reference
   const storage = useMemo(
@@ -97,7 +102,6 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
   useEffect(() => {
     const handleConnect = () => {
       setIsConnected(true);
-      setIsLoading(false);
       setError(null);
       setConnectionInfo(storage.getConnectionInfo());
     };
@@ -116,12 +120,18 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
       setConnectionInfo((prev) => ({ ...prev, state }));
     };
 
+    const stopStatus = storage.on("status", (status) =>
+      setIsLoading(
+        status.state === "initializing" || (status.state === "syncing" && !status.ready),
+      ),
+    );
     storage.on("connect", handleConnect);
     storage.on("disconnect", handleDisconnect);
     storage.on("error", handleError);
     storage.on("network-change", handleNetworkChange);
 
     return () => {
+      stopStatus();
       storage.off("connect", handleConnect);
       storage.off("disconnect", handleDisconnect);
       storage.off("error", handleError);
