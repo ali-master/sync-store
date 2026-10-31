@@ -51,19 +51,23 @@
     "lint": "bun --bun eslint \"src/**/*.ts\"",
     "lint:fix": "bun --bun eslint \"src/**/*.ts\" --fix",
     "format": "bun --bun prettier --write \"src/**/*.ts\"",
-    "format:check": "bun --bun prettier --check \"src/**/*.ts\""
+    "format:check": "bun --bun prettier --check \"src/**/*.ts\"",
+    "release": "bun --bun release-it",
+    "release:check": "bun run test:types && bun test test/sync.test.ts test/outbox.test.ts && bun run build",
+    "prepack": "bun run build"
   },
   "dependencies": {
     "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
-    "@types/react": "^19.3.0",
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
     "@usex/tsconfig": "workspace:*",
-    "typescript": "^6.0.3",
-    "vitest": "^5.0.5",
+    "react": "^19.3.1",
+    "release-it": "^21.1.2",
     "tsup": "^9.0.0",
-    "react": "^19.3.1"
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
   },
   "packageManager": "bun@1.4.4",
   "peerDependencies": {
@@ -73,5 +77,9 @@
     "react": {
       "optional": true
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

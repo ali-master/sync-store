@@ -107,3 +107,33 @@ bun run --cwd packages/client-sdk build
 Default tests cover client behavior locally. Live synchronization tests require their
 configured test services; see the service's integration tests for cross-replica and
 tenant-isolation scenarios.
+
+## Publish the SDK (maintainers)
+
+Run these commands from the repository root. Install Bun and Node.js with npm:
+release-it runs through Bun and publishes with Bun, but uses the npm CLI for
+registry authentication checks and updating the package version. Your npm account
+must have publishing access to the `@usex` scope.
+
+```sh
+npm login --registry=https://registry.npmjs.org/
+# Preview the first release; does not publish, commit, tag or push.
+bun run release:sdk 0.1.0 --dry-run
+# Publish after reviewing the preview (interactive confirmation).
+bun run release:sdk 0.1.0
+# Subsequent releases:
+bun run release:sdk patch
+```
+
+Start on `master` with a clean working tree and an upstream branch. The release
+checks SDK types and local unit tests, builds the package, updates its version and
+the root Bun lockfile, creates a release commit and an `sdk-v<version>` tag, and
+pushes to the configured Git remote. Only `@usex/sync-store` is published, with
+public access; the private application workspaces are not released. GitHub Release
+creation is disabled. The `prepack` hook rebuilds the SDK for direct packing too.
+
+For a preview without npm credentials, add `--npm.skipChecks` to the dry-run
+command. This skips registry and account checks, so it cannot confirm publishing
+permissions or whether the version already exists. Keep those checks enabled for
+real releases. Never commit npm tokens; complete npm authentication and any 2FA
+prompt locally. Live API and cluster tests are separate from these release checks.

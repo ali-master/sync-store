@@ -34,7 +34,8 @@
     "test:types": "turbo run test:types",
     "test:knip": "bun --bun knip",
     "test:knip:fix": "bun --bun knip --fix",
-    "depcruise": "bunx --bun depcruise packages --include-only \"^packages/.*/src\" --exclude \"\\.spec\\.ts\" --config --output-type dot | dot -T svg | bun run depcruise-wrap-stream-in-html > dependency-graph.html"
+    "depcruise": "bunx --bun depcruise packages --include-only \"^packages/.*/src\" --exclude \"\\.spec\\.ts\" --config --output-type dot | dot -T svg | bun run depcruise-wrap-stream-in-html > dependency-graph.html",
+    "release:sdk": "bun run --cwd packages/client-sdk release"
   },
   "dependencies": {
     "@nestjs/cqrs": "^12.1.1",

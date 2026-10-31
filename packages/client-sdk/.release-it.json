@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/release-it/schema/release-it.json",
+  "git": {
+    "requireBranch": "master",
+    "requireCleanWorkingDir": true,
+    "commitMessage": "chore(sdk): release v${version}",
+    "tagName": "sdk-v${version}",
+    "tagMatch": "sdk-v*"
+  },
+  "npm": {
+    "publishPackageManager": "bun",
+    "publishArgs": [
+      "--access",
+      "public"
+    ],
+    "publishPath": ""
+  },
+  "github": {
+    "release": false
+  },
+  "hooks": {
+    "before:init": "bun run release:check",
+    "after:bump": "cd ../.. && bun install --lockfile-only --ignore-scripts && git add bun.lock"
+  }
+}
