@@ -10,7 +10,8 @@ WORKDIR /app
 ARG TARGETARCH
 COPY . .
 # The init service needs Prisma; frontend/build/release tooling is not needed at runtime.
-RUN bun install --frozen-lockfile --ignore-scripts --production --filter @usex/api --filter @usex/utils --cpu=$TARGETARCH
+RUN cpu="$TARGETARCH"; if [ "$cpu" = "amd64" ]; then cpu=x64; fi; \
+    bun install --frozen-lockfile --ignore-scripts --production --filter @usex/api --filter @usex/utils --cpu="$cpu"
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
 COPY --from=build /app/apps/dashboard/dist /app/apps/dashboard/dist
 COPY --from=build /app/packages/utils/dist /app/packages/utils/dist
