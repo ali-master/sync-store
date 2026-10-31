@@ -1,6 +1,6 @@
 {
   "name": "@usex/sync-store",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A robust and flexible client-side communication layer for data synchronization, supporting both WebSocket and HTTP REST protocols with intelligent fallback mechanisms.",
   "author": {
     "name": "Ali Torki",
