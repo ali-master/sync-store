@@ -1,4 +1,10 @@
-# Sync Store client
+<p align="center">
+  <a href="https://github.com/ali-master/sync-store">
+    <img src="https://raw.githubusercontent.com/ali-master/sync-store/master/assets/logo.svg" alt="Sync Store — synchronized application data" width="112" height="112" />
+  </a>
+</p>
+
+# Sync Store SDK
 
 **Give your application a consistent view of its data, even across reconnects.**
 
@@ -10,6 +16,8 @@ application feature.
 Use it for preferences, settings and other application state shared across connected
 tabs or devices. It also exposes recovery tools for inspecting history, creating
 checkpoints and working with branches.
+
+[Documentation](https://github.com/ali-master/sync-store/tree/master/apps/docs/content/docs) · [Source code](https://github.com/ali-master/sync-store/tree/master/packages/client-sdk) · [Report an issue](https://github.com/ali-master/sync-store/issues)
 
 ## Connect and save a value
 

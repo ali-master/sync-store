@@ -1,7 +1,28 @@
 {
   "name": "@usex/sync-store",
   "version": "0.2.0",
-  "description": "A robust and flexible client-side communication layer for data synchronization, supporting both WebSocket and HTTP REST protocols with intelligent fallback mechanisms.",
+  "description": "Keep JSON application data in sync across tabs and devices with real-time updates, offline write queues, reconnect recovery and React hooks for self-hosted Sync Store.",
+  "keywords": [
+    "sync-store",
+    "data-synchronization",
+    "real-time",
+    "offline-storage",
+    "json-storage",
+    "state-synchronization",
+    "local-cache",
+    "websocket",
+    "socket.io",
+    "react",
+    "react-hooks",
+    "typescript",
+    "javascript",
+    "client-sdk",
+    "self-hosted"
+  ],
+  "homepage": "https://github.com/ali-master/sync-store/tree/master/packages/client-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/ali-master/sync-store/issues"
+  },
   "author": {
     "name": "Ali Torki",
     "url": "https://github.com/ali-master",
