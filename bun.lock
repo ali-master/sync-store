@@ -174,7 +174,7 @@
     },
     "packages/client-sdk": {
       "name": "@usex/sync-store",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "socket.io-client": "^4.8.4",
       },
