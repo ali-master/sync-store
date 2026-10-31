@@ -60,6 +60,8 @@ try {
     `typescript@${manifest.devDependencies.typescript}`,
   ]);
   const installed = join(consumer, "node_modules/@usex/sync-store");
+  const packedManifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8"));
+  assert.deepEqual(Object.keys(packedManifest.exports).sort(), [".", "./advanced", "./react"]);
   for (const entry of Object.values(manifest.exports)) {
     for (const path of Object.values(entry)) assert.ok(readFileSync(join(installed, path)).length);
   }
@@ -73,7 +75,6 @@ for (const load of [name => import(name), name => require(name)]) {
   const core = await load('@usex/sync-store');
   const advanced = await load('@usex/sync-store/advanced');
   assert.equal(typeof (await load('@usex/sync-store/react')).SyncProvider, 'function');
-  assert.equal(typeof (await load('@usex/sync-store/legacy')).useRemoteStorage, 'function');
   assert.equal(typeof core.SyncStore, 'function');
   assert.equal(typeof core.SyncStore.connect, 'function');
   assert.equal('RemoteStorage' in core, false);
@@ -99,7 +100,6 @@ for (const load of [name => import(name), name => require(name)]) {
 import { SyncStore } from '@usex/sync-store';
 import { EventEmitter, HttpTransport, TransportMode, type BatchOperation, type BatchResult, type SyncFilter } from '@usex/sync-store/advanced';
 import { SyncProvider } from '@usex/sync-store/react';
-import { useRemoteStorage } from '@usex/sync-store/legacy';
 export const store = new SyncStore({ userId: 'types', autoConnect: false });
 export const connect = SyncStore.connect;
 // @ts-expect-error removed class must not remain publicly importable
@@ -109,7 +109,6 @@ import type { createRemoteStorage } from "@usex/sync-store";
 export const emitter = new EventEmitter<{ value: number }>();
 export const transport = new HttpTransport({ serverUrl: 'http://localhost', userId: 'types', instanceId: 'test', mode: TransportMode.HTTP });
 export const provider = SyncProvider;
-export const legacy = useRemoteStorage;
 export const batch = (operations: BatchOperation[]): Promise<BatchResult> => store.executeBatch(operations);
 export const filter = (value: SyncFilter) => store.setSyncFilter(value);
 // @ts-expect-error event payloads must keep their declared type

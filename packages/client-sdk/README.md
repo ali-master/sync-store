@@ -147,7 +147,7 @@ bun run --cwd packages/client-sdk test:package
 
 This check packs the SDK and installs the tarball with the local npm CLI running
 on Bun in a temporary project outside the workspace. It verifies core imports
-without React, all four public entry points in Bun (ESM and CommonJS), offline
+without React, all three public entry points in Bun (ESM and CommonJS), offline
 writes and removals, strict TypeScript declaration emission, and browser bundling.
 It requires Bun and registry access, removes its temporary files, and does not
 publish. The release checks run it automatically before a release. To additionally
@@ -169,5 +169,4 @@ This is a breaking SDK API change: replace `new RemoteStorage(config)` and
 `createRemoteStorage(config)` with `new SyncStore(config)`. Replace the old
 `await SyncStore(options)` browser factory with `await SyncStore.connect(options)`.
 Use `SyncStoreConfig` for configuration types. The old class and factory are no
-longer exported. React hooks remain in `/react`, compatibility hooks in `/legacy`,
-and transport utilities in `/advanced`.
+longer exported. React hooks are in `/react` and transport utilities in `/advanced`.

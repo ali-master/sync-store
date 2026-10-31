@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/react.ts", "src/legacy.ts", "src/advanced.ts"],
+  entry: ["src/index.ts", "src/react.ts", "src/advanced.ts"],
   format: ["cjs", "esm"],
   dts: true,
   splitting: true,

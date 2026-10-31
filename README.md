@@ -136,5 +136,4 @@ This is a breaking SDK API change: replace `new RemoteStorage(config)` and
 `createRemoteStorage(config)` with `new SyncStore(config)`. Replace the old
 `await SyncStore(options)` browser factory with `await SyncStore.connect(options)`.
 Use `SyncStoreConfig` for configuration types. The old class and factory are no
-longer exported. React hooks remain in `/react`, compatibility hooks in `/legacy`,
-and transport utilities in `/advanced`.
+longer exported. React hooks are in `/react` and transport utilities in `/advanced`.

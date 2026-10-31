@@ -263,36 +263,6 @@ export interface PluginHooks {
   onError?: (error: Error) => Promise<void>;
 }
 
-// React hook types
-export interface UseRemoteStorageOptions extends Partial<SyncStoreConfig> {
-  suspense?: boolean;
-  errorBoundary?: boolean;
-}
-
-export interface UseStorageItemOptions<T> {
-  defaultValue?: T;
-  conflictStrategy?: ConflictStrategy;
-  syncMode?: SyncMode;
-  cacheTTL?: number;
-  validator?: (value: any) => value is T;
-  transform?: {
-    serialize?: (value: T) => any;
-    deserialize?: (value: any) => T;
-  };
-}
-
-export interface UseStorageItemResult<T> {
-  value: T;
-  setValue: (value: T) => Promise<void>;
-  loading: boolean;
-  error: Error | null;
-  syncing: boolean;
-  lastSynced?: number;
-  version?: number;
-  conflicts: ConflictData[];
-  resolveConflict: (conflictId: string, resolution: any) => Promise<void>;
-}
-
 // Utility types
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];

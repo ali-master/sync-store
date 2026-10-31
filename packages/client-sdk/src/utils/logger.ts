@@ -207,18 +207,6 @@ export class ColoredConsoleOutput implements LogOutput {
   }
 }
 
-/**
- * Legacy console output for compatibility
- *
- * @class ConsoleOutput
- * @implements {LogOutput}
- */
-export class ConsoleOutput extends ColoredConsoleOutput {
-  constructor() {
-    super({ useColors: false });
-  }
-}
-
 export class FileOutput implements LogOutput {
   private buffer: string[] = [];
   private flushTimer?: NodeJS.Timeout;

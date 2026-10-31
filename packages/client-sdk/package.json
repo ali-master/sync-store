@@ -31,11 +31,6 @@
       "import": "./dist/react.mjs",
       "require": "./dist/react.js"
     },
-    "./legacy": {
-      "types": "./dist/legacy.d.ts",
-      "import": "./dist/legacy.mjs",
-      "require": "./dist/legacy.js"
-    },
     "./advanced": {
       "types": "./dist/advanced.d.ts",
       "import": "./dist/advanced.mjs",

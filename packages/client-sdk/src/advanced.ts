@@ -25,7 +25,6 @@ export {
   LogLevel,
   LogColors,
   ColoredConsoleOutput,
-  ConsoleOutput,
   SessionStorageOutput,
   createLogger,
   setLogLevel,
