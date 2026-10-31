@@ -17,34 +17,13 @@ COPY --from=build /app/packages/utils/dist /app/packages/utils/dist
 # Keep the API tools, compiled dashboard and workspace dependency links only.
 RUN rm -rf /app/venv /app/apps/docs /app/examples /app/scripts /app/docs /app/docker /app/assets \
     /app/apps/dashboard/src /app/apps/dashboard/public /app/packages/client-sdk \
-    /app/packages/static-analyzer /app/apps/api/test
-# Small dependency layers avoid long single-upload proxy timeouts and allow independent retries.
-RUN set -eu; cd /; mkdir -p /layers/0; mv /app /layers/0/app; \
-    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do mkdir -p /layers/$i/app/node_modules/.bun; done; \
-    i=0; for package in /layers/0/app/node_modules/.bun/*; do \
-      if [ -d "$package" ] && [ ! -L "$package" ]; then \
-        i=$((i % 15 + 1)); mv "$package" /layers/$i/app/node_modules/.bun/; \
-      fi; \
-    done
+    /app/packages/static-analyzer /app/apps/api/test /app/share
+# Dependency source maps are only needed for debugging third-party source.
+RUN find /app/node_modules -type f -name '*.map' -delete
 
 FROM oven/bun:1.4.4-slim
 WORKDIR /app
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/0/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/1/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/2/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/3/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/4/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/5/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/6/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/7/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/8/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/9/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/10/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/11/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/12/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/13/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/14/ /
-COPY --link --from=runtime-deps --chown=1000:1000 /layers/15/ /
+COPY --from=runtime-deps --chown=bun:bun /app/ /app/
 ENV NODE_ENV=production
 ENV PORT=3000
 USER bun
