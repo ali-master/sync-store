@@ -38,7 +38,7 @@ and reconnect a client to see queued delivery in action.
 To connect your own application:
 
 ```ts
-import { RemoteStorage } from "@usex/sync-client";
+import { RemoteStorage } from "@usex/sync-store";
 
 const store = new RemoteStorage({
   serverUrl: "https://sync.example.com",
@@ -83,7 +83,7 @@ reference. For multiple backend replicas, follow the
 | Your goal | Start here |
 | --- | --- |
 | Run Sync Store on your own server | [Self hosting](apps/docs/content/docs/guides/self-hosted.mdx) |
-| Connect an application | [Client SDK](packages/sync-client/README.md) |
+| Connect an application | [Client SDK](packages/client-sdk/README.md) |
 | Explore a working example | [Examples](examples/README.md) |
 | Manage credentials and data | [Dashboard guide](apps/docs/content/docs/guides/dashboard.mdx) |
 | Separate customer workspaces | [Multi-tenancy](apps/docs/content/docs/guides/multi-tenancy.mdx) |

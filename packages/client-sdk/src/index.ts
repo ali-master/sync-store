@@ -20,7 +20,7 @@ export interface BrowserSession {
 }
 
 /** Connect using a user-bound session obtained from your authenticated application backend. */
-export async function connectBrowser(options: {
+export async function SyncStore(options: {
   serverUrl: string;
   session: () => Promise<BrowserSession>;
   mode?: RemoteStorageConfig["mode"];

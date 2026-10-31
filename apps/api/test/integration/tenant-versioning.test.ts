@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { describe, expect, test } from "bun:test";
 import { MongoClient } from "mongodb";
 import { io, type Socket } from "socket.io-client";
-import { RemoteStorage } from "../../../../packages/sync-client/src/remote-storage";
+import { RemoteStorage } from "../../../../packages/client-sdk/src/remote-storage";
 
 describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
   "tenant and branch isolation",

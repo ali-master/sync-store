@@ -23,7 +23,7 @@ Check those entry points before adding another helper or importing an internal f
 ## Use it within the workspace
 
 This is a private workspace package. Application developers connecting to Sync Store
-should start with the [client SDK](../sync-client/README.md); they do not need to
+should start with the [client SDK](../client-sdk/README.md); they do not need to
 install these service utilities.
 
 When maintaining the project, reuse an existing helper where its behavior fits.

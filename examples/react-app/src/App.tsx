@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RemoteStorage } from "@usex/sync-client";
+import { RemoteStorage } from "@usex/sync-store";
 import logo from "../../../assets/logo.svg";
 import "./App.css";
 

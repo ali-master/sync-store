@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CheckCheck, Code2, Copy, KeyRound, Radio, ArrowUpRight } from "lucide-react";
-import { RemoteStorage } from "@usex/sync-client";
+import { RemoteStorage } from "@usex/sync-store";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -25,7 +25,7 @@ export function ConnectApp() {
   );
   const code =
     framework === "React"
-      ? `import { SyncProvider, useSyncClient, useSyncValue, useSyncStatus } from "@usex/sync-client/react";
+      ? `import { SyncProvider, useSyncClient, useSyncValue, useSyncStatus } from "@usex/sync-store/react";
 
 function Preferences() {
   const store = useSyncClient();
@@ -38,9 +38,9 @@ function Preferences() {
 
 // Connect once using the JavaScript example, then share storage.
 <SyncProvider client={storage}><Preferences /></SyncProvider>`
-      : `import { connectBrowser } from "@usex/sync-client";
+      : `import { SyncStore } from "@usex/sync-store";
 
-const { storage, expiresAt } = await connectBrowser({
+const { storage, expiresAt } = await SyncStore({
   serverUrl: ${JSON.stringify(location.origin)},
   session: async () => {
     // Your application's authenticated server endpoint.

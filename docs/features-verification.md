@@ -32,7 +32,7 @@ keys and data in that installation.
 ```sh
 bun run --cwd apps/api test
 bun run --cwd apps/dashboard test
-bun run --cwd packages/sync-client test
+bun run --cwd packages/client-sdk test
 TEST_DATABASE_URL=YOUR_DISPOSABLE_REPLICA_SET_URL bun run --cwd apps/api test:e2e
 TEST_DATABASE_URL=YOUR_DISPOSABLE_REPLICA_SET_URL \
 TEST_API_URL=http://backend-1:3000 \

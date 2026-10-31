@@ -5,10 +5,10 @@ description: Configure RemoteStorage and read, write, delete and observe JSON va
 
 ## Use the workspace build
 
-The demo consumes `@usex/sync-client` through Bun workspaces. Build it before running a consumer:
+The demo consumes `@usex/sync-store` through Bun workspaces. Build it before running a consumer:
 
 ```sh
-bun run --cwd packages/sync-client build
+bun run --cwd packages/client-sdk build
 ```
 
 Use the version packaged from this repository when evaluating this implementation; an independently published registry release may differ.
@@ -16,7 +16,7 @@ Use the version packaged from this repository when evaluating this implementatio
 ## Create a client
 
 ```ts
-import { RemoteStorage } from "@usex/sync-client";
+import { RemoteStorage } from "@usex/sync-store";
 
 const storage = new RemoteStorage({
   serverUrl: "http://localhost:3000",
@@ -92,9 +92,9 @@ Server events include `eventId`, `recordId` and `version` for durable outbox del
 
 Use distinct cache namespaces for independent clients on the same origin. A namespace separates browser storage; it is **not** a server-side access-control boundary.
 
-The core package exposes storage operations. React hooks live in `@usex/sync-client/react`,
-and transport and diagnostics tools live in `@usex/sync-client/advanced`. Deprecated hooks
-are available only from `@usex/sync-client/legacy`.
+The core package exposes storage operations. React hooks live in `@usex/sync-store/react`,
+and transport and diagnostics tools live in `@usex/sync-store/advanced`. Deprecated hooks
+are available only from `@usex/sync-store/legacy`.
 
 Unsupported configuration has been removed: `debug`, `network`,
 `storage.encryptionKey`, `storage.compressionEnabled`, `storage.cleanupStrategy`,
@@ -149,9 +149,9 @@ rotation and current policy restrictions are checked on subsequent operations an
 event delivery, including across replicas.
 
 ```ts
-import { connectBrowser } from "@usex/sync-client";
+import { SyncStore } from "@usex/sync-store";
 
-const { storage, expiresAt } = await connectBrowser({
+const { storage, expiresAt } = await SyncStore({
   serverUrl: "https://sync.example.com",
   session: async () => {
     const response = await fetch("/my-app/sync-session", { cache: "no-store" });
@@ -169,7 +169,7 @@ user, branch, key or access policy uses another scope. On logout, close the old
 client before connecting as another user.
 
 Session renewal is explicit: before `expiresAt`, close the old client and call
-`connectBrowser` again. Persisted queued work is recovered with the same scope.
+`SyncStore` again. Persisted queued work is recovered with the same scope.
 No automatic renewal or cross-scope transfer of queued writes is performed.
 
 ## Typed keys and runtime validation

@@ -7,7 +7,7 @@ Use `useSyncStore` and `useSyncValue`. The older `useRemoteStorage` family remai
 
 ```tsx
 import { useState } from "react";
-import { useSyncStore, useSyncValue } from "@usex/sync-client/react";
+import { useSyncStore, useSyncValue } from "@usex/sync-store/react";
 
 const defaults = { theme: "light" };
 
@@ -59,7 +59,7 @@ to a provider. The application owns it and calls `close()` on logout or final te
 Do not share a server-side singleton between authenticated users.
 
 ```tsx
-import { SyncProvider, useSyncClient, useSyncStatus, useSyncValue } from "@usex/sync-client/react";
+import { SyncProvider, useSyncClient, useSyncStatus, useSyncValue } from "@usex/sync-store/react";
 
 function Preferences() {
   const client = useSyncClient();
@@ -80,4 +80,4 @@ function Preferences() {
 
 The provider connects the supplied client and shares it; mounting another consumer
 does not create another connection. `useSyncStatus` subscribes to delivery changes.
-Legacy hooks are available from `@usex/sync-client/legacy` for existing applications.
+Legacy hooks are available from `@usex/sync-store/legacy` for existing applications.

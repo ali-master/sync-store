@@ -1,4 +1,4 @@
-// Core types and interfaces for the sync-client library
+// Core types and interfaces for the client-sdk library
 
 export interface RemoteStorageConfig {
   /** Optional per-key validators; throw to reject a value. Unknown keys are rejected when provided. */

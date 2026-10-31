@@ -13,16 +13,16 @@ checkpoints and working with branches.
 
 ## Connect and save a value
 
-Install `@usex/sync-client` in your application:
+Install `@usex/sync-store` in your application:
 
 ```sh
-bun add @usex/sync-client
+bun add @usex/sync-store
 ```
 
 Create an application key in your running service's dashboard, then connect:
 
 ```ts
-import { RemoteStorage } from "@usex/sync-client";
+import { RemoteStorage } from "@usex/sync-store";
 
 const store = new RemoteStorage({
   serverUrl: "https://sync.example.com",
@@ -92,16 +92,16 @@ An API key is an application credential, not authentication for the supplied use
 Authorize users in a trusted backend; never distribute an administrator or unrestricted
 shared key in a public browser app. Local cache encryption is not implemented, and
 unsupported encryption and compression options are rejected. React hooks are available
-from `@usex/sync-client/react`; transport and diagnostic utilities use `/advanced`.
+from `@usex/sync-store/react`; transport and diagnostic utilities use `/advanced`.
 
 ## Work on the client
 
 From the repository root:
 
 ```sh
-bun run --cwd packages/sync-client test
-bun run --cwd packages/sync-client test:types
-bun run --cwd packages/sync-client build
+bun run --cwd packages/client-sdk test
+bun run --cwd packages/client-sdk test:types
+bun run --cwd packages/client-sdk build
 ```
 
 Default tests cover client behavior locally. Live synchronization tests require their

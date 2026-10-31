@@ -288,7 +288,7 @@ export class Analytics extends EventEmitter<{
       body: JSON.stringify({
         events,
         metadata: {
-          sdk: "sync-client",
+          sdk: "client-sdk",
           version: "1.0.0",
           sessionId: this.sessionId,
           timestamp: Date.now(),

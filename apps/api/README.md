@@ -39,7 +39,7 @@ key. Existing installations sign in with their saved administrator key.
 | `/api/v1` | Application storage and management requests |
 | `/sync` | Live client synchronization |
 
-See the [client SDK](../../packages/sync-client/README.md) to connect an application,
+See the [client SDK](../../packages/client-sdk/README.md) to connect an application,
 or the [examples](../../examples/README.md) to try two connected clients.
 
 ## Operate with clear boundaries

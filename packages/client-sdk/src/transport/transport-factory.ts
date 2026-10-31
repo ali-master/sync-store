@@ -286,7 +286,7 @@ export class TransportFactory {
  *
  * @example
  * ```typescript
- * import { createTransport, TransportMode } from "@usex/sync-client";
+ * import { createTransport, TransportMode } from "@usex/sync-store";
  *
  * const transport = createTransport({
  *   mode: TransportMode.AUTO,

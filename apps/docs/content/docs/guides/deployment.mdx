@@ -135,7 +135,7 @@ Use a disposable test database, not production:
 DATABASE_URL='mongodb://127.0.0.1:27017/sync_store_test' bun run db:deploy
 TEST_DATABASE_URL='mongodb://127.0.0.1:27017/sync_store_test' bun run --cwd apps/api test:e2e
 API_TEST_URL='http://localhost:3000' API_TEST_KEY='disposable-key' \
-  bun test packages/sync-client/test/live-api.test.ts
+  bun test packages/client-sdk/test/live-api.test.ts
 ```
 
 The live test writes and clears data for a generated test user. Confirm key permissions first. Local tests do not certify load capacity, multi-host failover or restore readiness.
@@ -145,7 +145,7 @@ For a two-replica verification, point the test at two **different backend addres
 ```sh
 API_TEST_URL_A='http://api-1:3000' API_TEST_URL_B='http://api-2:3000' \
 API_TEST_KEY='disposable-write-key' API_TEST_ADMIN_KEY='test-installation-admin-key' \
-  bun test packages/sync-client/test/distributed-api.test.ts
+  bun test packages/client-sdk/test/distributed-api.test.ts
 ```
 
 This checks cross-node WebSocket and REST delivery, user isolation, session listing from both replicas, remote disconnect, reconnect reconciliation and clear propagation. Use an isolated test installation because the session-management assertions require administrator access.

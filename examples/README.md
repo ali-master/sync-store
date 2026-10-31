@@ -31,7 +31,7 @@ commands from the repository root:
 
 ```sh
 bun install --frozen-lockfile
-bun run --cwd packages/sync-client build
+bun run --cwd packages/client-sdk build
 bun run --cwd examples/react-app dev
 ```
 
@@ -70,5 +70,5 @@ bun run --cwd examples/react-app build
 bun run --cwd examples/react-app preview
 ```
 
-Continue with the [SDK guide](../packages/sync-client/README.md) when you are ready
+Continue with the [SDK guide](../packages/client-sdk/README.md) when you are ready
 to build synchronization into your own application.

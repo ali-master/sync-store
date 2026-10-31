@@ -1,5 +1,5 @@
 /**
- * Transport layer module for sync-client
+ * Transport layer module for client-sdk
  *
  * This module provides a flexible and robust communication layer that supports
  * both WebSocket and HTTP REST protocols with intelligent fallback mechanisms.

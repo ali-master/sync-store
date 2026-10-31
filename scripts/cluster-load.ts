@@ -123,7 +123,7 @@ if (!worker) {
 } else {
   const { MongoClient } = await import("mongodb");
   // This script is copied inside the API image so it tests the deployed SDK source.
-  const { RemoteStorage } = await import("../../packages/sync-client/src/remote-storage.ts");
+  const { RemoteStorage } = await import("../../packages/client-sdk/src/remote-storage.ts");
   const db = new MongoClient(process.env.DATABASE_URL!);
   await db.connect();
   const key = await db.db().collection("api_keys").findOne({ name: "Cluster test key" });

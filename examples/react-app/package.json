@@ -12,7 +12,7 @@
   "dependencies": {
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "@usex/sync-client": "workspace:*"
+    "@usex/sync-store": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
