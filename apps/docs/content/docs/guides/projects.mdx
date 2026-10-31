@@ -40,7 +40,7 @@ there is no client header that can select another project. Set a distinct local 
 `namespace` for each project and backend when reusing the same browser:
 
 ```ts
-const store = new RemoteStorage({
+const store = new SyncStore({
   serverUrl: 'https://sync.example.com',
   apiKey: projectKey,
   userId: authenticatedUserId,

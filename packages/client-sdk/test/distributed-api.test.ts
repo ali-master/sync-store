@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { RemoteStorage } from "../src/remote-storage";
+import { SyncStore } from "../src/remote-storage";
 
 const a = process.env.API_TEST_URL_A;
 const b = process.env.API_TEST_URL_B;
@@ -17,20 +17,20 @@ describe.skipIf(!a || !b || !apiKey || !adminKey)("distributed Socket.IO", () =>
   test("cross-node delivery, tenant isolation, cluster session listing and remote disconnect", async () => {
     const userId = `cluster-${crypto.randomUUID()}`;
     const common = { apiKey: apiKey!, userId, autoConnect: false, timeout: 5000 };
-    const writer = new RemoteStorage({
+    const writer = new SyncStore({
       ...common,
       serverUrl: a!,
       instanceId: "writer",
       mode: "websocket",
     });
-    const reader = new RemoteStorage({
+    const reader = new SyncStore({
       ...common,
       serverUrl: b!,
       instanceId: "reader",
       mode: "websocket",
     });
-    const http = new RemoteStorage({ ...common, serverUrl: a!, instanceId: "http", mode: "http" });
-    const stranger = new RemoteStorage({
+    const http = new SyncStore({ ...common, serverUrl: a!, instanceId: "http", mode: "http" });
+    const stranger = new SyncStore({
       ...common,
       userId: userId + "-other",
       serverUrl: b!,

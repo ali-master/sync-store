@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { RemoteStorage } from "@usex/sync-store";
+import { SyncStore } from "@usex/sync-store";
 import logo from "../../../assets/logo.svg";
 import "./App.css";
 
 type Entry = { key: string; value: unknown };
-type Pair = [RemoteStorage, RemoteStorage];
+type Pair = [SyncStore, SyncStore];
 type Activity = { id: string; time: string; client: string; message: string };
 const sample = JSON.stringify({ theme: "midnight", notifications: true, language: "en" }, null, 2);
 
@@ -118,7 +118,7 @@ export default function App() {
       if (!apiKey.trim() || !userId.trim()) throw new Error("Enter an API key and user ID.");
       const pair = ["writer", "replica"].map(
         (name) =>
-          new RemoteStorage({
+          new SyncStore({
             serverUrl: serverUrl.trim(),
             apiKey: apiKey.trim(),
             userId: userId.trim(),

@@ -22,9 +22,9 @@ bun add @usex/sync-store
 Create an application key in your running service's dashboard, then connect:
 
 ```ts
-import { RemoteStorage } from "@usex/sync-store";
+import { SyncStore } from "@usex/sync-store";
 
-const store = new RemoteStorage({
+const store = new SyncStore({
   serverUrl: "https://sync.example.com",
   apiKey: applicationKey,
   userId: authenticatedUserId,
@@ -153,3 +153,18 @@ The release checks run it automatically before a release.
 
 Transport consumers can import `BatchOperation`, `BatchResult`, `SyncFilter` and
 `EventEmitter` from `@usex/sync-store/advanced`; no internal source paths are needed.
+
+### One client: SyncStore
+
+Use `new SyncStore(config)` to create a client with explicit credentials (keep
+application keys on your server), or `await SyncStore.connect({ serverUrl, session })`
+to obtain a ready browser client using a user-bound session. Both paths use the
+same `SyncStore` class. The browser connection returns `{ storage, expiresAt }`;
+call `storage.destroy()` when finished or before renewing its session.
+
+This is a breaking SDK API change: replace `new RemoteStorage(config)` and
+`createRemoteStorage(config)` with `new SyncStore(config)`. Replace the old
+`await SyncStore(options)` browser factory with `await SyncStore.connect(options)`.
+Use `SyncStoreConfig` for configuration types. The old class and factory are no
+longer exported. React hooks remain in `/react`, compatibility hooks in `/legacy`,
+and transport utilities in `/advanced`.

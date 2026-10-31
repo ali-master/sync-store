@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { RemoteStorage } from "../src/remote-storage";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { SyncStore } from "../src/index";
 import { HttpTransport } from "../src/transport/http-transport";
 import { TransportMode } from "../src/transport/types";
 import { DataStorage } from "../src/utils/storage";
@@ -21,14 +21,14 @@ afterEach(() => {
 });
 
 /** Exercise the client against real HTTP requests without a production database. */
-function fixture(basePath = "/api/v1") {
+function fixture(basePath = "/api/v1", apiKey = "test-key") {
   const items = new Map<string, any>();
   const writes: string[] = [];
   let fail = false;
   const server = Bun.serve({
     port: 0,
     async fetch(request) {
-      if (request.headers.get("x-api-key") !== "test-key")
+      if (request.headers.get("x-api-key") !== apiKey)
         return Response.json({ message: "Unauthorized" }, { status: 401 });
       const path = new URL(request.url).pathname;
       if (path === `${basePath}/keys`) return Response.json([...items.keys()]);
@@ -79,7 +79,7 @@ function fixture(basePath = "/api/v1") {
 
 describe("storage synchronization", () => {
   test("offline item listing preserves null values", async () => {
-    const client = new RemoteStorage(fixture().config);
+    const client = new SyncStore(fixture().config);
     resources.push(client);
     await client.setItem("empty", null);
     expect((await client.getAllItems()).map(({ key, value }) => ({ key, value }))).toEqual([
@@ -89,7 +89,7 @@ describe("storage synchronization", () => {
 
   test("HTTP accepts an explicit API base path with a trailing slash", async () => {
     const f = fixture("/custom/api");
-    const client = new RemoteStorage({
+    const client = new SyncStore({
       ...f.config,
       serverUrl: `${f.config.serverUrl}/custom/api/`,
     });
@@ -101,7 +101,7 @@ describe("storage synchronization", () => {
 
   test("HTTP mode uses API prefix, authentication headers and preserves falsy values", async () => {
     const f = fixture();
-    const client = new RemoteStorage(f.config);
+    const client = new SyncStore(f.config);
     resources.push(client);
     await client.connect();
     await client.setItem("false", false);
@@ -113,7 +113,7 @@ describe("storage synchronization", () => {
 
   test("offline set/remove ordering survives connection without resurrecting deleted values", async () => {
     const f = fixture();
-    const client = new RemoteStorage(f.config);
+    const client = new SyncStore(f.config);
     resources.push(client);
     await client.setItem("key", 1);
     await client.removeItem("key");
@@ -125,7 +125,7 @@ describe("storage synchronization", () => {
 
   test("failed writes remain queued and forceSync retries in order", async () => {
     const f = fixture();
-    const client = new RemoteStorage(f.config);
+    const client = new SyncStore(f.config);
     resources.push(client);
     await client.connect();
     f.fail(true);
@@ -137,7 +137,7 @@ describe("storage synchronization", () => {
 
   test("clear propagates to server, including keys absent from local cache", async () => {
     const f = fixture();
-    const client = new RemoteStorage(f.config);
+    const client = new SyncStore(f.config);
     resources.push(client);
     await client.connect();
     f.items.set("remote", { key: "remote", value: 1 });
@@ -148,7 +148,7 @@ describe("storage synchronization", () => {
 
   test("concurrent writes to one key are sent in invocation order", async () => {
     const f = fixture();
-    const client = new RemoteStorage(f.config);
+    const client = new SyncStore(f.config);
     resources.push(client);
     await client.connect();
     await Promise.all([
@@ -196,14 +196,14 @@ test("branch clients send fixed HTTP identity and partition caches without chang
     },
   });
   servers.push(server);
-  const main = new RemoteStorage({
+  const main = new SyncStore({
     userId: user,
     namespace,
     autoConnect: false,
     serverUrl: server.url.toString(),
   });
   resources.push(main);
-  const feature = new RemoteStorage({
+  const feature = new SyncStore({
     userId: user,
     namespace,
     branch: "feature/a",
@@ -219,7 +219,7 @@ test("branch clients send fixed HTTP identity and partition caches without chang
 });
 
 test("readiness waits for a snapshot and can retry after a snapshot failure", async () => {
-  const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
+  const client = new SyncStore({ userId: crypto.randomUUID(), autoConnect: false });
   resources.push(client);
   const internal = client as any;
   let snapshots = 0;
@@ -244,7 +244,7 @@ test("readiness waits for a snapshot and can retry after a snapshot failure", as
 
 test("queued work, failed delivery, acknowledgement and shutdown have distinct states", async () => {
   const f = fixture();
-  const client = new RemoteStorage(f.config);
+  const client = new SyncStore(f.config);
   resources.push(client);
   await client.setItem("draft", false);
   expect(client.getStatus()).toMatchObject({
@@ -268,7 +268,7 @@ test("queued work, failed delivery, acknowledgement and shutdown have distinct s
 });
 
 test("flush never reports delivery after a disconnect leaves queued operations", async () => {
-  const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
+  const client = new SyncStore({ userId: crypto.randomUUID(), autoConnect: false });
   resources.push(client);
   await client.setItem("one", 1);
   await client.setItem("two", 2);
@@ -289,7 +289,7 @@ test("flush never reports delivery after a disconnect leaves queued operations",
 });
 
 test("invalid JSON and schema values never enter the outbox or optimistic cache", async () => {
-  const client = new RemoteStorage<{ count: number }>({
+  const client = new SyncStore<{ count: number }>({
     userId: crypto.randomUUID(),
     autoConnect: false,
     schema: {
@@ -307,7 +307,7 @@ test("invalid JSON and schema values never enter the outbox or optimistic cache"
 
 test("bootstrap is scoped, preserves null, and does not claim server acknowledgement", async () => {
   const identity = { userId: "bootstrap-user", namespace: crypto.randomUUID(), autoConnect: false };
-  const source = new RemoteStorage(identity);
+  const source = new SyncStore(identity);
   resources.push(source);
   await (source as any).handleRemoteUpdate({
     key: "empty",
@@ -317,7 +317,7 @@ test("bootstrap is scoped, preserves null, and does not claim server acknowledge
     source: "remote",
   });
   const snapshot = source.dehydrate();
-  const browser = new RemoteStorage({ ...identity, initialSnapshot: snapshot });
+  const browser = new SyncStore({ ...identity, initialSnapshot: snapshot });
   resources.push(browser);
   expect(await browser.hasItem("empty")).toBe(true);
   expect(browser.getStatus()).toMatchObject({
@@ -326,8 +326,79 @@ test("bootstrap is scoped, preserves null, and does not claim server acknowledge
     pendingCount: 0,
   });
   expect(
-    () => new RemoteStorage({ ...identity, userId: "other-user", initialSnapshot: snapshot }),
+    () => new SyncStore({ ...identity, userId: "other-user", initialSnapshot: snapshot }),
   ).toThrow("scope");
   await source.setItem("draft", "pending");
   expect(source.dehydrate().items.some((item) => item.key === "draft")).toBe(false);
+});
+
+test("SyncStore.connect returns the same public client with a validated browser session", async () => {
+  const session = {
+    token: "ss_session.test",
+    expiresAt: Date.now() + 60_000,
+    userId: "browser",
+    branch: "main",
+    cacheScope: "a".repeat(64),
+  };
+  const f = fixture("/api/v1", session.token);
+  const { storage, expiresAt } = await SyncStore.connect({
+    serverUrl: f.config.serverUrl,
+    session: async () => session,
+    mode: "http",
+  });
+  resources.push(storage);
+  expect(storage).toBeInstanceOf(SyncStore);
+  expect(expiresAt).toBe(session.expiresAt);
+  expect(storage.getStatus().ready).toBe(true);
+  await storage.setItem("browser", { connected: true });
+  expect(f.items.get("browser").value).toEqual({ connected: true });
+});
+
+test("SyncStore.connect rejects invalid sessions before connecting", async () => {
+  const session = {
+    token: "ss_session.test",
+    expiresAt: Date.now() + 60_000,
+    userId: "browser",
+    branch: "main",
+    cacheScope: "a".repeat(64),
+  };
+  for (const change of [
+    { token: "application-key" },
+    { expiresAt: 0 },
+    { userId: "" },
+    { branch: "" },
+    { cacheScope: "invalid" },
+  ]) {
+    await expect(
+      SyncStore.connect({
+        serverUrl: "http://localhost",
+        session: async () => ({ ...session, ...change }),
+      }),
+    ).rejects.toThrow("Invalid or expired browser session");
+  }
+});
+
+test("SyncStore.connect destroys the client when readiness fails", async () => {
+  const ready = spyOn(SyncStore.prototype, "ready").mockRejectedValue(
+    new Error("connection failed"),
+  );
+  const destroy = spyOn(SyncStore.prototype, "destroy");
+  try {
+    await expect(
+      SyncStore.connect({
+        serverUrl: "http://localhost",
+        session: async () => ({
+          token: "ss_session.test",
+          expiresAt: Date.now() + 60_000,
+          userId: "browser",
+          branch: "main",
+          cacheScope: "b".repeat(64),
+        }),
+      }),
+    ).rejects.toThrow("connection failed");
+    expect(destroy).toHaveBeenCalledTimes(1);
+  } finally {
+    ready.mockRestore();
+    destroy.mockRestore();
+  }
 });

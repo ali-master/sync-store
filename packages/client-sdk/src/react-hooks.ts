@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import type {
-  RemoteStorageConfig,
+  SyncStoreConfig,
   StorageItem,
   ConnectionInfo,
   SyncEvent,
@@ -12,13 +12,13 @@ import type {
   SyncFilter,
 } from "./types";
 import { ConnectionState } from "./types";
-import { RemoteStorage } from "./remote-storage";
+import { SyncStore } from "./remote-storage";
 
 /**
  * Hook configuration options
  */
 export interface UseSyncStoreOptions {
-  config: RemoteStorageConfig;
+  config: SyncStoreConfig;
   autoConnect?: boolean;
   subscribeToKeys?: string[];
   syncFilter?: SyncFilter;
@@ -55,7 +55,7 @@ export interface SyncStoreHookResult {
   waitForConnection: (timeout?: number) => Promise<void>;
 
   // State
-  storage: RemoteStorage;
+  storage: SyncStore;
   isLoading: boolean;
   error: Error | null;
 
@@ -76,7 +76,7 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
 
   // Create storage instance (only once) - use stable config reference
   const storage = useMemo(
-    () => new RemoteStorage({ ...config, autoConnect: false }),
+    () => new SyncStore({ ...config, autoConnect: false }),
     [
       config.userId,
       config.serverUrl,
@@ -231,7 +231,7 @@ export function useSyncStore(options: UseSyncStoreOptions): SyncStoreHookResult 
  * Hook for reactive storage values
  */
 export function useSyncValue<T = any>(
-  storage: RemoteStorage,
+  storage: SyncStore,
   key: string,
   defaultValue?: T,
 ): [T | undefined, (value: T, metadata?: Record<string, any>) => Promise<void>] {
@@ -273,7 +273,7 @@ export function useSyncValue<T = any>(
  * Hook for multiple reactive storage values
  */
 export function useSyncValues<T extends Record<string, any>>(
-  storage: RemoteStorage,
+  storage: SyncStore,
   keys: (keyof T)[],
   defaultValues?: Partial<T>,
 ): [
@@ -324,7 +324,7 @@ export function useSyncValues<T extends Record<string, any>>(
 /**
  * Hook for connection status
  */
-export function useConnectionStatus(storage: RemoteStorage) {
+export function useConnectionStatus(storage: SyncStore) {
   const [isConnected, setIsConnected] = useState(storage.isConnected());
   const [connectionInfo, setConnectionInfo] = useState<ConnectionInfo>(storage.getConnectionInfo());
 
@@ -353,7 +353,7 @@ export function useConnectionStatus(storage: RemoteStorage) {
 /**
  * Hook for sync events
  */
-export function useSyncEvents(storage: RemoteStorage) {
+export function useSyncEvents(storage: SyncStore) {
   const [lastSyncEvent, setLastSyncEvent] = useState<SyncEvent | null>(null);
   const [lastChangeEvent, setLastChangeEvent] = useState<ChangeEvent | null>(null);
   const [lastConflict, setLastConflict] = useState<ConflictData | null>(null);
@@ -393,7 +393,7 @@ export function useSyncEvents(storage: RemoteStorage) {
  * Hook for conflict resolution
  */
 export function useConflictResolution(
-  storage: RemoteStorage,
+  storage: SyncStore,
   onConflict?: (conflict: ConflictData) => Promise<any> | any,
 ) {
   const [pendingConflicts, setPendingConflicts] = useState<ConflictData[]>([]);
@@ -448,7 +448,7 @@ export function useConflictResolution(
 /**
  * Hook for performance analytics
  */
-export function useAnalytics(storage: RemoteStorage) {
+export function useAnalytics(storage: SyncStore) {
   const [analytics, setAnalytics] = useState(() => storage.getAnalytics());
 
   useEffect(() => {
@@ -465,7 +465,7 @@ export function useAnalytics(storage: RemoteStorage) {
 /**
  * Hook for batch operations
  */
-export function useBatchOperations(storage: RemoteStorage) {
+export function useBatchOperations(storage: SyncStore) {
   const [isExecuting, setIsExecuting] = useState(false);
   const [lastResult, setLastResult] = useState<BatchResult | null>(null);
 
@@ -493,7 +493,7 @@ export function useBatchOperations(storage: RemoteStorage) {
 /**
  * Hook for offline/online state management
  */
-export function useOfflineSupport(storage: RemoteStorage) {
+export function useOfflineSupport(storage: SyncStore) {
   const [isOnline, setIsOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine,
   );
@@ -533,7 +533,7 @@ export function useOfflineSupport(storage: RemoteStorage) {
  */
 export interface UseRemoteStorageOptions {
   apiKey?: string;
-  mode?: RemoteStorageConfig["mode"];
+  mode?: SyncStoreConfig["mode"];
   namespace?: string;
   branch?: string;
   serverUrl?: string;
@@ -545,7 +545,7 @@ export interface UseRemoteStorageOptions {
  * @deprecated Use useSyncStore instead
  */
 export function useRemoteStorage(userId: string, options?: UseRemoteStorageOptions) {
-  const config: RemoteStorageConfig = {
+  const config: SyncStoreConfig = {
     userId,
     serverUrl: options?.serverUrl || "http://localhost:3000",
     instanceId: options?.instanceId,

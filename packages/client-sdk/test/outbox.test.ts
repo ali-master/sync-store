@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { RemoteStorage } from "../src/remote-storage";
+import { SyncStore } from "../src/remote-storage";
 
 test("an unacknowledged write retains its request ID on retry", async () => {
-  const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
+  const client = new SyncStore({ userId: crypto.randomUUID(), autoConnect: false });
   const internal = client as any;
   const ids: string[] = [];
   const original = internal.transport;
@@ -30,7 +30,7 @@ test("an unacknowledged write retains its request ID on retry", async () => {
 });
 
 test("outbox duplicates and delayed versions cannot resurrect a removed value", async () => {
-  const client = new RemoteStorage({ userId: crypto.randomUUID(), autoConnect: false });
+  const client = new SyncStore({ userId: crypto.randomUUID(), autoConnect: false });
   const internal = client as any;
   const event = { key: "item", recordId: "record", timestamp: 100, source: "remote" };
   let changes = 0;
@@ -63,7 +63,7 @@ test("unsupported options fail explicitly for JavaScript consumers", () => {
     { conflict: { mergeStrategy: "custom" } },
   ]) {
     expect(
-      () => new RemoteStorage({ userId: "test", autoConnect: false, ...config } as any),
+      () => new SyncStore({ userId: "test", autoConnect: false, ...config } as any),
     ).toThrow("Unsupported SDK option");
   }
 });

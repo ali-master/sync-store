@@ -1,6 +1,6 @@
 ---
 title: Client SDK
-description: Configure RemoteStorage and read, write, delete and observe JSON values.
+description: Configure SyncStore and read, write, delete and observe JSON values.
 ---
 
 ## Use the workspace build
@@ -16,9 +16,9 @@ Use the version packaged from this repository when evaluating this implementatio
 ## Create a client
 
 ```ts
-import { RemoteStorage } from "@usex/sync-store";
+import { SyncStore } from "@usex/sync-store";
 
-const storage = new RemoteStorage({
+const storage = new SyncStore({
   serverUrl: "http://localhost:3000",
   apiKey: developmentKey,
   userId: "demo-user",
@@ -151,7 +151,7 @@ event delivery, including across replicas.
 ```ts
 import { SyncStore } from "@usex/sync-store";
 
-const { storage, expiresAt } = await SyncStore({
+const { storage, expiresAt } = await SyncStore.connect({
   serverUrl: "https://sync.example.com",
   session: async () => {
     const response = await fetch("/my-app/sync-session", { cache: "no-store" });
@@ -169,13 +169,13 @@ user, branch, key or access policy uses another scope. On logout, close the old
 client before connecting as another user.
 
 Session renewal is explicit: before `expiresAt`, close the old client and call
-`SyncStore` again. Persisted queued work is recovered with the same scope.
+`SyncStore.connect()` again. Persisted queued work is recovered with the same scope.
 No automatic renewal or cross-scope transfer of queued writes is performed.
 
 ## Typed keys and runtime validation
 
 ```ts
-const storage = new RemoteStorage<{ count: number }>({
+const storage = new SyncStore<{ count: number }>({
   serverUrl,
   apiKey,
   userId,
@@ -259,3 +259,18 @@ The release checks run it automatically before a release.
 
 Transport consumers can import `BatchOperation`, `BatchResult`, `SyncFilter` and
 `EventEmitter` from `@usex/sync-store/advanced`; no internal source paths are needed.
+
+### One client: SyncStore
+
+Use `new SyncStore(config)` to create a client with explicit credentials (keep
+application keys on your server), or `await SyncStore.connect({ serverUrl, session })`
+to obtain a ready browser client using a user-bound session. Both paths use the
+same `SyncStore` class. The browser connection returns `{ storage, expiresAt }`;
+call `storage.destroy()` when finished or before renewing its session.
+
+This is a breaking SDK API change: replace `new RemoteStorage(config)` and
+`createRemoteStorage(config)` with `new SyncStore(config)`. Replace the old
+`await SyncStore(options)` browser factory with `await SyncStore.connect(options)`.
+Use `SyncStoreConfig` for configuration types. The old class and factory are no
+longer exported. React hooks remain in `/react`, compatibility hooks in `/legacy`,
+and transport utilities in `/advanced`.

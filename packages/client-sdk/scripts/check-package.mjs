@@ -67,12 +67,15 @@ for (const load of [name => import(name), name => require(name)]) {
   assert.equal(typeof (await load('@usex/sync-store/react')).SyncProvider, 'function');
   assert.equal(typeof (await load('@usex/sync-store/legacy')).useRemoteStorage, 'function');
   assert.equal(typeof core.SyncStore, 'function');
+  assert.equal(typeof core.SyncStore.connect, 'function');
+  assert.equal('RemoteStorage' in core, false);
+  assert.equal('createRemoteStorage' in core, false);
   const emitter = new advanced.EventEmitter();
   let received;
   emitter.on('value', value => { received = value; });
   await emitter.emit('value', 42);
   assert.equal(received, 42);
-  const client = core.createRemoteStorage({ userId: 'consumer', autoConnect: false, mode: 'http' });
+  const client = new core.SyncStore({ userId: 'consumer', autoConnect: false, mode: 'http' });
   try {
     await client.setItem('value', { count: 42 });
     assert.deepEqual(client.getItem('value'), { count: 42 });
@@ -85,12 +88,16 @@ for (const load of [name => import(name), name => require(name)]) {
   run("node", ["runtime.mjs"]);
   run("bun", ["runtime.mjs"]);
   const source = `
-import { createRemoteStorage, SyncStore } from '@usex/sync-store';
+import { SyncStore } from '@usex/sync-store';
 import { EventEmitter, HttpTransport, TransportMode, type BatchOperation, type BatchResult, type SyncFilter } from '@usex/sync-store/advanced';
 import { SyncProvider } from '@usex/sync-store/react';
 import { useRemoteStorage } from '@usex/sync-store/legacy';
-export const store = createRemoteStorage({ userId: 'types', autoConnect: false });
-export const connect = SyncStore;
+export const store = new SyncStore({ userId: 'types', autoConnect: false });
+export const connect = SyncStore.connect;
+// @ts-expect-error removed class must not remain publicly importable
+import type { RemoteStorage } from "@usex/sync-store";
+// @ts-expect-error removed factory must not remain publicly importable
+import type { createRemoteStorage } from "@usex/sync-store";
 export const emitter = new EventEmitter<{ value: number }>();
 export const transport = new HttpTransport({ serverUrl: 'http://localhost', userId: 'types', instanceId: 'test', mode: TransportMode.HTTP });
 export const provider = SyncProvider;

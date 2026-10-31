@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { RemoteStorage } from "../src/remote-storage";
+import { SyncStore } from "../src/remote-storage";
 
 describe.skipIf(!process.env.API_TEST_URL || !process.env.API_TEST_KEY)(
   "live API synchronization",
@@ -13,8 +13,8 @@ describe.skipIf(!process.env.API_TEST_URL || !process.env.API_TEST_KEY)(
         autoConnect: false,
         timeout: 3000,
       };
-      const writer = new RemoteStorage({ ...common, instanceId: "http", mode: "http" });
-      const reader = new RemoteStorage({ ...common, instanceId: "ws", mode: "websocket" });
+      const writer = new SyncStore({ ...common, instanceId: "http", mode: "http" });
+      const reader = new SyncStore({ ...common, instanceId: "ws", mode: "websocket" });
       try {
         await writer.connect();
         await reader.connect();
@@ -47,7 +47,7 @@ describe.skipIf(!process.env.API_TEST_URL || !process.env.API_TEST_KEY)(
       }
     }, 15_000);
     test("invalid credentials cannot establish an HTTP session", async () => {
-      const client = new RemoteStorage({
+      const client = new SyncStore({
         serverUrl: process.env.API_TEST_URL!,
         apiKey: "invalid-e2e-key",
         userId: "unauthorized-e2e",

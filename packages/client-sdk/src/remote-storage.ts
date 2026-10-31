@@ -7,7 +7,8 @@ import {
   type TransportResponse,
 } from "./transport";
 import type {
-  RemoteStorageConfig,
+  SyncStoreConfig,
+  BrowserSession,
   StorageItem,
   SyncEvent,
   ConflictData,
@@ -46,9 +47,48 @@ interface RemoteStorageEvents {
   "performance-warning": { metric: string; value: number; threshold: number };
 }
 
-export class RemoteStorage<
+export class SyncStore<
   Values extends Record<string, any> = Record<string, any>,
 > extends EventEmitter<RemoteStorageEvents> {
+  /** Connect using a user-bound session obtained from your authenticated application backend. */
+  static async connect(options: {
+    serverUrl: string;
+    session: () => Promise<BrowserSession>;
+    mode?: SyncStoreConfig["mode"];
+  }): Promise<{ storage: SyncStore; expiresAt: number }> {
+    const session = await options.session();
+    if (
+      !session.token?.startsWith("ss_session.") ||
+      !Number.isFinite(session.expiresAt) ||
+      session.expiresAt <= Date.now() ||
+      !session.userId ||
+      !session.branch ||
+      !/^[a-f0-9]{64}$/.test(session.cacheScope)
+    )
+      throw new Error("Invalid or expired browser session");
+    const endpoint = new URL(options.serverUrl);
+    const storage = new SyncStore({
+      serverUrl: options.serverUrl,
+      apiKey: session.token,
+      userId: session.userId,
+      branch: session.branch,
+      mode: options.mode,
+      namespace: JSON.stringify([
+        endpoint.origin,
+        endpoint.pathname.replace(/\/$/, ""),
+        session.cacheScope,
+      ]),
+      autoConnect: false,
+    });
+    try {
+      await storage.ready();
+    } catch (error) {
+      storage.destroy();
+      throw error;
+    }
+    return { storage, expiresAt: session.expiresAt };
+  }
+
   private initialized = false;
   private closed = false;
   private status: Readonly<SyncStatus> = Object.freeze({
@@ -63,7 +103,7 @@ export class RemoteStorage<
   private connecting?: Promise<void>;
   private flushing?: Promise<void>;
   private outbox: DataStorage;
-  private readonly config: RemoteStorageConfig & {
+  private readonly config: SyncStoreConfig & {
     serverUrl: string;
     instanceId: string;
     autoConnect: boolean;
@@ -87,7 +127,7 @@ export class RemoteStorage<
     { recordId: string; version: number; timestamp: number }
   >();
 
-  constructor(config: RemoteStorageConfig) {
+  constructor(config: SyncStoreConfig) {
     super();
     const removed = config as unknown as Record<string, any>;
     for (const field of ["debug", "network"]) {
@@ -152,8 +192,8 @@ export class RemoteStorage<
     this.updateStatus();
 
     // Initialize logger
-    this.logger = config.logger ?? new Logger("RemoteStorage");
-    this.logger.info("Initializing RemoteStorage", {
+    this.logger = config.logger ?? new Logger("SyncStore");
+    this.logger.info("Initializing SyncStore", {
       userId: this.config.userId,
       instanceId: this.config.instanceId,
       serverUrl: this.config.serverUrl,
@@ -224,7 +264,7 @@ export class RemoteStorage<
       void this.connect().catch((error) => this.handleConnectionError(error));
     }
 
-    this.logger.info("RemoteStorage initialized successfully");
+    this.logger.info("SyncStore initialized successfully");
   }
 
   /**
@@ -1249,6 +1289,6 @@ export class RemoteStorage<
     this.localStorage.destroy();
     this.removeAllListeners();
 
-    this.logger.info("RemoteStorage destroyed");
+    this.logger.info("SyncStore destroyed");
   }
 }

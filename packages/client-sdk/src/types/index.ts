@@ -1,6 +1,14 @@
+export interface BrowserSession {
+  token: string;
+  expiresAt: number;
+  userId: string;
+  branch: string;
+  cacheScope: string;
+}
+
 // Core types and interfaces for the client-sdk library
 
-export interface RemoteStorageConfig {
+export interface SyncStoreConfig {
   /** Optional per-key validators; throw to reject a value. Unknown keys are rejected when provided. */
   schema?: Record<string, (value: unknown) => void>;
   initialSnapshot?: StoreSnapshot;
@@ -256,7 +264,7 @@ export interface PluginHooks {
 }
 
 // React hook types
-export interface UseRemoteStorageOptions extends Partial<RemoteStorageConfig> {
+export interface UseRemoteStorageOptions extends Partial<SyncStoreConfig> {
   suspense?: boolean;
   errorBoundary?: boolean;
 }

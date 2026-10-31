@@ -36,7 +36,7 @@ write permission. Prefix-restricted credentials cannot inspect whole-tree commit
 They can still read and write permitted individual keys.
 
 ```ts
-const main = new RemoteStorage({
+const main = new SyncStore({
   serverUrl: 'https://sync.example.com',
   apiKey: applicationKey,
   userId: 'customer-42',
@@ -50,7 +50,7 @@ const head = branches.find(b => b.name === 'main')!.head;
 const checkpoint = await main.commit('Before redesign', head, crypto.randomUUID());
 await main.createBranch('feature/redesign', checkpoint.id);
 
-const feature = new RemoteStorage({
+const feature = new SyncStore({
   serverUrl: 'https://sync.example.com',
   apiKey: applicationKey,
   userId: 'customer-42',

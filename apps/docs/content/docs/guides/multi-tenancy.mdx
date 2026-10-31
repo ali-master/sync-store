@@ -40,7 +40,7 @@ Never embed tenant administrator credentials in a public app.
 Set a stable, distinct SDK `namespace` for each backend, tenant and project:
 
 ```ts
-const store = new RemoteStorage({
+const store = new SyncStore({
   serverUrl: 'https://sync.example.com',
   apiKey: applicationKey,
   userId: authenticatedUserId,

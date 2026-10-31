@@ -50,7 +50,7 @@ A write can update local state and still reject because delivery failed. Show th
 
 Do not use the legacy `useOfflineSupport().queuedOperations` value as an authoritative queue count: it is currently a placeholder. Connection state should come from the client, not just `navigator.onLine`.
 
-The playground owns two `RemoteStorage` instances directly to make their lifecycles and independent caches visible. Both approaches use the same transport and outbox implementation.
+The playground owns two `SyncStore` instances directly to make their lifecycles and independent caches visible. Both approaches use the same transport and outbox implementation.
 
 ## Share one client
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CheckCheck, Code2, Copy, KeyRound, Radio, ArrowUpRight } from "lucide-react";
-import { RemoteStorage } from "@usex/sync-store";
+import { SyncStore } from "@usex/sync-store";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -14,7 +14,7 @@ export function ConnectApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [proof, setProof] = useState("");
-  const clients = useRef<RemoteStorage[]>([]);
+  const clients = useRef<SyncStore[]>([]);
   const cancelled = useRef(false);
   useEffect(
     () => () => {
@@ -40,7 +40,7 @@ function Preferences() {
 <SyncProvider client={storage}><Preferences /></SyncProvider>`
       : `import { SyncStore } from "@usex/sync-store";
 
-const { storage, expiresAt } = await SyncStore({
+const { storage, expiresAt } = await SyncStore.connect({
   serverUrl: ${JSON.stringify(location.origin)},
   session: async () => {
     // Your application's authenticated server endpoint.
@@ -70,7 +70,7 @@ console.log(storage.getStatus());
     cancelled.current = false;
     const runId = crypto.randomUUID();
     const probe = `__sync_check__/${runId}`;
-    let writer: RemoteStorage | undefined;
+    let writer: SyncStore | undefined;
     let wrote = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -91,7 +91,7 @@ console.log(storage.getStatus());
       setPhase(1);
       const pair = ["writer", "receiver"].map(
         (role) =>
-          new RemoteStorage({
+          new SyncStore({
             serverUrl: location.origin,
             apiKey: session.token,
             userId,

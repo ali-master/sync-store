@@ -97,7 +97,7 @@ export interface TransportEvents {
  * Unified transport interface for both WebSocket and HTTP REST
  *
  * This interface abstracts the communication protocol details and provides
- * a consistent API for the RemoteStorage class to interact with the server
+ * a consistent API for the SyncStore class to interact with the server
  * regardless of the underlying transport mechanism.
  *
  * @interface ITransport

@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { describe, expect, test } from "bun:test";
 import { MongoClient } from "mongodb";
 import { io, type Socket } from "socket.io-client";
-import { RemoteStorage } from "../../../../packages/client-sdk/src/remote-storage";
+import { SyncStore } from "../../../../packages/client-sdk/src/remote-storage";
 
 describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
   "tenant and branch isolation",
@@ -12,7 +12,7 @@ describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
       const base = process.env.TEST_API_URL!;
       const user = "tenant-qa-" + crypto.randomUUID();
       const sockets: Socket[] = [];
-      const sdks: RemoteStorage[] = [];
+      const sdks: SyncStore[] = [];
       const call = async (
         key: string,
         path: string,
@@ -116,7 +116,7 @@ describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
         expect(eventsA.some((e) => e.value === "b")).toBe(false);
         expect(eventsB.some((e) => e.value === "b")).toBe(true);
         expect(eventsB.some((e) => e.value === "a")).toBe(false);
-        const sdk = new RemoteStorage({
+        const sdk = new SyncStore({
           serverUrl: base,
           apiKey: ka.key,
           userId: user,
@@ -134,7 +134,7 @@ describe.skipIf(!process.env.TEST_API_URL || !process.env.TEST_DATABASE_URL)(
             .status,
         ).toBe(200);
         expect((await call(ka.key, "item/theme")).data.value).toBe("a");
-        const fork = new RemoteStorage({
+        const fork = new SyncStore({
           serverUrl: base,
           apiKey: ka.key,
           userId: user,

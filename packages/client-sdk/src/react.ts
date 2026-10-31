@@ -6,14 +6,14 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import type { RemoteStorage } from "./remote-storage";
+import type { SyncStore } from "./remote-storage";
 export { useSyncStore, useSyncValue } from "./react-hooks";
 export type { UseSyncStoreOptions, SyncStoreHookResult } from "./react-hooks";
 
-const StoreContext = createContext<RemoteStorage | null>(null);
+const StoreContext = createContext<SyncStore | null>(null);
 
 /** Share one application-owned client. The owner calls close() when the application ends. */
-export function SyncProvider({ client, children }: { client: RemoteStorage; children: ReactNode }) {
+export function SyncProvider({ client, children }: { client: SyncStore; children: ReactNode }) {
   useEffect(() => {
     void client.ready().catch(() => {
       /* Exposed through the status subscription. */
@@ -23,7 +23,7 @@ export function SyncProvider({ client, children }: { client: RemoteStorage; chil
 }
 
 /** Access the same client in every component without opening another connection. */
-export function useSyncClient(): RemoteStorage {
+export function useSyncClient(): SyncStore {
   const client = useContext(StoreContext);
   if (!client) throw new Error("Wrap your application in SyncProvider");
   return client;
