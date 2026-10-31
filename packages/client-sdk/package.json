@@ -47,7 +47,7 @@
     "dev": "bun --bun tsup --watch",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "test:types": "tsc --noEmit",
+    "test:types": "bun --bun tsc --noEmit",
     "lint": "bun --bun eslint \"src/**/*.ts\"",
     "lint:fix": "bun --bun eslint \"src/**/*.ts\" --fix",
     "format": "bun --bun prettier --write \"src/**/*.ts\"",
@@ -55,7 +55,9 @@
     "release": "bun --bun release-it",
     "release:check": "bun run test:types && bun test test/sync.test.ts test/outbox.test.ts && bun run test:package",
     "prepack": "bun run build",
-    "test:package": "bun scripts/check-package.mjs"
+    "test:package": "bun scripts/check-package.mjs",
+    "test:package:node": "bun scripts/check-package.mjs --node",
+    "npm:cli": "bun --bun npm"
   },
   "dependencies": {
     "socket.io-client": "^4.8.4"
@@ -64,6 +66,7 @@
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@usex/tsconfig": "workspace:*",
+    "npm": "^12.2.1",
     "react": "^19.3.1",
     "release-it": "^21.1.2",
     "tsup": "^9.0.0",

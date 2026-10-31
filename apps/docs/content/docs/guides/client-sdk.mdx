@@ -216,13 +216,14 @@ memory implementation through `storage.adapter`; this also stores the pending qu
 
 ## Publish the SDK (maintainers)
 
-Run these commands from the repository root. Install Bun and Node.js with npm:
-release-it runs through Bun and publishes with Bun, but uses the npm CLI for
-registry authentication checks and updating the package version. Your npm account
+Run these commands from the repository root after `bun install`. No global npm
+or Node.js installation is required: release-it and the locally installed official
+npm CLI run on Bun. The CLI handles authentication checks and version updates;
+Bun publishes the package. Your npm account
 must have publishing access to the `@usex` scope.
 
 ```sh
-npm login --registry=https://registry.npmjs.org/
+bun run --cwd packages/client-sdk npm:cli login --registry=https://registry.npmjs.org/
 # Preview the first release; does not publish, commit, tag or push.
 bun run release:sdk 0.1.0 --dry-run
 # Publish after reviewing the preview (interactive confirmation).
@@ -236,7 +237,7 @@ checks SDK types and local unit tests, builds the package, updates its version a
 the root Bun lockfile, creates a release commit and an `sdk-v<version>` tag, and
 pushes to the configured Git remote. Only `@usex/sync-store` is published, with
 public access; the private application workspaces are not released. GitHub Release
-creation is disabled. The `prepack` hook rebuilds the SDK for direct packing too.
+creation is enabled and requires a `GITHUB_TOKEN` with release access to the repository. The `prepack` hook rebuilds the SDK for direct packing too.
 
 For a preview without npm credentials, add `--npm.skipChecks` to the dry-run
 command. This skips registry and account checks, so it cannot confirm publishing
@@ -250,12 +251,14 @@ prompt locally. Live API and cluster tests are separate from these release check
 bun run --cwd packages/client-sdk test:package
 ```
 
-This check packs the SDK and installs the tarball with npm in a temporary project
-outside the workspace. It verifies core imports without React, all four public
-entry points in Node.js and Bun (ESM and CommonJS), offline writes and removals,
-strict TypeScript declaration emission, and browser bundling. It requires npm,
-Node.js and registry access, removes its temporary files, and does not publish.
-The release checks run it automatically before a release.
+This check packs the SDK and installs the tarball with the local npm CLI running
+on Bun in a temporary project outside the workspace. It verifies core imports
+without React, all four public entry points in Bun (ESM and CommonJS), offline
+writes and removals, strict TypeScript declaration emission, and browser bundling.
+It requires Bun and registry access, removes its temporary files, and does not
+publish. The release checks run it automatically before a release. To additionally
+test a separately installed Node.js runtime, run
+`bun run --cwd packages/client-sdk test:package:node` outside the release process.
 
 Transport consumers can import `BatchOperation`, `BatchResult`, `SyncFilter` and
 `EventEmitter` from `@usex/sync-store/advanced`; no internal source paths are needed.

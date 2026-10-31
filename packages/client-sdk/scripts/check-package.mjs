@@ -1,17 +1,25 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const sdk = fileURLToPath(new URL("../", import.meta.url));
 const manifest = JSON.parse(readFileSync(join(sdk, "package.json"), "utf8"));
+const npmCli = join(
+  dirname(createRequire(import.meta.url).resolve("npm/package.json")),
+  "bin/npm-cli.js",
+);
+const checkNode = process.argv.includes("--node");
 const consumer = mkdtempSync(join(tmpdir(), "sync-store-consumer-"));
 
 /** Exercise the packed SDK outside the workspace so missing exports cannot hide behind source aliases. */
 function run(command, args, cwd = consumer) {
-  execFileSync(command, args, { cwd, stdio: "inherit", timeout: 180_000 });
+  const executable = command === "npm" || command === "bun" ? process.execPath : command;
+  const parameters = command === "npm" ? [npmCli, ...args] : args;
+  execFileSync(executable, parameters, { cwd, stdio: "inherit", timeout: 180_000 });
 }
 
 try {
@@ -27,7 +35,7 @@ try {
     archive,
   ]);
   // The core and advanced entry points must work without the optional React peer.
-  run("node", [
+  run("bun", [
     "--input-type=module",
     "-e",
     `
@@ -85,7 +93,7 @@ for (const load of [name => import(name), name => require(name)]) {
 }
 `,
   );
-  run("node", ["runtime.mjs"]);
+  if (checkNode) run("node", ["runtime.mjs"]);
   run("bun", ["runtime.mjs"]);
   const source = `
 import { SyncStore } from '@usex/sync-store';
@@ -108,7 +116,7 @@ export const filter = (value: SyncFilter) => store.setSyncFilter(value);
 emitter.emit('value', 'invalid');
 `;
   for (const ext of ["mts", "cts"]) writeFileSync(join(consumer, `consumer.${ext}`), source);
-  run("node", [
+  run("bun", [
     "node_modules/typescript/bin/tsc",
     "--strict",
     "--declaration",
@@ -122,7 +130,7 @@ emitter.emit('value', 'invalid');
     "consumer.mts",
     "consumer.cts",
   ]);
-  run("node", [
+  run("bun", [
     "node_modules/typescript/bin/tsc",
     "--strict",
     "--noEmit",
@@ -136,7 +144,7 @@ emitter.emit('value', 'invalid');
   ]);
   run("bun", ["build", "consumer.mts", "--target", "browser", "--outfile", "browser.js"]);
   console.log(
-    "Packed SDK passed npm installation, Node/Bun runtime and consumer declaration checks.",
+    "Packed SDK passed npm CLI installation (on Bun), Bun runtime and consumer declaration checks.",
   );
 } finally {
   rmSync(consumer, { recursive: true, force: true });
