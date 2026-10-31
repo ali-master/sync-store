@@ -16,7 +16,7 @@
     "publishPath": ""
   },
   "github": {
-    "release": false
+    "release": true
   },
   "hooks": {
     "before:init": "bun run release:check",
