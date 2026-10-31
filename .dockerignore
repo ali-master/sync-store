@@ -13,3 +13,7 @@ coverage
 **/Dockerfile
 **/README.md
 apps/mcp
+
+venv
+.venv
+**/__pycache__

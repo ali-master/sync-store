@@ -7,12 +7,17 @@ RUN bun run --cwd packages/utils build && bun run --cwd packages/client-sdk buil
 
 FROM --platform=$BUILDPLATFORM oven/bun:1.4.4 AS runtime-deps
 WORKDIR /app
+ARG TARGETARCH
 COPY . .
 # The init service needs Prisma; frontend/build/release tooling is not needed at runtime.
-RUN bun install --frozen-lockfile --ignore-scripts --production --filter @usex/api --filter @usex/utils --cpu=x64 --cpu=arm64
+RUN bun install --frozen-lockfile --ignore-scripts --production --filter @usex/api --filter @usex/utils --cpu=$TARGETARCH
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
 COPY --from=build /app/apps/dashboard/dist /app/apps/dashboard/dist
 COPY --from=build /app/packages/utils/dist /app/packages/utils/dist
+# Keep the API tools, compiled dashboard and workspace dependency links only.
+RUN rm -rf /app/venv /app/apps/docs /app/examples /app/scripts /app/docs /app/docker /app/assets \
+    /app/apps/dashboard/src /app/apps/dashboard/public /app/packages/client-sdk \
+    /app/packages/static-analyzer /app/apps/api/test
 # Small dependency layers avoid long single-upload proxy timeouts and allow independent retries.
 RUN set -eu; cd /; mkdir -p /layers/0; mv /app /layers/0/app; \
     for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do mkdir -p /layers/$i/app/node_modules/.bun; done; \
@@ -22,7 +27,7 @@ RUN set -eu; cd /; mkdir -p /layers/0; mv /app /layers/0/app; \
       fi; \
     done
 
-FROM oven/bun:1.4.4
+FROM oven/bun:1.4.4-slim
 WORKDIR /app
 COPY --link --from=runtime-deps --chown=1000:1000 /layers/0/ /
 COPY --link --from=runtime-deps --chown=1000:1000 /layers/1/ /
