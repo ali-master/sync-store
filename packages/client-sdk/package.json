@@ -53,8 +53,9 @@
     "format": "bun --bun prettier --write \"src/**/*.ts\"",
     "format:check": "bun --bun prettier --check \"src/**/*.ts\"",
     "release": "bun --bun release-it",
-    "release:check": "bun run test:types && bun test test/sync.test.ts test/outbox.test.ts && bun run build",
-    "prepack": "bun run build"
+    "release:check": "bun run test:types && bun test test/sync.test.ts test/outbox.test.ts && bun run test:package",
+    "prepack": "bun run build",
+    "test:package": "bun scripts/check-package.mjs"
   },
   "dependencies": {
     "socket.io-client": "^4.8.4"

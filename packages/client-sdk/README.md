@@ -137,3 +137,19 @@ command. This skips registry and account checks, so it cannot confirm publishing
 permissions or whether the version already exists. Keep those checks enabled for
 real releases. Never commit npm tokens; complete npm authentication and any 2FA
 prompt locally. Live API and cluster tests are separate from these release checks.
+
+### Verify the installable package
+
+```sh
+bun run --cwd packages/client-sdk test:package
+```
+
+This check packs the SDK and installs the tarball with npm in a temporary project
+outside the workspace. It verifies core imports without React, all four public
+entry points in Node.js and Bun (ESM and CommonJS), offline writes and removals,
+strict TypeScript declaration emission, and browser bundling. It requires npm,
+Node.js and registry access, removes its temporary files, and does not publish.
+The release checks run it automatically before a release.
+
+Transport consumers can import `BatchOperation`, `BatchResult`, `SyncFilter` and
+`EventEmitter` from `@usex/sync-store/advanced`; no internal source paths are needed.

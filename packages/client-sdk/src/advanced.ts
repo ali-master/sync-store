@@ -1,3 +1,6 @@
+export { EventEmitter } from "./core/event-emitter";
+export type { BatchOperation, BatchResult, SyncFilter } from "./types";
+
 // Transport layer exports
 export {
   TransportFactory,
