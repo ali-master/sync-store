@@ -57,7 +57,7 @@
     "lint:fix": "bun --bun eslint \"src/**/*.ts\" --fix"
   },
   "dependencies": {
-    "@nestjs/common": "^12.2.0",
+    "@nestjs/common": "^12.3.2",
     "@orama/cuid2": "^2.2.3",
     "@supercharge/request-ip": "^1.2.0",
     "@visulima/humanizer": "^4.0.0",
