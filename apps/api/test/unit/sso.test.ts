@@ -61,6 +61,9 @@ test("ID token claims must match the issuer, client, nonce, expiry and a verifie
   expect(ssoIdentity(idToken(claims({ aud: ["console"] })), expected, 1000)).toBe(
     "ada@example.com",
   );
+  expect(ssoIdentity(idToken(claims({ email_verified: "true" })), expected, 1000)).toBe(
+    "ada@example.com",
+  );
   for (const bad of [
     { iss: "https://evil.example/" },
     { aud: "another-client" },
@@ -71,6 +74,11 @@ test("ID token claims must match the issuer, client, nonce, expiry and a verifie
     { email: undefined },
     { email_verified: false },
     { email_verified: "false" },
+    // A provider that does not vouch for the address is refused, not trusted by default.
+    { email_verified: undefined },
+    { email_verified: null },
+    { email_verified: 1 },
+    { email_verified: "yes" },
   ])
     expect(() => ssoIdentity(idToken(claims(bad)), expected, 1000)).toThrow();
   expect(() => ssoIdentity("not-a-token", expected, 1000)).toThrow("invalid ID token");

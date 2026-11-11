@@ -5,7 +5,7 @@ description: Let your team open the Sync Store console with your identity provid
 
 ## What it does
 
-Single sign-on (SSO) adds a **Continue with …** button to the console sign-in screen. People sign in with your identity provider (Google Workspace, Microsoft Entra ID, Okta, Keycloak, Auth0 or any other OpenID Connect provider), and the console opens with installation-administrator access. The administrator key keeps working, so you always have a way in if the provider is down.
+Single sign-on (SSO) adds a **Continue with …** button to the console sign-in screen. People sign in with your identity provider (Google Workspace, Okta, Keycloak, Auth0 or any other OpenID Connect provider that verifies email addresses), and the console opens with installation-administrator access. The administrator key keeps working, so you always have a way in if the provider is down.
 
 SSO is off until you configure it. It is for operators of your installation only; it does not sign in the end users of your applications.
 
@@ -25,15 +25,23 @@ https://sync.example.com/api/v1/sso/callback
 
 Request the `openid`, `email` and `profile` scopes. Note the issuer URL, the client ID and, if your provider issued one, the client secret.
 
-| Provider           | Issuer URL                                           |
-| ------------------ | ---------------------------------------------------- |
-| Google             | `https://accounts.google.com`                        |
-| Microsoft Entra ID | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
-| Okta               | `https://<your-domain>.okta.com`                     |
-| Keycloak           | `https://<host>/realms/<realm>`                      |
-| Auth0              | `https://<tenant>.auth0.com`                         |
+| Provider | Issuer URL                       |
+| -------- | -------------------------------- |
+| Google   | `https://accounts.google.com`    |
+| Okta     | `https://<your-domain>.okta.com` |
+| Keycloak | `https://<host>/realms/<realm>`  |
+| Auth0    | `https://<tenant>.auth0.com`     |
 
-The issuer must serve `/.well-known/openid-configuration`, and it must put a verified `email` claim in the ID token. In Microsoft Entra ID, add the optional `email` claim to the ID token of the app registration. Use a single-tenant issuer; the multi-tenant `common` endpoint is not supported.
+The issuer must serve `/.well-known/openid-configuration`, and its ID token must contain both:
+
+- an `email` claim, and
+- `email_verified` set to `true`.
+
+A token without `email_verified` is refused, even if it has an email address: the allow-list can only be trusted when the provider vouches for the address. Google, Okta, Keycloak and Auth0 include the claim when you request the `email` scope.
+
+Microsoft Entra ID does not include `email_verified` in its ID tokens, so it cannot be used directly. Put an OpenID Connect provider that issues the claim in front of it, for example Keycloak or Auth0 with Entra ID as its upstream identity provider.
+
+Use a single-tenant issuer; the multi-tenant `common` endpoint is not supported.
 
 ## 2. Configure the API
 
@@ -110,11 +118,11 @@ Register the same URI with your provider.
 
 ## Troubleshooting
 
-| Message                                                         | Cause and fix                                                                                             |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `… is not allowed to administer this installation`              | The email address is not in `SSO_ALLOWED_EMAILS` and its domain is not in `SSO_ALLOWED_DOMAINS`.          |
-| `The sign-in request expired or was not started here`           | More than ten minutes passed, or the callback opened in another browser. Start again from the console.    |
-| `The identity provider did not return a verified email address` | Release the `email` claim to the application, and verify the address at the provider.                     |
-| `The identity provider rejected the authorization code`         | The client secret is wrong, or `SSO_REDIRECT_URI` differs from the registered URI.                        |
-| `Finish installation setup before signing in with SSO`          | Complete first-time setup, or re-enable the installation administrator key.                               |
-| `Sign-in failed. Check the API logs and try again.`             | The API could not reach the provider or its discovery document does not match `SSO_ISSUER`. See the logs. |
+| Message                                                         | Cause and fix                                                                                                                                                         |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `… is not allowed to administer this installation`              | The email address is not in `SSO_ALLOWED_EMAILS` and its domain is not in `SSO_ALLOWED_DOMAINS`.                                                                      |
+| `The sign-in request expired or was not started here`           | More than ten minutes passed, or the callback opened in another browser. Start again from the console.                                                                |
+| `The identity provider did not return a verified email address` | The ID token has no `email`, or no `email_verified: true`. Request the `email` scope, release both claims to the application, and verify the address at the provider. |
+| `The identity provider rejected the authorization code`         | The client secret is wrong, or `SSO_REDIRECT_URI` differs from the registered URI.                                                                                    |
+| `Finish installation setup before signing in with SSO`          | Complete first-time setup, or re-enable the installation administrator key.                                                                                           |
+| `Sign-in failed. Check the API logs and try again.`             | The API could not reach the provider or its discovery document does not match `SSO_ISSUER`. See the logs.                                                             |

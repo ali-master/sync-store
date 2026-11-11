@@ -113,11 +113,13 @@ export function ssoIdentity(
     claims.nonce !== expected.nonce
   )
     throw new UnauthorizedException("The identity provider's ID token failed validation");
+  // Only an explicit verification counts: a provider that omits email_verified has not vouched for
+  // the address, and the allow-list is only as trustworthy as the email it matches. Some providers
+  // send the boolean as a string.
   if (
     typeof claims.email !== "string" ||
     !claims.email ||
-    claims.email_verified === false ||
-    claims.email_verified === "false"
+    (claims.email_verified !== true && claims.email_verified !== "true")
   )
     throw new ForbiddenException("The identity provider did not return a verified email address");
   return claims.email.toLowerCase();
