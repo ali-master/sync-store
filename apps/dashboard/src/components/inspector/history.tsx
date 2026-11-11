@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/motion/button/base";
 import { display, type Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
+import { helpClass, labelClass, textareaClass } from "./sheet";
 
 /** Preview a retained version against the current value before restoring it. */
 export function HistoryInspector({ selected }: { selected: Row }) {
@@ -11,30 +10,30 @@ export function HistoryInspector({ selected }: { selected: Row }) {
   const [historyPreview, setHistoryPreview] = useState<Row | null>(null);
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border bg-muted/20 p-4 text-sm">
-        <p>
+      <div className="space-y-2 rounded-xl border bg-card p-4 text-sm">
+        <p className="font-medium">
           Version {selected.version} · {display(selected.lastModified)}
         </p>
-        <p className="mt-2 break-all text-muted-foreground">
+        <p className="font-mono text-xs break-all text-muted-foreground">
           {selected.userId} / {selected.key}
         </p>
-        <p className="mt-2">
+        <p className={helpClass}>
           {selected.isDeleted
             ? "This version represents a deletion."
             : "This version contains a stored value."}
         </p>
       </div>
-      <Label>
-        Retained value
-        <Textarea
+      <label className="block space-y-1.5">
+        <span className={labelClass}>Retained value</span>
+        <textarea
           readOnly
           rows={8}
           value={
             selected.isDeleted ? "Deleted" : JSON.stringify(JSON.parse(selected.value), null, 2)
           }
-          className="font-mono text-xs"
+          className={textareaClass}
         />
-      </Label>
+      </label>
       <Button
         disabled={busy}
         onClick={() =>
@@ -51,33 +50,45 @@ export function HistoryInspector({ selected }: { selected: Row }) {
         Preview restore
       </Button>
       {historyPreview && (
-        <section className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-5">
-          <h3 className="font-semibold">Review before restoring</h3>
-          <Label>
-            Current value
-            <Textarea
+        <section className="space-y-4 border-t pt-5">
+          <h3 className="text-sm font-semibold">Review before restoring</h3>
+          <label className="block space-y-1.5">
+            <span className={labelClass}>Current value</span>
+            <textarea
               readOnly
               rows={6}
-              className="font-mono text-xs"
+              className={textareaClass}
               value={
                 historyPreview.current && !historyPreview.current.isDeleted
                   ? JSON.stringify(JSON.parse(historyPreview.current.value), null, 2)
                   : "Deleted or missing"
               }
             />
-          </Label>
-          <details className="text-sm">
-            <summary className="cursor-pointer font-medium">Metadata changes</summary>
-            <Label className="mt-3">
-              Current metadata
-              <Textarea readOnly rows={3} value={historyPreview.current?.metadata || "null"} />
-            </Label>
-            <Label className="mt-3">
-              Retained metadata
-              <Textarea readOnly rows={3} value={historyPreview.snapshot.metadata || "null"} />
-            </Label>
+          </label>
+          <details>
+            <summary className="cursor-pointer text-sm font-medium marker:text-muted-foreground">
+              Metadata changes
+            </summary>
+            <label className="mt-3 block space-y-1.5">
+              <span className={labelClass}>Current metadata</span>
+              <textarea
+                readOnly
+                rows={3}
+                className={textareaClass}
+                value={historyPreview.current?.metadata || "null"}
+              />
+            </label>
+            <label className="mt-3 block space-y-1.5">
+              <span className={labelClass}>Retained metadata</span>
+              <textarea
+                readOnly
+                rows={3}
+                className={textareaClass}
+                value={historyPreview.snapshot.metadata || "null"}
+              />
+            </label>
           </details>
-          <p className="text-sm text-muted-foreground">
+          <p className={helpClass}>
             This creates a new version and notifies connected clients. If another client changes the
             item, restore will stop and ask for a fresh preview.
           </p>

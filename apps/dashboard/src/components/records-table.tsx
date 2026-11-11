@@ -1,28 +1,31 @@
 import { useMemo } from "react";
-import {
-  createColumnHelper,
-  rowPaginationFeature,
-  tableFeatures,
-  useTable,
-} from "@tanstack/react-table";
-import { ArrowUpRight, ChevronLeft, ChevronRight, Database } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableHeader,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-} from "@/components/ui/table";
+import { ArrowUpRight, Database } from "lucide-react";
+import { AnimatedBadge } from "@/components/motion/animated-badge";
+import { Button } from "@/components/motion/button/base";
+import { Pagination } from "@/components/motion/pagination";
+import { Table } from "@/components/motion/table";
+import type { TableColumn } from "@/components/motion/table/types";
 
 type RecordRow = Record<string, any>;
-const features = tableFeatures({ rowPaginationFeature });
-const helper = createColumnHelper<typeof features, RecordRow>();
 const emptyRows: RecordRow[] = [];
+const pageSize = 25;
 
-/** Model the server's page without sorting or filtering only a misleading partial dataset. */
+/** "lastUsedAt" reads as "Last used at" when a field has no curated label. */
+function heading(field: string) {
+  const words = field
+    .replace(/^_/, "")
+    .replace(/([A-Z])/g, " $1")
+    .toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Fields whose values are identifiers or stored text, shown in the monospace face. */
+const technical = /(^_id$|Id$|^key$|^revision$|^value$|^action$)/;
+
+/**
+ * Show one server page. Sorting and filtering stay on the server: ordering only the 25 loaded rows
+ * would present a partial dataset as if it were the whole.
+ */
 export function RecordsTable({
   fields,
   labels,
@@ -44,117 +47,80 @@ export function RecordsTable({
   onInspect: (record: RecordRow) => void;
   display: (value: any) => string;
 }) {
-  const columns = useMemo(
-    () =>
-      helper.columns([
-        ...fields.map((field) =>
-          helper.accessor((row) => row[field], {
-            id: field,
-            header: labels[field] || field.replace(/([A-Z])/g, " $1"),
-            cell: (info) =>
-              typeof info.getValue() === "boolean" ? (
-                <Badge variant={info.getValue() ? "secondary" : "outline"}>
-                  {display(info.getValue())}
-                </Badge>
-              ) : (
-                <span className="block max-w-64 truncate" title={display(info.getValue())}>
-                  {display(info.getValue())}
-                </span>
-              ),
-          }),
-        ),
-        helper.display({
-          id: "inspect",
-          header: () => <span className="sr-only">Inspect</span>,
-          cell: ({ row }) => (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={"Inspect " + (row.original.name || row.original.key || row.original._id)}
-              onClick={() => onInspect(row.original)}
+  const columns = useMemo<TableColumn<RecordRow>[]>(
+    () => [
+      ...fields.map((field): TableColumn<RecordRow> => ({
+        key: field,
+        header: labels[field] || heading(field),
+        cell: (row) =>
+          typeof row[field] === "boolean" ? (
+            <AnimatedBadge size="sm" status={row[field] ? "success" : "neutral"} showIcon={false}>
+              {display(row[field])}
+            </AnimatedBadge>
+          ) : (
+            <span
+              className={
+                "block max-w-64 truncate " + (technical.test(field) ? "font-mono text-xs" : "")
+              }
+              title={display(row[field])}
             >
-              <ArrowUpRight />
-            </Button>
+              {display(row[field])}
+            </span>
           ),
-        }),
-      ]),
+      })),
+      {
+        key: "inspect",
+        header: <span className="sr-only">Inspect</span>,
+        align: "right",
+        width: "56px",
+        cell: (row) => (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={"Inspect " + (row.name || row.key || row._id)}
+            onClick={() => onInspect(row)}
+          >
+            <ArrowUpRight className="size-4" />
+          </Button>
+        ),
+      },
+    ],
     [fields, labels, onInspect, display],
   );
-  const table = useTable({
-    features,
-    columns,
-    data: records?.items ?? emptyRows,
-    getRowId: (row) => row._id,
-    manualPagination: true,
-    autoResetPageIndex: false,
-    rowCount: records?.total ?? 0,
-    state: { pagination: { pageIndex: page - 1, pageSize: 25 } },
-    onPaginationChange: (updater) => {
-      const current = { pageIndex: page - 1, pageSize: 25 };
-      const next = typeof updater === "function" ? updater(current) : updater;
-      onPageChange(next.pageIndex + 1);
-    },
-  });
+  const pages = Math.max(1, Math.ceil((records?.total ?? 0) / pageSize));
+  const empty = !loading && !records?.items.length;
+
   return (
     <>
-      <Table aria-label="Installation records" aria-busy={loading}>
-        <TableHeader>
-          {table.getHeaderGroups().map((group) => (
-            <TableRow key={group.id}>
-              {group.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className="px-6 text-xs font-medium text-muted-foreground"
-                >
-                  {!header.isPlaceholder && <table.FlexRender header={header} />}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getAllCells().map((cell) => (
-                <TableCell key={cell.id} className="px-6 py-3">
-                  <table.FlexRender cell={cell} />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {!loading && !records?.items.length && (
-        <div className="grid justify-items-center gap-3 px-6 py-16 text-center">
-          <Database className="size-8 text-muted-foreground/50" />
-          <h3 className="font-medium">{query ? "No matching records." : "A clean slate."}</h3>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            {query
-              ? "Try another search or clear the filter."
-              : "Records will appear when your applications use this installation."}
-          </p>
-        </div>
-      )}
-      <footer className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4 text-xs text-muted-foreground">
+      <div aria-busy={loading}>
+        <Table
+          data={records?.items ?? emptyRows}
+          columns={columns}
+          getRowId={(row, index) => String(row._id ?? index)}
+          loading={loading && !records}
+          skeletonRows={6}
+          emptyState={
+            empty ? (
+              <div className="grid justify-items-center gap-3 px-6 py-14 text-center">
+                <span className="grid size-12 place-items-center rounded-2xl bg-muted text-muted-foreground">
+                  <Database className="size-5" aria-hidden="true" />
+                </span>
+                <h3 className="font-medium">{query ? "No matching records." : "A clean slate."}</h3>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {query
+                    ? "Try another search or clear the filter."
+                    : "Records will appear when your applications use this installation."}
+                </p>
+              </div>
+            ) : undefined
+          }
+        />
+      </div>
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-xs text-muted-foreground">
         <span>
-          Page {page} of {Math.max(1, table.getPageCount())} · 25 records per page
+          Page {page} of {pages} · {pageSize} records per page
         </span>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            disabled={loading || !table.getCanPreviousPage()}
-            onClick={() => table.previousPage()}
-          >
-            <ChevronLeft /> Previous
-          </Button>
-          <Button
-            variant="outline"
-            disabled={loading || !records || !table.getCanNextPage()}
-            onClick={() => table.nextPage()}
-          >
-            Next <ChevronRight />
-          </Button>
-        </div>
+        <Pagination totalPages={pages} page={page} onPageChange={onPageChange} />
       </footer>
     </>
   );

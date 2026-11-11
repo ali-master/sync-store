@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { DataScope } from "@/components/data-scope";
 import { RecordsTable } from "@/components/records-table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+import { Button } from "@/components/motion/button/base";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/motion/card";
+import { Input } from "@/components/motion/input";
 import { columns, display, labels, type Page, type Row } from "@/lib/console";
 
 /** Search and page one resource; the submitted query and page live in the URL. */
@@ -41,14 +43,14 @@ export function Records({
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-4 p-6 [&_h2]:font-semibold [&_span]:text-xs [&_span]:text-muted-foreground">
-        <div>
-          <h2>{section === "overview" ? "Recent recorded activity" : title}</h2>
-          <span>{records ? records.total.toLocaleString() + " records" : "Loading records"}</span>
-        </div>
+    <Card className="overflow-hidden">
+      <CardHeader className="gap-y-4">
+        <CardTitle as="h2">{section === "overview" ? "Recent recorded activity" : title}</CardTitle>
+        <CardDescription>
+          {records ? records.total.toLocaleString() + " records" : "Loading records"}
+        </CardDescription>
         <form
-          className="flex w-full items-center gap-2 sm:w-80"
+          className="col-span-full flex w-full items-center gap-2 sm:max-w-md"
           onSubmit={(e) => {
             e.preventDefault();
             void routerNavigate({
@@ -57,18 +59,19 @@ export function Records({
             });
           }}
         >
-          <span aria-hidden="true">⌕</span>
           <Input
             aria-label="Search records"
             placeholder="Search records…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
+            leftIcon={<Search className="size-4" />}
+            className="flex-1"
           />
           <Button variant="outline" type="submit">
             Search
           </Button>
         </form>
-      </div>
+      </CardHeader>
       <RecordsTable
         fields={activeColumns}
         labels={labels}
@@ -80,6 +83,6 @@ export function Records({
         onInspect={onInspect}
         display={display}
       />
-    </section>
+    </Card>
   );
 }

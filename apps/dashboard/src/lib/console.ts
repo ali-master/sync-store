@@ -113,3 +113,28 @@ export function display(value: any): string {
     return new Date(value).toLocaleString();
   return String(value);
 }
+
+/** Stored sizes in the unit a person reads at a glance; exact bytes stay in the record. */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(
+    units.length - 1,
+    bytes < 1 ? 0 : Math.floor(Math.log(bytes) / Math.log(1024)),
+  );
+  const value = bytes / 1024 ** index;
+  return (
+    (index === 0 ? String(Math.round(value)) : value.toFixed(value < 10 ? 2 : 1)) +
+    " " +
+    units[index]
+  );
+}
+
+/** Uptime as its two largest units, such as "1 d 2 h" or "14 min". */
+export function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return minutes + " min";
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + " h " + (minutes % 60) + " min";
+  return Math.floor(hours / 24) + " d " + (hours % 24) + " h";
+}

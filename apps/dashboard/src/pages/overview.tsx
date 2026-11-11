@@ -1,92 +1,204 @@
-import { useNavigate } from "@tanstack/react-router";
+import { ArrowRight, Database, HardDrive, KeyRound, Network, type LucideIcon } from "lucide-react";
+import { BarChart } from "@/components/charts/bar-chart";
+import {
+  DonutChart,
+  DonutChartCenter,
+  DonutChartLegend,
+  DonutChartPlot,
+} from "@/components/charts/donut-chart";
+import { useSectionNavigate } from "@/components/console-nav";
 import type { DataScope } from "@/components/data-scope";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import type { Row } from "@/lib/console";
+import { AnimatedBadge } from "@/components/motion/animated-badge";
+import { AnimatedNumber } from "@/components/motion/animated-number";
+import { Button } from "@/components/motion/button/base";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/motion/card";
+import { formatBytes, formatDuration, type Row } from "@/lib/console";
+
+const whole = (value: number) => Math.round(value).toLocaleString();
+
+/** The collections an operator reasons about together, in a fixed colour order. */
+const collections: [id: string, name: string, color: string][] = [
+  ["storage", "Stored items", "var(--chart-1)"],
+  ["history", "Retained versions", "var(--chart-2)"],
+  ["audits", "Activity entries", "var(--chart-3)"],
+  ["conflicts", "Conflicts", "var(--chart-4)"],
+  ["analytics", "Analytics records", "var(--chart-5)"],
+];
+
+function Stat({
+  label,
+  help,
+  icon: Icon,
+  children,
+}: {
+  label: string;
+  help: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card size="compact">
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+          {label}
+          <span className="grid size-7 place-items-center rounded-lg bg-accent text-accent-foreground">
+            <Icon className="size-3.5" aria-hidden="true" />
+          </span>
+        </div>
+        <p className="text-3xl font-semibold tracking-tight tabular-nums">{children}</p>
+        <p className="text-xs text-muted-foreground">{help}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 /** Summarize the installation and point to the most common next tasks. */
 export function Overview({ overview, dataScope }: { overview: Row; dataScope: DataScope }) {
-  const routerNavigate = useNavigate();
-  function navigate(next: string) {
-    void routerNavigate({
-      to: next === "overview" ? "/" : "/" + next,
-      search: { ...dataScope, page: 1, q: "" },
-    });
-  }
+  const go = useSectionNavigate(dataScope);
+  const counts: Record<string, number> = overview.counts ?? {};
+  const segments = collections
+    .map(([id, name, color]) => ({ id, name, color, value: counts[id] ?? 0 }))
+    .filter((segment) => segment.value > 0);
+  const access = ["keys", "projects", "tenants", "sessions", "quotas"].filter(
+    (id) => typeof counts[id] === "number",
+  );
 
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Stored items", overview.counts.storage, "Across " + overview.users + " users", "▤"],
-          ["Live connections", overview.activeSessions, "Sockets across connected replicas", "⇄"],
-          ["API keys", overview.counts.keys, "Application & admin credentials", "⌘"],
-          [
-            "Storage used",
-            (overview.storageBytes / 1024).toFixed(1) + " KB",
-            "Persisted item sizes",
-            "◴",
-          ],
-        ].map(([label, value, help, icon]) => (
-          <Card
-            className="gap-5 p-6 [&>div]:flex [&>div]:items-center [&>div]:justify-between [&>div]:text-xs [&>div]:text-muted-foreground [&_strong]:text-4xl [&_strong]:font-medium [&_strong]:tracking-tight [&_small]:text-xs [&_small]:text-muted-foreground"
-            key={String(label)}
-          >
-            <div>
-              <span>{label}</span>
-              <i aria-hidden="true">{icon}</i>
-            </div>
-            <strong>{value}</strong>
-            <small>{help}</small>
-          </Card>
-        ))}
+        <Stat label="Stored items" help={`Across ${whole(overview.users)} users`} icon={Database}>
+          <AnimatedNumber value={counts.storage ?? 0} format={whole} />
+        </Stat>
+        <Stat label="Live connections" help="Sockets across connected replicas" icon={Network}>
+          <AnimatedNumber value={overview.activeSessions} format={whole} />
+        </Stat>
+        <Stat label="API keys" help="Application and administrator credentials" icon={KeyRound}>
+          <AnimatedNumber value={counts.keys ?? 0} format={whole} />
+        </Stat>
+        <Stat label="Storage used" help="Persisted item sizes" icon={HardDrive}>
+          {formatBytes(overview.storageBytes)}
+        </Stat>
       </div>
-      <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <section className="rounded-xl border bg-gradient-to-br from-card to-primary/5 p-6">
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
-            CONNECTION HEALTH
-          </p>
-          <div className="my-8 flex items-center gap-5 [&_h2]:text-lg [&_h2]:font-medium [&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
-            <span className="grid size-14 shrink-0 place-items-center rounded-full border-8 border-primary/5 bg-card text-xl text-primary">
-              ↔
-            </span>
-            <div>
-              <h2>Your backend is responding.</h2>
-              <p>
-                MongoDB ping completed in <b>{overview.databaseLatencyMs} ms</b>.
+
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Records by collection</CardTitle>
+            <CardDescription>Counted in your database just now. Not a history.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {segments.length ? (
+              <DonutChart
+                segments={segments}
+                formatValue={whole}
+                label="Records by collection"
+                onSelect={go}
+              >
+                <div className="grid items-center gap-6 md:grid-cols-[11rem_1fr]">
+                  <DonutChartPlot className="mx-auto w-44">
+                    <DonutChartCenter totalLabel="records" />
+                  </DonutChartPlot>
+                  <DonutChartLegend />
+                </div>
+              </DonutChart>
+            ) : (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Nothing is stored yet. Connect your app to write the first item.
               </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3 border-t pt-5 [&_small]:block [&_small]:text-[10px] [&_small]:text-muted-foreground [&_b]:mt-2 [&_b]:block [&_b]:text-xs [&_b]:font-medium">
-            <div>
-              <small>Runtime</small>
-              <b>{overview.runtime}</b>
-            </div>
-            <div>
-              <small>Process uptime</small>
-              <b>{Math.floor(overview.uptimeSeconds / 60)} min</b>
-            </div>
-            <div>
-              <small>Lifetime key requests</small>
-              <b>{overview.totalCalls.toLocaleString()}</b>
-            </div>
-          </div>
-        </section>
-        <section className="space-y-4 rounded-xl border bg-card p-6 [&_h2]:text-lg [&_h2]:font-medium [&_button]:w-full [&_button]:justify-between">
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
-            NEXT STEPS
-          </p>
-          <h2>A place for every detail.</h2>
-          <Button variant="outline" onClick={() => navigate("storage")}>
-            Explore stored data <span>→</span>
-          </Button>
-          <Button variant="outline" onClick={() => navigate("keys")}>
-            Manage application access <span>→</span>
-          </Button>
-          <Button variant="outline" onClick={() => navigate("conflicts")}>
-            Review conflicts <span>→</span>
-          </Button>
-        </section>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Backend</CardTitle>
+            <CardDescription>
+              MongoDB answered a ping in{" "}
+              <b className="font-medium text-foreground">{overview.databaseLatencyMs} ms</b>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <AnimatedBadge status="success" pulse>
+              Responding
+            </AnimatedBadge>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm [&_dd]:mt-1 [&_dd]:font-medium [&_dt]:text-xs [&_dt]:text-muted-foreground">
+              <div>
+                <dt>Runtime</dt>
+                <dd>{overview.runtime}</dd>
+              </div>
+              <div>
+                <dt>Database</dt>
+                <dd className="truncate font-mono text-xs">{overview.database}</dd>
+              </div>
+              <div>
+                <dt>Process uptime</dt>
+                <dd>{formatDuration(overview.uptimeSeconds)}</dd>
+              </div>
+              <div>
+                <dt>Lifetime key requests</dt>
+                <dd className="tabular-nums">{whole(overview.totalCalls)}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Access and connections</CardTitle>
+            <CardDescription>Credentials, workspaces and live sessions.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BarChart
+              orientation="horizontal"
+              categories={access.map((id) => id[0].toUpperCase() + id.slice(1))}
+              series={[
+                {
+                  id: "count",
+                  name: "Records",
+                  color: "var(--chart-2)",
+                  values: access.map((id) => counts[id]),
+                },
+              ]}
+              formatValue={whole}
+              label="Access and connection records"
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Next steps</CardTitle>
+            <CardDescription>The places operators go most.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {(
+              [
+                ["storage", "Explore stored data"],
+                ["keys", "Manage application access"],
+                ["health", "Check sync health"],
+                ["conflicts", "Review conflicts"],
+              ] as const
+            ).map(([id, label]) => (
+              <Button
+                key={id}
+                variant="outline"
+                className="w-full justify-between"
+                onClick={() => go(id)}
+              >
+                {label}
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </>
   );

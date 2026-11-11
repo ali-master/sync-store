@@ -1,11 +1,10 @@
 import { useState } from "react";
 import type { DataScope } from "@/components/data-scope";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/motion/button/base";
+import { Input } from "@/components/motion/input";
 import type { Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
+import { labelClass, textareaClass } from "./sheet";
 
 /** Edit one stored JSON value; saving and deleting are reviewed in the confirm dialog. */
 export function StorageInspector({ selected, dataScope }: { selected: Row; dataScope: DataScope }) {
@@ -21,6 +20,7 @@ export function StorageInspector({ selected, dataScope }: { selected: Row; dataS
   });
   return (
     <form
+      className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
         let value: unknown;
@@ -52,64 +52,64 @@ export function StorageInspector({ selected, dataScope }: { selected: Row; dataS
         });
       }}
     >
-      <Label>
-        User ID
-        <Input
-          required
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          readOnly={!selected._new}
-        />
-      </Label>
-      <Label>
-        Storage key
-        <Input
-          required
-          value={storageKey}
-          onChange={(e) => setStorageKey(e.target.value)}
-          readOnly={!selected._new}
-        />
-      </Label>
-      <Label>
-        JSON value
-        <Textarea
-          className="min-h-64 font-mono text-xs leading-6"
+      <Input
+        label="User ID"
+        required
+        value={user}
+        onChange={setUser}
+        readOnly={!selected._new}
+        classNames={{ input: "font-mono text-sm", field: selected._new ? "" : "bg-muted/40" }}
+      />
+      <Input
+        label="Storage key"
+        required
+        value={storageKey}
+        onChange={setStorageKey}
+        readOnly={!selected._new}
+        classNames={{ input: "font-mono text-sm", field: selected._new ? "" : "bg-muted/40" }}
+      />
+      <label className="block space-y-1.5">
+        <span className={labelClass}>JSON value</span>
+        <textarea
+          className={textareaClass + " min-h-64"}
           required
           value={editor}
           onChange={(e) => setEditor(e.target.value)}
           spellCheck={false}
         />
-      </Label>
-      <Button type="submit" variant="default" disabled={busy}>
-        Save & synchronize
-      </Button>
-      {!selected._new && (
-        <Button
-          variant="outline"
-          type="button"
-          className="text-destructive"
-          disabled={busy}
-          onClick={() =>
-            setConfirm({
-              text:
-                "Permanently delete " +
-                user +
-                "/" +
-                storageKey +
-                "? Connected clients will receive the deletion.",
-              run: async () => {
-                await request("storage/delete", "POST", {
-                  userId: user,
-                  key: storageKey,
-                });
-                mutationDone("Item deleted.");
-              },
-            })
-          }
-        >
-          Delete item
+      </label>
+      <div className="flex flex-wrap gap-2 border-t pt-5">
+        <Button type="submit" variant="primary" disabled={busy}>
+          Save & synchronize
         </Button>
-      )}
+        {!selected._new && (
+          <Button
+            variant="outline"
+            type="button"
+            className="text-destructive"
+            disabled={busy}
+            onClick={() =>
+              setConfirm({
+                text:
+                  "Permanently delete " +
+                  user +
+                  "/" +
+                  storageKey +
+                  "? Connected clients will receive the deletion.",
+                run: async () => {
+                  await request("storage/delete", "POST", {
+                    userId: user,
+                    key: storageKey,
+                  });
+                  mutationDone("Item deleted.");
+                },
+              })
+            }
+          >
+            Delete item
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

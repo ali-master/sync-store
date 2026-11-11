@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/motion/button/base";
 import type { Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
 
@@ -8,6 +8,7 @@ export function TenantInspector({ selected, onDone }: { selected: Row; onDone: (
   return (
     <Button
       variant="outline"
+      className={selected.isActive ? "text-destructive" : undefined}
       disabled={busy}
       onClick={() =>
         setConfirm({

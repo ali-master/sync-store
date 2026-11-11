@@ -1,9 +1,19 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Copy, X } from "lucide-react";
+import { Alert, AlertContent, AlertIcon, AlertTitle } from "@/components/motion/alert";
+import { AnimatedBadge } from "@/components/motion/animated-badge";
+import { Button } from "@/components/motion/button/base";
+import { Drawer } from "@/components/motion/drawer";
 import type { Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
+
+/** Field styles shared by the inspector bodies; beUI has no textarea and no standalone label. */
+export const labelClass = "block px-1 text-sm font-medium";
+export const helpClass = "text-xs leading-5 text-muted-foreground";
+export const textareaClass =
+  "block w-full rounded-xl border bg-background px-3 py-2 font-mono text-xs leading-5 outline-none placeholder:text-muted-foreground/60 read-only:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring";
+export const jsonClass =
+  "max-h-[60vh] overflow-auto rounded-xl border bg-muted p-4 font-mono text-xs leading-5";
 
 /** Frame one record: its title, the last error, a one-time secret or the section's body. */
 export function InspectorSheet({
@@ -25,55 +35,83 @@ export function InspectorSheet({
   children: ReactNode;
 }) {
   const { busy, setError, setNotice } = useConsole();
+  const title = selected._new
+    ? "New " + (section === "keys" ? "API key" : "storage item")
+    : selected.name || selected.key || "Record details";
+  const description =
+    section === "keys"
+      ? "Give your application the access it needs. Fine-tune permissions and protect your installation."
+      : "Inspect this record and apply changes to your installation.";
   return (
-    <Sheet
+    <Drawer
       open={Boolean(selected)}
       onOpenChange={(open) => {
         if (!open && !busy) onClose();
       }}
+      side="right"
+      // The drawer takes a name only, so the description is announced with the title.
+      ariaLabel={title + ". " + description}
+      className="w-full max-w-full sm:max-w-xl"
     >
-      <SheetContent
-        showCloseButton={false}
-        className="data-[side=right]:w-full data-[side=right]:sm:max-w-xl overflow-y-auto p-6 sm:p-8 [&_form]:space-y-5 [&_label]:flex-col [&_label]:items-start [&_label]:gap-2"
-      >
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
-              {section.toUpperCase()}
-            </p>
-            <SheetTitle className="text-xl">
-              {selected._new
-                ? "New " + (section === "keys" ? "API key" : "storage item")
-                : selected.name || selected.key || "Record details"}
-            </SheetTitle>
-          </div>
-          <Button variant="outline" disabled={busy} onClick={onClose} aria-label="Close inspector">
-            ×
-          </Button>
-        </header>
-        <SheetDescription>
-          {section === "keys"
-            ? "Give your application the access it needs. Fine-tune permissions and protect your installation."
-            : "Inspect this record and apply changes to your installation."}
-        </SheetDescription>
-        {error && (
-          <p
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
-            role="alert"
-          >
-            {error}
+      <header className="flex items-start justify-between gap-4 border-b px-6 py-5">
+        <div className="min-w-0 space-y-1">
+          <p className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground">
+            {section.toUpperCase()}
           </p>
+          <h2 className="text-xl font-semibold tracking-tight break-words">{title}</h2>
+          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          disabled={busy}
+          onClick={onClose}
+          aria-label="Close inspector"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </Button>
+      </header>
+      <div
+        className="flex-1 space-y-5 overflow-y-auto px-6 py-5"
+        onKeyDown={(event) => {
+          // An open select closes itself on Escape; without this the drawer would close with it.
+          if (
+            event.key === "Escape" &&
+            (event.target as HTMLElement).closest('[role="listbox"], [aria-expanded="true"]')
+          )
+            event.preventDefault();
+        }}
+      >
+        {error && (
+          <Alert variant="destructive">
+            <AlertIcon />
+            <AlertContent>
+              <AlertTitle>{error}</AlertTitle>
+            </AlertContent>
+          </Alert>
         )}
         {actions}
         {secret ? (
-          <div className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-5 [&_h3]:font-semibold [&_p]:text-sm [&_p]:leading-6 [&_p]:text-muted-foreground [&_textarea]:min-h-24 [&_textarea]:font-mono [&_textarea]:text-xs">
-            <h3>Save this key now.</h3>
-            <p>
+          <section className="space-y-4 rounded-2xl border-2 border-primary bg-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Save this key now.</h3>
+              <AnimatedBadge status="warning" size="sm">
+                Shown only once
+              </AnimatedBadge>
+            </div>
+            <p className="text-sm leading-6 text-muted-foreground">
               It will not appear in the key list. Keep it out of screenshots and public client code.
             </p>
-            <Textarea readOnly aria-label="Generated API key" value={secret} />
+            <textarea
+              readOnly
+              aria-label="Generated API key"
+              value={secret}
+              className="block field-sizing-content min-h-24 w-full resize-none rounded-xl bg-foreground p-4 font-mono text-xs leading-5 break-all text-background outline-none selection:bg-primary selection:text-primary-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            />
             <Button
-              variant="outline"
+              variant="primary"
+              className="w-full"
               onClick={() => {
                 void navigator.clipboard.writeText(secret).then(
                   () => setNotice("Key copied."),
@@ -81,23 +119,24 @@ export function InspectorSheet({
                 );
               }}
             >
+              <Copy className="size-4" aria-hidden="true" />
               Copy key
             </Button>
-          </div>
+          </section>
         ) : (
           <>
             {children}
             {!selected._new && (
-              <details className="space-y-3 border-t pt-5 text-sm">
-                <summary>All record fields</summary>
-                <pre className="max-h-[60vh] overflow-auto rounded-xl border bg-muted/50 p-4 font-mono text-xs leading-6">
-                  {JSON.stringify(selected, null, 2)}
-                </pre>
+              <details className="border-t pt-5">
+                <summary className="cursor-pointer text-sm font-semibold marker:text-muted-foreground">
+                  All record fields
+                </summary>
+                <pre className={jsonClass + " mt-3"}>{JSON.stringify(selected, null, 2)}</pre>
               </details>
             )}
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </div>
+    </Drawer>
   );
 }

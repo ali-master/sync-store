@@ -48,6 +48,8 @@ Advanced settings accept JSON for expiration, request quotas, allowed HTTP metho
 
 Lists are paginated, 25 records per page. Search matches selected identifying fields rather than every nested JSON value. Refresh loads current server state; counts and connections are snapshots, not a continuous monitoring stream. The inspector exposes the full returned record. Destructive actions require confirmation.
 
+Press <kbd>⌘K</kbd> (or <kbd>Ctrl</kbd>+<kbd>K</kbd>) to jump to any view or run an action such as refreshing data or signing out. The sidebar folds to an icon rail, and becomes a slide-over menu on small screens. Reports draw a time bucket without a sample as a gap, never as zero.
+
 Each view has its own address, such as `/dashboard/storage` or `/dashboard/keys`. Search and page selection are retained in the URL, so browser Back and Forward restore your view. Opening a saved link after refreshing still requires signing in; credentials never appear in these URLs.
 
 ## Recover administrator access
@@ -62,9 +64,9 @@ For a source installation, use `bun run --cwd apps/api admin:key` with the same 
 
 ## Development
 
-The console uses Tailwind CSS 4, shadcn components, TanStack Router, TanStack Query and TanStack Table 9. Router owns view/search URLs; Query owns server reads, cancellation and mutation invalidation; Table renders server-paginated records. Signing out cancels reads and clears the in-memory query cache. Mutations are not retried automatically.
+The console uses Tailwind CSS 4, [beUI](https://beui.dev) components, charts and blocks, TanStack Router and TanStack Query. Router owns view/search URLs; Query owns server reads, cancellation and mutation invalidation. Records are paged, searched and ordered by the server, so the table never sorts a partial page. Signing out cancels reads and clears the in-memory query cache. Mutations are not retried automatically.
 
-Components are maintained in `apps/dashboard/src/components/ui`, with shadcn configuration in `components.json`. Run `bun run --cwd apps/dashboard test` for URL validation and query-cache isolation checks, and `bun run --cwd apps/dashboard test:types` for type checking.
+Each view is its own file under `apps/dashboard/src/pages`, framed by `components/console-shell.tsx`; the record inspector lives in `components/inspector`. The beUI sources are vendored in `src/components/motion` and `src/components/charts`, so you can change them. Add another with `bunx --bun shadcn add @beui/<name>`; the registry is configured in `components.json`. Colours, radius and fonts are tokens in `src/styles.css`, for light and dark. Run `bun run --cwd apps/dashboard test` for URL validation and query-cache isolation checks, and `bun run --cwd apps/dashboard test:types` for type checking.
 
 The API build includes the dashboard automatically. For UI development, run `bun run --cwd apps/dashboard dev` and open `http://localhost:4100/dashboard/`. Vite proxies `/api` to `http://localhost:3000`; set `API_PROXY_TARGET` to use another local API. Browser requests use the console's own origin, so credentials are not sent to a user-entered server URL.
 

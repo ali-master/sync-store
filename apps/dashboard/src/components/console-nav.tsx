@@ -1,167 +1,134 @@
-import { useState, useRef, useEffect } from "react";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  Archive,
   BarChart3,
   Database,
+  Gauge,
   GitBranch,
   History,
   KeyRound,
   Layers,
   LayoutDashboard,
+  type LucideIcon,
   Network,
+  PlugZap,
+  ScrollText,
   Settings2,
   ShieldCheck,
-  Archive,
-  Gauge,
-  ScrollText,
   Unplug,
   Users,
-  Search,
-  PlugZap,
 } from "lucide-react";
+import {
+  AnimatedSidebarGroup,
+  AnimatedSidebarGroupContent,
+  AnimatedSidebarGroupLabel,
+  AnimatedSidebarMenu,
+  AnimatedSidebarMenuButton,
+  AnimatedSidebarMenuItem,
+} from "@/components/motion/animated-sidebar";
 import type { DataScope } from "./data-scope";
 
-const groups = [
+export type NavItem = { id: string; title: string; icon: LucideIcon };
+
+/** One source for the sidebar and the command palette, so a page is never reachable from only one. */
+export const navGroups: { label: string; items: NavItem[] }[] = [
   {
-    label: "Workspace",
+    label: "Start",
     items: [
-      ["overview", "Overview", LayoutDashboard],
-      ["storage", "Data explorer", Database],
-      ["versioning", "Branches & commits", GitBranch],
-      ["history", "Version history", History],
+      { id: "connect", title: "Connect your app", icon: PlugZap },
+      { id: "overview", title: "Overview", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "Data",
+    items: [
+      { id: "storage", title: "Data explorer", icon: Database },
+      { id: "versioning", title: "Branches & commits", icon: GitBranch },
+      { id: "history", title: "Version history", icon: History },
     ],
   },
   {
     label: "Access",
     items: [
-      ["keys", "API keys", KeyRound],
-      ["projects", "Projects", Layers],
-      ["tenants", "Tenants", Users],
+      { id: "keys", title: "API keys", icon: KeyRound },
+      { id: "projects", title: "Projects", icon: Layers },
+      { id: "tenants", title: "Tenants", icon: Users },
     ],
   },
   {
     label: "Monitor",
     items: [
-      ["health", "Sync health", Activity],
-      ["usage", "Usage & quotas", Gauge],
-      ["changes", "Changes & growth", BarChart3],
-      ["sessions", "Connections", Network],
-      ["audits", "Activity log", ScrollText],
+      { id: "health", title: "Sync health", icon: Activity },
+      { id: "usage", title: "Usage & quotas", icon: Gauge },
+      { id: "changes", title: "Changes & growth", icon: BarChart3 },
+      { id: "sessions", title: "Connections", icon: Network },
+      { id: "audits", title: "Activity log", icon: ScrollText },
     ],
   },
   {
     label: "Advanced",
     items: [
-      ["conflicts", "Conflicts", Unplug],
-      ["quotas", "User quotas", ShieldCheck],
-      ["analytics", "Analytics records", BarChart3],
-      ["archives", "Archives", Archive],
-      ["system", "System", Settings2],
+      { id: "conflicts", title: "Conflicts", icon: Unplug },
+      { id: "quotas", title: "User quotas", icon: ShieldCheck },
+      { id: "analytics", title: "Analytics records", icon: BarChart3 },
+      { id: "archives", title: "Archives", icon: Archive },
+      { id: "system", title: "System", icon: Settings2 },
     ],
   },
-] as const;
+];
 
-/** Group operator tasks while keeping every existing resource reachable and searchable. */
+/** Tenants are a platform concern; a tenant administrator never sees the page. */
+export function visibleNav(platform: boolean) {
+  return navGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item.id !== "tenants" || platform),
+  }));
+}
+
+/** Navigate between views while keeping the selected data scope. */
+export function useSectionNavigate(scope: DataScope) {
+  const navigate = useNavigate();
+  return (id: string) =>
+    void navigate({ to: id === "overview" ? "/" : "/" + id, search: { ...scope, page: 1, q: "" } });
+}
+
+/** The grouped pages of the console, inside the animated sidebar. */
 export function ConsoleNav({
   section,
   platform,
   busy,
   scope,
-  onNavigate,
 }: {
   section: string;
   platform: boolean;
   busy: boolean;
   scope: DataScope;
-  onNavigate: () => void;
 }) {
-  const [query, setQuery] = useState("");
-  const search = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const focus = (event: KeyboardEvent) => {
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key.toLowerCase() === "k" &&
-        search.current?.getClientRects().length
-      ) {
-        event.preventDefault();
-        search.current.focus();
-      }
-    };
-    window.addEventListener("keydown", focus);
-    return () => window.removeEventListener("keydown", focus);
-  }, []);
-  function items(group: (typeof groups)[number]) {
-    return group.items
-      .filter(
-        ([id, title]) =>
-          (id !== "tenants" || platform) && title.toLowerCase().includes(query.toLowerCase()),
-      )
-      .map(([id, title, Icon]) => (
-        <Link
-          key={id}
-          to={id === "overview" ? "/" : "/" + id}
-          search={{ ...scope, page: 1, q: "" }}
-          disabled={busy}
-          onClick={onNavigate}
-          aria-current={section === id ? "page" : undefined}
-          className="console-nav-link"
-        >
-          <Icon className="size-4 shrink-0" aria-hidden="true" />
-          <span>{title}</span>
-        </Link>
-      ));
-  }
+  const go = useSectionNavigate(scope);
   return (
-    <nav aria-label="Console navigation" className="min-h-0 flex-1 overflow-y-auto py-2">
-      <label className="mx-1 mb-4 flex items-center gap-2 rounded-md border bg-background px-2.5 py-2 text-muted-foreground">
-        <Search className="size-3.5" />
-        <input
-          ref={search}
-          className="min-w-0 w-full bg-transparent text-xs outline-none"
-          aria-label="Find a page"
-          placeholder="Search…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <kbd aria-hidden="true" className="shrink-0 rounded bg-muted px-1 text-[10px]">
-          ⌘K
-        </kbd>
-      </label>
-      <Link
-        to="/connect"
-        search={{ ...scope, page: 1, q: "" }}
-        onClick={onNavigate}
-        aria-current={section === "connect" ? "page" : undefined}
-        className="console-nav-link mb-3"
-      >
-        <PlugZap className="size-4" />
-        Connect your app
-      </Link>
-      {groups.map((group) =>
-        group.label === "Advanced" && !query ? (
-          <details
-            key={group.label}
-            open={group.items.some(([id]) => id === section) || undefined}
-            className="mt-3"
-          >
-            <summary className="cursor-pointer px-3 py-2 text-[11px] font-medium text-muted-foreground">
-              Advanced
-            </summary>
-            {items(group)}
-          </details>
-        ) : (
-          <div key={group.label} className="mb-2">
-            <p className="sr-only">{group.label}</p>
-            {items(group)}
-          </div>
-        ),
-      )}
-      {query &&
-        !groups.some((g) =>
-          g.items.some(([, name]) => name.toLowerCase().includes(query.toLowerCase())),
-        ) && <p className="p-3 text-xs text-muted-foreground">No matching pages.</p>}
-    </nav>
+    <>
+      {visibleNav(platform).map((group) => (
+        <AnimatedSidebarGroup key={group.label}>
+          <AnimatedSidebarGroupLabel>{group.label}</AnimatedSidebarGroupLabel>
+          <AnimatedSidebarGroupContent>
+            <AnimatedSidebarMenu>
+              {group.items.map(({ id, title, icon: Icon }) => (
+                <AnimatedSidebarMenuItem key={id}>
+                  <AnimatedSidebarMenuButton
+                    icon={<Icon className="size-4" />}
+                    isActive={section === id}
+                    disabled={busy}
+                    onSelect={() => go(id)}
+                  >
+                    {title}
+                  </AnimatedSidebarMenuButton>
+                </AnimatedSidebarMenuItem>
+              ))}
+            </AnimatedSidebarMenu>
+          </AnimatedSidebarGroupContent>
+        </AnimatedSidebarGroup>
+      ))}
+    </>
   );
 }

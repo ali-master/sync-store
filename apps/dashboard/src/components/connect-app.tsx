@@ -1,15 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CheckCheck, Code2, Copy, KeyRound, Radio, ArrowUpRight } from "lucide-react";
 import { SyncStore } from "@usex/sync-store";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Card } from "./ui/card";
+import { Alert, AlertContent, AlertIcon, AlertTitle } from "./motion/alert";
+import { AnimatedBadge } from "./motion/animated-badge";
+import { Button } from "./motion/button/base";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./motion/card";
+import { Input } from "./motion/input";
+import { Loader } from "./motion/loader";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./motion/tabs";
+
+const checklist = [
+  "Session issued",
+  "Two clients connected",
+  "Write acknowledged",
+  "Remote event received",
+];
+const inlineCode = "rounded bg-muted px-1 font-mono text-xs";
 
 /** Verify a real two-client exchange, then remove only the probe created by this run. */
 export function ConnectApp() {
   const [framework, setFramework] = useState("JavaScript");
   const [copied, setCopied] = useState(false);
+  // Held in state so clearing it after the check also clears what the field shows.
+  const [testKey, setTestKey] = useState("");
   const [phase, setPhase] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -152,170 +172,192 @@ console.log(storage.getStatus());
       }
       clients.current.forEach((client) => client.destroy());
       clients.current = [];
-      const keyInput = form.elements.namedItem("key") as HTMLInputElement;
-      if (keyInput) keyInput.value = "";
+      setTestKey("");
       if (!cancelled.current) setBusy(false);
     }
   }
 
   return (
-    <div className="grid overflow-hidden rounded-xl border bg-card lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="min-w-0 space-y-5 p-4 sm:p-6">
-        <Card className="gap-0 overflow-hidden">
-          <div className="border-b p-5">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid min-w-0 content-start gap-4">
+        <Card className="overflow-hidden pb-0">
+          <CardHeader>
             <p className="text-xs font-medium text-primary">01 · CONNECT</p>
-            <h2 className="mt-2 text-sm font-semibold">Connect your application</h2>
-            <p className="mt-2 text-xs leading-6 text-muted-foreground">
+            <CardTitle as="h2">Connect your application</CardTitle>
+            <CardDescription>
               Create an application key, keep it in your backend, and issue a short-lived session
               for each signed-in user.
-            </p>
-          </div>
-          <div className="flex items-center justify-between border-b px-4">
-            <div className="flex gap-1" role="tablist" aria-label="SDK example">
-              {["JavaScript", "React"].map((name) => (
-                <button
-                  key={name}
-                  role="tab"
-                  aria-selected={framework === name}
-                  onClick={() => {
-                    setFramework(name);
-                    setCopied(false);
-                  }}
-                  className={
-                    "border-b-2 px-4 py-3 text-xs " +
-                    (framework === name
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground")
-                  }
-                >
-                  {name}
-                </button>
-              ))}
+            </CardDescription>
+          </CardHeader>
+          <Tabs
+            variant="segment"
+            value={framework}
+            onValueChange={(name) => {
+              setFramework(name);
+              setCopied(false);
+            }}
+            className="border-t"
+          >
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
+              <TabsList aria-label="SDK example" wrapperClassName="w-auto" className="bg-muted">
+                {["JavaScript", "React"].map((name) => (
+                  <TabsTrigger key={name} value={name}>
+                    {name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  void navigator.clipboard.writeText(code).then(
+                    () => setCopied(true),
+                    () => setError("Clipboard unavailable. Select the code to copy it."),
+                  )
+                }
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                void navigator.clipboard.writeText(code).then(
-                  () => setCopied(true),
-                  () => setError("Clipboard unavailable. Select the code to copy it."),
-                )
-              }
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-          <pre className="overflow-x-auto bg-muted/25 p-5 text-[11px] leading-6" role="tabpanel">
-            <code>{code}</code>
-          </pre>
+            <TabsContent value={framework} className="mt-0 rounded-none">
+              <pre className="overflow-x-auto bg-muted/40 p-5 font-mono text-xs leading-6">
+                <code>{code}</code>
+              </pre>
+            </TabsContent>
+          </Tabs>
         </Card>
-        <Card className="p-5 sm:p-6">
-          <p className="text-xs font-medium text-primary">02 · VERIFY</p>
-          <h2 className="text-sm font-semibold">See a change arrive.</h2>
-          <p className="text-xs leading-6 text-muted-foreground">
-            Use a test application key with read/write access to <code>__sync_check__/</code>. This
-            creates and removes one temporary value in the selected user's branch. History and audit
-            records are retained.
-          </p>
-          <form onSubmit={(event) => void test(event)} className="grid gap-4 sm:grid-cols-2">
-            <Label className="grid gap-2 sm:col-span-2">
-              Test application key
+        <Card>
+          <CardHeader>
+            <p className="text-xs font-medium text-primary">02 · VERIFY</p>
+            <CardTitle as="h2">See a change arrive.</CardTitle>
+            <CardDescription>
+              Use a test application key with read/write access to{" "}
+              <code className={inlineCode}>__sync_check__/</code>. This creates and removes one
+              temporary value in the selected user's branch. History and audit records are retained.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form onSubmit={(event) => void test(event)} className="grid gap-4 sm:grid-cols-2">
               <Input
+                className="sm:col-span-2"
+                label="Test application key"
                 name="key"
                 type="password"
                 required
                 autoComplete="off"
                 placeholder="ss_…"
                 disabled={busy}
+                value={testKey}
+                onChange={setTestKey}
+                leftIcon={<KeyRound />}
               />
-            </Label>
-            <Label className="grid gap-2">
-              Test user
-              <Input name="user" required defaultValue="connection-check" disabled={busy} />
-            </Label>
-            <Label className="grid gap-2">
-              Branch
-              <Input name="branch" required defaultValue="main" disabled={busy} />
-            </Label>
-            <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-              <Button type="submit" disabled={busy}>
-                <Radio className="size-4" />
-                {busy ? "Checking delivery…" : "Run connection check"}
-              </Button>
-              <span className="text-[11px] text-muted-foreground">
-                Credentials stay in memory and are cleared after the check.
-              </span>
-            </div>
-          </form>
-          {error && (
-            <p
-              role="alert"
-              className="break-words rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs leading-6 text-destructive"
-            >
-              {error}
-            </p>
-          )}
-          {proof && (
-            <p
-              role="status"
-              className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-6 text-emerald-800"
-            >
-              {proof}
-            </p>
-          )}
+              <Input
+                label="Test user"
+                name="user"
+                required
+                defaultValue="connection-check"
+                disabled={busy}
+              />
+              <Input label="Branch" name="branch" required defaultValue="main" disabled={busy} />
+              <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+                <Button type="submit" disabled={busy}>
+                  {busy ? (
+                    <span aria-hidden="true" className="inline-flex">
+                      <Loader size={16} className="text-current" />
+                    </span>
+                  ) : (
+                    <Radio className="size-4" aria-hidden="true" />
+                  )}
+                  {busy ? "Checking delivery…" : "Run connection check"}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Credentials stay in memory and are cleared after the check.
+                </span>
+              </div>
+            </form>
+            {error && (
+              <Alert variant="destructive">
+                <AlertIcon />
+                <AlertContent>
+                  <AlertTitle className="break-words">{error}</AlertTitle>
+                </AlertContent>
+              </Alert>
+            )}
+            {proof && (
+              <Alert variant="success">
+                <AlertIcon />
+                <AlertContent>
+                  <AlertTitle>{proof}</AlertTitle>
+                </AlertContent>
+              </Alert>
+            )}
+          </CardContent>
         </Card>
       </div>
-      <aside className="connection-canvas space-y-5 border-t p-5 lg:border-l lg:border-t-0">
-        <Card className="gap-0 p-5">
-          <h2 className="mb-5 text-xs font-semibold">Connection checklist</h2>
-          {[
-            "Session issued",
-            "Two clients connected",
-            "Write acknowledged",
-            "Remote event received",
-          ].map((step, index) => (
-            <div key={step} className="flex items-center gap-3 border-b py-4 text-xs last:border-0">
-              <span
-                className={
-                  "grid size-6 shrink-0 place-items-center rounded-full border " +
-                  (phase > index
-                    ? "border-primary/20 bg-primary/5 text-primary"
-                    : "text-muted-foreground")
-                }
+      <aside className="connection-canvas grid content-start gap-4 rounded-2xl border p-4">
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle as="h2">Connection checklist</CardTitle>
+            <CardAction>
+              <AnimatedBadge
+                size="sm"
+                status={busy ? "loading" : proof ? "success" : "neutral"}
+                showIcon={busy || Boolean(proof)}
               >
-                {phase > index ? <Check className="size-3.5" /> : index + 1}
-              </span>
-              {step}
-            </div>
-          ))}
+                {Math.min(phase, checklist.length)} of {checklist.length}
+              </AnimatedBadge>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <ol className="divide-y">
+              {checklist.map((step, index) => (
+                <li key={step} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <span
+                    className={
+                      "grid size-6 shrink-0 place-items-center rounded-full border text-xs " +
+                      (phase > index
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "text-muted-foreground")
+                    }
+                  >
+                    {phase > index ? <Check className="size-3.5" aria-hidden="true" /> : index + 1}
+                  </span>
+                  <span className="flex-1">{step}</span>
+                  {busy && phase === index && <Loader size={14} label={"Waiting: " + step} />}
+                </li>
+              ))}
+            </ol>
+          </CardContent>
         </Card>
-        <div className="space-y-4 px-2 text-xs leading-6 text-muted-foreground">
-          <div className="flex gap-3">
-            <KeyRound className="mt-1 size-4 shrink-0 text-primary" />
-            <p>
-              Keep application keys on your server. Browser sessions are bound to one user and
-              branch.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <CheckCheck className="mt-1 size-4 shrink-0 text-primary" />
-            <p>
-              A socket connection is not proof of delivery. This check waits for a real event on the
-              receiving client.
-            </p>
-          </div>
-          <a
-            href="/api/docs"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 text-primary"
-          >
-            <Code2 className="size-4" />
-            Explore the API
-            <ArrowUpRight className="size-3" />
-          </a>
-        </div>
+        <Card className="bg-card">
+          <CardContent className="space-y-4 text-xs leading-6 text-muted-foreground">
+            <div className="flex gap-3">
+              <KeyRound className="mt-1 size-4 shrink-0 text-primary" aria-hidden="true" />
+              <p>
+                Keep application keys on your server. Browser sessions are bound to one user and
+                branch.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <CheckCheck className="mt-1 size-4 shrink-0 text-primary" aria-hidden="true" />
+              <p>
+                A socket connection is not proof of delivery. This check waits for a real event on
+                the receiving client.
+              </p>
+            </div>
+            <a
+              href="/api/docs"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 font-medium text-primary hover:underline"
+            >
+              <Code2 className="size-4" aria-hidden="true" />
+              Explore the API
+              <ArrowUpRight className="size-3" aria-hidden="true" />
+            </a>
+          </CardContent>
+        </Card>
       </aside>
     </div>
   );

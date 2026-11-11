@@ -1,6 +1,6 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from "react";
+import { Button } from "@/components/motion/button/base";
+import { Input } from "@/components/motion/input";
 import type { Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
 
@@ -13,17 +13,18 @@ export function CreateWorkspaceForm({
   onSecret: (created: Row) => void;
 }) {
   const { request, run, busy, setNotice } = useConsole();
+  // The field holds its value in React state, so it is cleared here rather than by form.reset().
+  const [name, setName] = useState("");
   return (
     <form
-      className="flex flex-wrap items-end gap-4 rounded-2xl border bg-card p-5"
+      className="flex flex-wrap items-end gap-3 rounded-2xl border bg-card p-5"
       onSubmit={(event) => {
         event.preventDefault();
-        const form = event.currentTarget;
-        const data = new FormData(form);
+        const data = new FormData(event.currentTarget);
         void run(async () => {
           const created = await request(section, "POST", { name: data.get("name") });
           if (created.key) onSecret(created);
-          form.reset();
+          setName("");
           setNotice(
             section === "tenants"
               ? "Tenant created. Save its administrator key and use it to sign in to the tenant workspace."
@@ -32,11 +33,17 @@ export function CreateWorkspaceForm({
         });
       }}
     >
-      <Label className="min-w-0 flex-1">
-        {section === "tenants" ? "Tenant name" : "Project name"}
-        <Input name="name" required maxLength={100} placeholder="Production workspace" />
-      </Label>
-      <Button type="submit" disabled={busy}>
+      <Input
+        className="min-w-0 flex-1"
+        label={section === "tenants" ? "Tenant name" : "Project name"}
+        name="name"
+        required
+        maxLength={100}
+        placeholder="Production workspace"
+        value={name}
+        onChange={setName}
+      />
+      <Button type="submit" className="h-11" disabled={busy}>
         Create {section === "tenants" ? "tenant" : "project"}
       </Button>
     </form>

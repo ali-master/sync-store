@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/motion/button/base";
 import type { Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
 import { GenericInspector } from "./generic";
@@ -11,7 +11,8 @@ export function SessionInspector({ selected }: { selected: Row }) {
       <GenericInspector selected={selected} />
       {!selected.disconnectedAt && selected.socketId && (
         <Button
-          variant="destructive"
+          variant="outline"
+          className="text-destructive"
           disabled={busy}
           onClick={() =>
             setConfirm({

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Sun, Moon, Monitor } from "lucide-react";
 import { applyTheme, parseTheme, readTheme, themeKey, type Theme } from "../lib/theme";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Button } from "./motion/button/base";
 
 const ThemeContext = createContext<{ theme: Theme; setTheme: (theme: Theme) => void }>({
   theme: "system",
@@ -37,44 +37,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 }
 
+const order: Theme[] = ["light", "dark", "system"];
+
+/** One button that steps through light, dark and the device setting. */
 export function ThemePicker() {
   const { theme, setTheme } = useContext(ThemeContext);
   const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+  const next = order[(order.indexOf(theme) + 1) % order.length];
   return (
-    <Select
-      value={theme}
-      onValueChange={(value) => {
-        if (value) setTheme(parseTheme(value));
-      }}
-      items={[
-        { value: "light", label: "Light" },
-        { value: "dark", label: "Dark" },
-        { value: "system", label: "System" },
-      ]}
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(next)}
+      aria-label={`Appearance: ${theme}. Switch to ${next}.`}
+      title={`Appearance: ${theme}`}
     >
-      <SelectTrigger
-        aria-label="Appearance"
-        className="h-8 gap-2 border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-muted"
-      >
-        <Icon className="size-4" />
-        <span className="sr-only sm:not-sr-only">
-          <SelectValue />
-        </span>
-      </SelectTrigger>
-      <SelectContent align="end" alignItemWithTrigger={false}>
-        <SelectItem value="light">
-          <Sun className="size-4" />
-          Light
-        </SelectItem>
-        <SelectItem value="dark">
-          <Moon className="size-4" />
-          Dark
-        </SelectItem>
-        <SelectItem value="system">
-          <Monitor className="size-4" />
-          System
-        </SelectItem>
-      </SelectContent>
-    </Select>
+      <Icon className="size-4" />
+    </Button>
   );
 }

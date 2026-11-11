@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ThemePicker } from "@/components/theme-provider";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { ArrowRight, ArrowUpRight, KeyRound } from "lucide-react";
+import { Alert, AlertContent, AlertIcon, AlertTitle } from "@/components/motion/alert";
+import { Button } from "@/components/motion/button/base";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/motion/card";
+import { Input } from "@/components/motion/input";
+import { Loader } from "@/components/motion/loader";
+import { AccessLayout } from "@/components/onboarding";
 import { useConsole } from "@/lib/console-actions";
 import { useSession } from "@/lib/session";
 import { readSsoReturn, ssoRequest } from "@/lib/sso";
-import logo from "../../../../assets/logo.svg";
 
 /** Open the console with the administrator key or an organization account. */
 export function SignIn({ error }: { error: string }) {
@@ -34,93 +42,120 @@ export function SignIn({ error }: { error: string }) {
   }, []);
 
   return (
-    <main className="mx-auto grid min-h-screen max-w-6xl items-center gap-12 px-6 py-12 lg:grid-cols-[1.2fr_1fr] lg:gap-24">
-      <div className="absolute right-4 top-4 z-10">
-        <ThemePicker />
-      </div>
-      <div className="space-y-7 [&>img]:size-14 [&_h1]:text-5xl [&_h1]:font-semibold [&_h1]:leading-[1.12] [&_h1]:tracking-tight [&_h1_span]:text-muted-foreground [&>p:not(:first-of-type)]:max-w-md [&>p:not(:first-of-type)]:leading-7 [&>p:not(:first-of-type)]:text-muted-foreground">
-        <img src={logo} alt="Sync Store" />
-        <p className="text-[10px] font-semibold tracking-[0.24em] text-muted-foreground">
-          SYNC STORE CONSOLE
-        </p>
-        <h1>
+    <AccessLayout
+      label="Sync Store console"
+      title={
+        <>
           Everything connected.
           <br />
-          <span>Everything in view.</span>
-        </h1>
-        <p>A quiet place to manage your data, credentials and connections.</p>
-        <div className="flex flex-wrap items-center gap-4 pt-7 text-xs [&_strong]:rounded-xl [&_strong]:border [&_strong]:bg-card [&_strong]:p-4 [&_i]:text-muted-foreground">
-          <span>Application</span>
-          <i>⇄</i>
-          <strong>Sync Store</strong>
-          <i>⇄</i>
-          <span>Your users</span>
-        </div>
-      </div>
-      <form
-        className="space-y-6 rounded-2xl border bg-card p-7 shadow-sm sm:p-9 [&_h2]:text-3xl [&_h2]:font-semibold [&_h2]:tracking-tight [&>p]:text-sm [&>p]:leading-6 [&>p]:text-muted-foreground [&_label]:flex-col [&_label]:items-start [&_label]:gap-2 [&>button]:w-full [&>a]:block [&>a]:text-center [&>a]:text-xs [&>a]:text-primary"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void run(async () => {
-            await request("overview", "GET", undefined, credential.trim());
-            setToken(credential.trim());
-            setCredential("");
-          });
-        }}
-      >
-        <span className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground">
-          YOUR INSTALLATION
-        </span>
-        <h2>Welcome back.</h2>
-        {sso.data?.enabled ? (
-          <>
-            <p>Sign in with your organization account, or use the administrator key.</p>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => location.assign("/api/v1/sso/login")}
-            >
-              Continue with {sso.data.name} →
-            </Button>
-            <span className="block border-t pt-6 text-xs text-muted-foreground">
-              Or connect with the administrator key
-            </span>
-          </>
-        ) : (
-          <p>Connect with the administrator key you saved during setup.</p>
-        )}
-        <Label>
-          Administrator key
-          <Input
-            type="password"
-            autoComplete="off"
-            value={credential}
-            onChange={(e) => setCredential(e.target.value)}
-            required
-            placeholder="ss_admin_…"
-          />
-        </Label>
-        <Button type="submit" variant={sso.data?.enabled ? "outline" : "default"} disabled={busy}>
-          {busy ? "Connecting…" : "Open console →"}
-        </Button>
-
-        {(error || ssoError) && (
-          <p
-            role="alert"
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
+          <span className="text-muted-foreground">Everything in view.</span>
+        </>
+      }
+      lede="A quiet place to manage your data, credentials and connections."
+    >
+      <Card className="bg-card shadow-sm">
+        <CardHeader>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Your installation
+          </p>
+          <CardTitle as="h2" className="text-2xl tracking-tight">
+            Welcome back.
+          </CardTitle>
+          <CardDescription>
+            {sso.data?.enabled
+              ? "Sign in with your organization account, or use the administrator key."
+              : "Connect with the administrator key you saved during setup."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {sso.data?.enabled && (
+            <>
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={() => location.assign("/api/v1/sso/login")}
+              >
+                Continue with {sso.data.name}
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Button>
+              <p className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                Or connect with the administrator key
+                <span className="h-px flex-1 bg-border" aria-hidden="true" />
+              </p>
+            </>
+          )}
+          <form
+            className="space-y-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(async () => {
+                await request("overview", "GET", undefined, credential.trim());
+                setToken(credential.trim());
+                setCredential("");
+              });
+            }}
           >
-            {error || ssoError}
-          </p>
-        )}
-        <div className="space-y-3 border-t pt-6 text-xs leading-6 text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1">
-          <b>Need your administrator key?</b>
-          <p>
-            Recover it on your server with <code>docker compose exec api bun run admin:key</code>.
-          </p>
-          <p>Your key stays in this tab's memory. Refreshing signs you out.</p>
-        </div>
-        <a href="/api/docs">API reference ↗</a>
-      </form>
-    </main>
+            <Input
+              label="Administrator key"
+              type="password"
+              autoComplete="off"
+              value={credential}
+              onChange={setCredential}
+              required
+              placeholder="ss_admin_…"
+              leftIcon={<KeyRound />}
+            />
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
+              variant={sso.data?.enabled ? "outline" : "primary"}
+              disabled={busy}
+            >
+              {busy ? (
+                <>
+                  <span aria-hidden="true" className="inline-flex">
+                    <Loader size={16} className="text-current" />
+                  </span>
+                  Connecting…
+                </>
+              ) : (
+                <>
+                  Open console
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </>
+              )}
+            </Button>
+          </form>
+          {(error || ssoError) && (
+            <Alert variant="destructive">
+              <AlertIcon />
+              <AlertContent>
+                <AlertTitle className="break-words">{error || ssoError}</AlertTitle>
+              </AlertContent>
+            </Alert>
+          )}
+          <div className="space-y-2 rounded-xl bg-muted p-4 text-xs leading-6 text-muted-foreground">
+            <p className="font-medium text-foreground">Need your administrator key?</p>
+            <p>
+              Recover it on your server with{" "}
+              <code className="rounded bg-background px-1 font-mono">
+                docker compose exec api bun run admin:key
+              </code>
+              .
+            </p>
+            <p>Your key stays in this tab's memory. Refreshing signs you out.</p>
+          </div>
+          <a
+            href="/api/docs"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            API reference
+            <ArrowUpRight className="size-3.5" aria-hidden="true" />
+          </a>
+        </CardContent>
+      </Card>
+    </AccessLayout>
   );
 }

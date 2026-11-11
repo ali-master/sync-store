@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/motion/button/base";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/motion/select";
 import type { Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
+import { helpClass, jsonClass, labelClass } from "./sheet";
 
 /** Show one conflict and record a resolution proposal; the recorded result replaces the JSON. */
 export function ConflictInspector({
@@ -25,38 +25,29 @@ export function ConflictInspector({
   const [editor, setEditor] = useState(() => JSON.stringify(selected, null, 2));
   return (
     <>
-      <pre className="max-h-[60vh] overflow-auto rounded-xl border bg-muted/50 p-4 font-mono text-xs leading-6">
-        {editor}
-      </pre>
-      <div>
-        <Label>
-          Resolution strategy
-          <Select
-            items={[
-              { value: "last_write_wins", label: "Use conflicting value" },
-              { value: "first_write_wins", label: "Keep original value" },
-              { value: "merge", label: "Merge values" },
-            ]}
-            value={strategy}
-            onValueChange={(value) => {
-              if (value !== null) onStrategyChange(value);
-            }}
-          >
-            <SelectTrigger aria-label="Resolution strategy" className="w-full min-w-36">
+      <pre className={jsonClass}>{editor}</pre>
+      <div className="space-y-4 border-t pt-5">
+        <div className="space-y-1.5">
+          <span className={labelClass}>Resolution strategy</span>
+          <Select value={strategy} onValueChange={onStrategyChange}>
+            <SelectTrigger>
+              {/* The trigger takes no aria-label; this names it for screen readers. */}
+              <span className="sr-only">Resolution strategy: </span>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
+            <SelectContent>
               <SelectItem value="last_write_wins">Use conflicting value</SelectItem>
               <SelectItem value="first_write_wins">Keep original value</SelectItem>
               <SelectItem value="merge">Merge values</SelectItem>
             </SelectContent>
           </Select>
-        </Label>
-        <p className="text-sm leading-6 text-muted-foreground">
-          Records a proposal only. Review resolvedValue, then apply it explicitly in Data explorer.
-        </p>
+          <p className={helpClass}>
+            Records a proposal only. Review resolvedValue, then apply it explicitly in Data
+            explorer.
+          </p>
+        </div>
         <Button
-          variant="default"
+          variant="primary"
           disabled={busy}
           onClick={() =>
             setConfirm({
