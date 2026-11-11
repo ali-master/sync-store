@@ -50,7 +50,7 @@ storage snapshot. Every replica reads the same value at scrape time, so these ca
 `scope="cluster"`. **Do not `sum()` them across replicas**: that multiplies the value by the number of
 replicas. Take one replica's value with `max by (...)`:
 
-```promql
+```text
 # Correct: pending events per tenant, then the cluster total
 sum(max by (tenant) (sync_store_outbox_pending_events))
 
@@ -161,7 +161,7 @@ Bun's heap figures come from its JavaScriptCore engine, so used can momentarily 
 
 ## Example queries
 
-```promql
+```text
 # HTTP error rate (5xx) across all replicas
 sum(rate(sync_store_http_requests_total{status_code=~"5.."}[5m]))
   / sum(rate(sync_store_http_requests_total[5m]))
