@@ -17,7 +17,7 @@ Use it for preferences, settings and other application state shared across conne
 tabs or devices. It also exposes recovery tools for inspecting history, creating
 checkpoints and working with branches.
 
-[Documentation](https://github.com/ali-master/sync-store/tree/master/apps/docs/content/docs) · [Source code](https://github.com/ali-master/sync-store/tree/master/packages/client-sdk) · [Report an issue](https://github.com/ali-master/sync-store/issues)
+[Documentation](https://sync-store.usestrict.dev) · [Source code](https://github.com/ali-master/sync-store/tree/master/packages/client-sdk) · [Report an issue](https://github.com/ali-master/sync-store/issues)
 
 ## Connect and save a value
 

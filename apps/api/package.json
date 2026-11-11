@@ -13,7 +13,7 @@
     "url": "git+https://github.com/ali-master/sync-store.git",
     "directory": "apps/api"
   },
-  "homepage": "https://github.com/ali-master/sync-store/tree/master/apps/docs/content/docs",
+  "homepage": "https://sync-store.usestrict.dev",
   "bugs": {
     "url": "https://github.com/ali-master/sync-store/issues"
   },
