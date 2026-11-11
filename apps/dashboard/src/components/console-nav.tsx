@@ -16,6 +16,7 @@ import {
   ScrollText,
   Settings2,
   ShieldCheck,
+  SlidersHorizontal,
   Unplug,
   Users,
 } from "lucide-react";
@@ -73,16 +74,22 @@ export const navGroups: { label: string; items: NavItem[] }[] = [
       { id: "quotas", title: "User quotas", icon: ShieldCheck },
       { id: "analytics", title: "Analytics records", icon: BarChart3 },
       { id: "archives", title: "Archives", icon: Archive },
+    ],
+  },
+  {
+    label: "Installation",
+    items: [
+      { id: "settings", title: "Settings", icon: SlidersHorizontal },
       { id: "system", title: "System", icon: Settings2 },
     ],
   },
 ];
 
-/** Tenants are a platform concern; a tenant administrator never sees the page. */
+/** Tenants and settings are platform concerns; a tenant administrator never sees them. */
 export function visibleNav(platform: boolean) {
   return navGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => item.id !== "tenants" || platform),
+    items: group.items.filter((item) => platform || !["tenants", "settings"].includes(item.id)),
   }));
 }
 

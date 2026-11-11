@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -8,14 +9,24 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import { Database, InjectDatabase } from "../../modules/db";
 import { AdminService } from "./admin.service";
 import { BOOTSTRAP_KEY_ID } from "./bootstrap-key";
+import { effectiveEnv } from "../settings/settings.store";
 
 export interface SsoSession {
   email: string;
   expiresAt: number;
 }
 
+/** The callback on the public API origin, used when no redirect URI is set explicitly. */
+function defaultRedirect(apiUrl: string | undefined): string {
+  try {
+    return apiUrl ? new URL(apiUrl).origin + "/api/v1/sso/callback" : "";
+  } catch {
+    return "";
+  }
+}
+
 /** Read the identity provider settings; SSO stays off until every required value is present. */
-export function ssoConfig(env: Record<string, string | undefined> = process.env) {
+export function ssoConfig(env: Record<string, string | undefined> = effectiveEnv()) {
   const list = (value?: string) =>
     (value ?? "")
       .split(",")
@@ -26,7 +37,7 @@ export function ssoConfig(env: Record<string, string | undefined> = process.env)
     issuer: withoutTrailingSlash((env.SSO_ISSUER ?? "").trim()),
     clientId: (env.SSO_CLIENT_ID ?? "").trim(),
     clientSecret: env.SSO_CLIENT_SECRET ?? "",
-    redirectUri: (env.SSO_REDIRECT_URI ?? "").trim(),
+    redirectUri: (env.SSO_REDIRECT_URI ?? "").trim() || defaultRedirect(env.API_URL),
     scopes: env.SSO_SCOPES || "openid email profile",
     name: env.SSO_PROVIDER_NAME || "SSO",
     emails: list(env.SSO_ALLOWED_EMAILS),
@@ -42,7 +53,7 @@ export function ssoConfig(env: Record<string, string | undefined> = process.env)
   // A half-configured provider must stop the boot instead of silently leaving SSO off.
   if (!enabled && (config.issuer || config.clientId))
     throw new Error(
-      "SSO requires SSO_ISSUER, SSO_CLIENT_ID, SSO_REDIRECT_URI and SSO_ALLOWED_EMAILS or SSO_ALLOWED_DOMAINS",
+      "SSO requires an issuer, a client ID, a redirect URI (or a public API URL) and allowed email addresses or domains",
     );
   if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440)
     throw new Error("SSO_SESSION_MINUTES must be between 1 and 1440");
@@ -50,6 +61,15 @@ export function ssoConfig(env: Record<string, string | undefined> = process.env)
 }
 
 type SsoConfig = ReturnType<typeof ssoConfig>;
+
+/** The configuration in effect, or a disabled one when the settings are incomplete. */
+export function currentSsoConfig(): SsoConfig & { error?: string } {
+  try {
+    return ssoConfig();
+  } catch (error) {
+    return { ...ssoConfig({}), enabled: false, error: (error as Error).message };
+  }
+}
 
 /** Issuers are compared without their optional trailing slash. */
 function withoutTrailingSlash(value: string): string {
@@ -150,8 +170,18 @@ interface ProviderMetadata {
 /** OpenID Connect authorization-code sign-in for the dashboard, with PKCE, state and nonce. */
 @Injectable()
 export class SsoService {
-  private readonly config = ssoConfig();
-  private discovery?: Promise<ProviderMetadata>;
+  private readonly logger = new Logger("SSO");
+  private discovery?: { issuer: string; metadata: Promise<ProviderMetadata> };
+
+  /**
+   * Read on every use, so a change saved in the dashboard applies at once on every replica. Saved
+   * settings are validated before they are stored; an invalid environment fails the boot instead.
+   */
+  private get config() {
+    const config = currentSsoConfig();
+    if (config.error) this.logger.error(config.error);
+    return config;
+  }
 
   constructor(
     @InjectDatabase() private readonly db: Database,
@@ -162,9 +192,11 @@ export class SsoService {
     return { enabled: this.config.enabled, name: this.config.name };
   }
 
-  /** Discover the provider once; a failed lookup is retried on the next sign-in. */
+  /** Discover each issuer once; a failed lookup, or a changed issuer, is looked up again. */
   private metadata(): Promise<ProviderMetadata> {
-    this.discovery ??= fetch(this.config.issuer + "/.well-known/openid-configuration", {
+    const { issuer } = this.config;
+    if (this.discovery?.issuer === issuer) return this.discovery.metadata;
+    const metadata = fetch(issuer + "/.well-known/openid-configuration", {
       signal: AbortSignal.timeout(10_000),
     })
       .then(async (response) => {
@@ -172,18 +204,19 @@ export class SsoService {
         if (
           !response.ok ||
           typeof document.issuer !== "string" ||
-          withoutTrailingSlash(document.issuer) !== this.config.issuer ||
+          withoutTrailingSlash(document.issuer) !== issuer ||
           !document.authorization_endpoint ||
           !document.token_endpoint
         )
-          throw new Error("SSO discovery document does not match SSO_ISSUER");
+          throw new Error("SSO discovery document does not match the configured issuer");
         return document;
       })
       .catch((error) => {
-        this.discovery = undefined;
+        if (this.discovery?.metadata === metadata) this.discovery = undefined;
         throw error;
       });
-    return this.discovery;
+    this.discovery = { issuer, metadata };
+    return metadata;
   }
 
   private requireEnabled() {

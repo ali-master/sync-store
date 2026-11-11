@@ -1,4 +1,5 @@
 import { appendCommit, groupingCommit } from "./version-store";
+import { setting } from "../../settings/settings.store";
 import { storageProject, storageTenant } from "../services/access-policy";
 import {
   Injectable,
@@ -216,7 +217,7 @@ export class SyncStorageRepository {
 
   /** Retain immutable versions separately so item documents do not grow with history. */
   private async snapshot(document: ItemDocument) {
-    const days = Number(process.env.HISTORY_RETENTION_DAYS ?? 30);
+    const days = Number(setting("HISTORY_RETENTION_DAYS") ?? 30);
     if (!Number.isInteger(days) || days < 1 || days > 3650)
       throw new Error("HISTORY_RETENTION_DAYS must be an integer between 1 and 3650");
     const { _id, userId, key, value, metadata, version, isDeleted, lastModified, instanceId } =

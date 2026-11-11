@@ -3,20 +3,40 @@ title: Configuration
 description: The settings used by the API, client, docs and playground.
 ---
 
+## Dashboard settings
+
+Settings that can change while the API runs are edited in the dashboard under **Settings** (platform administrator only) and stored in MongoDB, in the `installation_settings` collection. Each one is named after the environment variable it overrides:
+
+1. A value saved in the dashboard wins.
+2. Otherwise the environment variable applies.
+3. Otherwise the built-in default.
+
+A change reaches every replica within five seconds, without a restart. Saved values are validated together before they are stored: the dashboard refuses, for example, a half-configured SSO provider or an origin list that is not exact origins. **Use environment value** removes a saved value. Secrets (`SSO_CLIENT_SECRET`, `METRICS_TOKEN`) are write-only: the API reports whether they are set, never their value. Every change is recorded in the **Activity log** as `admin.settings.update` with the names of the changed settings.
+
+| Setting                  | Dashboard group | Purpose                                                                                                                                       |
+| ------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_URL`                | General         | Public API URL; its origin is the SDK `serverUrl` shown in **Connect your app**, and the base of the MCP, metrics and SSO callback addresses. |
+| `CORS_ALLOWED_ORIGINS`   | General         | Exact browser origins, or `*`. Applies to HTTP, Socket.IO and the MCP endpoint.                                                               |
+| `HISTORY_RETENTION_DAYS` | Data            | Retention of newly captured history versions, 1–3650 days.                                                                                    |
+| `SSO_*`                  | Single sign-on  | See [dashboard single sign-on](/docs/guides/dashboard-sso).                                                                                   |
+| `METRICS_TOKEN`          | Monitoring      | Bearer token for `/metrics`, at least 32 characters.                                                                                          |
+
+Everything the API needs before it can read the database stays environment-only: `DATABASE_URL`, `REDIS_URL`, `SOCKET_IO_PREFIX`, `JWT_SECRET`, `CSRF_SECRET`, `PORT`, `TRUSTED_PROXY_CIDRS` and the TLS overlay settings.
+
 ## API environment
 
-| Setting                  | Purpose                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------- |
-| `DATABASE_URL`           | Required MongoDB URL; `mongodb://` or `mongodb+srv://`.                               |
-| `API_URL`                | Explicit public API URL, e.g. `http://localhost:3000`.                                |
-| `PORT`                   | Listener port, default 3000.                                                          |
-| `HISTORY_RETENTION_DAYS` | Retention for newly captured history snapshots; default 30, integer 1–3650. Use the same value on all replicas. |
-| `TRUSTED_PROXY_CIDRS` | Comma-separated IPs/CIDRs of directly connected terminating proxies; empty trusts none. Applies to HTTP and Socket.IO. |
-| `TLS_CERT_DIR` | Compose TLS overlay: directory containing `fullchain.pem` and `privkey.pem`. |
-| `TLS_BIND_ADDRESS` | Compose TLS overlay: host bind address for port 443; defaults to `127.0.0.1`. |
-| `NODE_ENV`               | `development`, `test` or `production`; the runtime is still Bun.                      |
-| `JWT_SECRET`             | Required application secret. This does not add JWT authentication to the sync routes. |
-| `CSRF_SECRET`            | Required application secret, at least 32 characters.                                  |
+| Setting                  | Purpose                                                                                                                |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Required MongoDB URL; `mongodb://` or `mongodb+srv://`.                                                                |
+| `API_URL`                | Explicit public API URL, e.g. `http://localhost:3000`.                                                                 |
+| `PORT`                   | Listener port, default 3000.                                                                                           |
+| `HISTORY_RETENTION_DAYS` | Retention for newly captured history snapshots; default 30, integer 1–3650. Use the same value on all replicas.        |
+| `TRUSTED_PROXY_CIDRS`    | Comma-separated IPs/CIDRs of directly connected terminating proxies; empty trusts none. Applies to HTTP and Socket.IO. |
+| `TLS_CERT_DIR`           | Compose TLS overlay: directory containing `fullchain.pem` and `privkey.pem`.                                           |
+| `TLS_BIND_ADDRESS`       | Compose TLS overlay: host bind address for port 443; defaults to `127.0.0.1`.                                          |
+| `NODE_ENV`               | `development`, `test` or `production`; the runtime is still Bun.                                                       |
+| `JWT_SECRET`             | Required application secret. This does not add JWT authentication to the sync routes.                                  |
+| `CSRF_SECRET`            | Required application secret, at least 32 characters.                                                                   |
 
 The Nest application reads its environment files, including `apps/api/.env.local`. Explicit shell variables are useful for Prisma and database setup commands. Keep deployment secrets outside images and source control.
 
@@ -26,17 +46,17 @@ No initial API-key environment variables are required. Open `/dashboard/` and co
 
 All optional. Setting `SSO_ISSUER` or `SSO_CLIENT_ID` turns the feature on, and the API then requires the others marked required. See [dashboard single sign-on](/docs/guides/dashboard-sso).
 
-| Setting               | Purpose                                                                    |
-| --------------------- | -------------------------------------------------------------------------- |
-| `SSO_ISSUER`          | Required. OpenID Connect issuer URL of your identity provider.             |
-| `SSO_CLIENT_ID`       | Required. Client ID registered with the provider.                          |
-| `SSO_CLIENT_SECRET`   | Client secret; omit for a public client.                                   |
-| `SSO_REDIRECT_URI`    | Required. `<API origin>/api/v1/sso/callback`, as registered.               |
-| `SSO_ALLOWED_EMAILS`  | Comma-separated addresses that may sign in. One allow-list is required.    |
-| `SSO_ALLOWED_DOMAINS` | Comma-separated email domains that may sign in.                            |
-| `SSO_PROVIDER_NAME`   | Sign-in button label; default `SSO`.                                       |
-| `SSO_SCOPES`          | Requested scopes; default `openid email profile`.                          |
-| `SSO_SESSION_MINUTES` | Console session lifetime, 1–1440; default 480.                             |
+| Setting               | Purpose                                                                 |
+| --------------------- | ----------------------------------------------------------------------- |
+| `SSO_ISSUER`          | Required. OpenID Connect issuer URL of your identity provider.          |
+| `SSO_CLIENT_ID`       | Required. Client ID registered with the provider.                       |
+| `SSO_CLIENT_SECRET`   | Client secret; omit for a public client.                                |
+| `SSO_REDIRECT_URI`    | Required. `<API origin>/api/v1/sso/callback`, as registered.            |
+| `SSO_ALLOWED_EMAILS`  | Comma-separated addresses that may sign in. One allow-list is required. |
+| `SSO_ALLOWED_DOMAINS` | Comma-separated email domains that may sign in.                         |
+| `SSO_PROVIDER_NAME`   | Sign-in button label; default `SSO`.                                    |
+| `SSO_SCOPES`          | Requested scopes; default `openid email profile`.                       |
+| `SSO_SESSION_MINUTES` | Console session lifetime, 1–1440; default 480.                          |
 
 [Operational reports](/docs/guides/operational-reports) store minute metrics and
 metadata-only change events for 90 days. Shared storage-size snapshots run once per

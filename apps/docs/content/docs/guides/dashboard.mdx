@@ -52,6 +52,10 @@ Press <kbd>⌘K</kbd> (or <kbd>Ctrl</kbd>+<kbd>K</kbd>) to jump to any view or r
 
 Each view has its own address, such as `/dashboard/storage` or `/dashboard/keys`. Search and page selection are retained in the URL, so browser Back and Forward restore your view. Opening a saved link after refreshing still requires signing in; credentials never appear in these URLs.
 
+## Settings
+
+**Settings** (platform administrator only) edits the installation settings that can change at runtime: the public API URL, allowed browser origins, history retention, single sign-on and the metrics token. Values are saved in your database and override the environment; see [dashboard settings](/docs/reference/configuration#dashboard-settings).
+
 ## Recover administrator access
 
 From the server's repository directory:

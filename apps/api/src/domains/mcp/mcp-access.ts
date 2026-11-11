@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   type CanActivate,
   type ExecutionContext,
   Injectable,
@@ -7,6 +8,7 @@ import {
 } from "@nestjs/common";
 import type { McpContext } from "@nestjs/mcp";
 import * as z from "zod";
+import { originAllowed } from "../../cors";
 import { publicDocument } from "../admin/admin.service";
 import { ApiKeyGuard } from "../sync-storage/guards/api-key.guard";
 import type { AccessPolicy } from "../sync-storage/services/access-policy";
@@ -198,6 +200,11 @@ export class McpKeyGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const http = context.switchToHttp();
+    // A page on another site, in a user's browser, must not reach the server; clients outside a
+    // browser send no Origin and pass.
+    const origin = http.getRequest().headers?.origin;
+    if (!originAllowed(typeof origin === "string" ? origin : undefined))
+      throw new ForbiddenException("This origin is not allowed to call the MCP endpoint");
     await this.access.authenticate(http.getRequest());
     // The MCP module writes straight to the socket, which drops headers set on the Fastify reply:
     // carry the CORS headers over so browser-based clients can read the response.

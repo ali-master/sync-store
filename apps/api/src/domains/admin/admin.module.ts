@@ -5,12 +5,13 @@ import { AdminGuard } from "./admin.guard";
 import { AdminService } from "./admin.service";
 import { SetupController } from "./setup.controller";
 import { SetupService } from "./setup.service";
+import { SettingsController } from "./settings.controller";
 import { SsoController } from "./sso.controller";
 import { SsoService } from "./sso.service";
 
 @Module({
   imports: [SyncStorageModule],
-  controllers: [AdminController, SetupController, SsoController],
+  controllers: [AdminController, SetupController, SsoController, SettingsController],
   providers: [AdminService, AdminGuard, SetupService, SsoService],
   exports: [AdminService],
 })

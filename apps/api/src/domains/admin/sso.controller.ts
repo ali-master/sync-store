@@ -13,14 +13,14 @@ import {
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { Public } from "../../decorators/public.decorator";
-import { SsoService } from "./sso.service";
+import { currentSsoConfig, SsoService } from "./sso.service";
 
 const STATE_COOKIE = "ss_sso_state";
 const HANDOFF_COOKIE = "ss_sso_handoff";
 
 /** Both cookies are HttpOnly and scoped to these routes; scripts and other paths never see them. */
 function cookie(name: string, value: string, maxAge: number, sameSite: "Lax" | "Strict") {
-  const secure = process.env.SSO_REDIRECT_URI?.startsWith("https:") ? "; Secure" : "";
+  const secure = currentSsoConfig().redirectUri.startsWith("https:") ? "; Secure" : "";
   return `${name}=${value}; Path=/api/v1/sso; Max-Age=${maxAge}; HttpOnly; SameSite=${sameSite}${secure}`;
 }
 

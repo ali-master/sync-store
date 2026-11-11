@@ -1,5 +1,7 @@
+import { setting } from "./domains/settings/settings.store";
+
 /** Configure browser access for header-authenticated clients, without ambient cookies. */
-export function corsOptions(value = process.env.CORS_ALLOWED_ORIGINS) {
+export function corsOptions(value = setting("CORS_ALLOWED_ORIGINS")) {
   const origins = (value ?? "*").split(",").map((origin) => origin.trim());
   if (origins.length === 1 && origins[0] === "*") {
     // Public SDK access is intentional; authorization remains enforced by API-key guards.
@@ -22,11 +24,16 @@ export function corsOptions(value = process.env.CORS_ALLOWED_ORIGINS) {
   return { origin: origins, credentials: false } as const;
 }
 
+/** Whether a browser page on this origin may call the API; read on every request. */
+export function originAllowed(origin: string | undefined): boolean {
+  const allowed = corsOptions().origin;
+  return allowed === "*" || origin === undefined || allowed.includes(origin);
+}
+
 /** Read configuration after Nest loads environment files, including for Socket.IO. */
 export function socketCorsOrigin(
   origin: string | undefined,
   callback: (error: Error | null, allow: boolean) => void,
 ) {
-  const allowed = corsOptions().origin;
-  callback(null, allowed === "*" || origin === undefined || allowed.includes(origin));
+  callback(null, originAllowed(origin));
 }

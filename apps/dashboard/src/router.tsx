@@ -70,6 +70,7 @@ const sections = [
   "analytics",
   "archives",
   "system",
+  "settings",
 ];
 const routes = sections.map((section) =>
   createRoute({

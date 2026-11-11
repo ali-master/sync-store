@@ -15,6 +15,7 @@ import { Overview } from "./pages/overview";
 import { Records } from "./pages/records";
 import { SignIn } from "./pages/sign-in";
 import { System } from "./pages/system";
+import { SettingsPage } from "./pages/settings";
 import { VersioningPage } from "./pages/versioning";
 
 /** Manage a single installation with a memory-only administrator credential. */
@@ -62,7 +63,16 @@ export default function App({ section }: { section: string }) {
       ),
     enabled:
       Boolean(token) &&
-      !["system", "health", "usage", "changes", "versioning", "connect"].includes(section),
+      ![
+        "system",
+        "health",
+        "usage",
+        "changes",
+        "versioning",
+        "connect",
+        "settings",
+        "about",
+      ].includes(section),
   });
   const mutation = useMutation({
     mutationFn: (action: () => Promise<void>) => action(),
@@ -167,6 +177,8 @@ export default function App({ section }: { section: string }) {
           <VersioningPage dataScope={dataScope} tenantId={overview?.tenantId} />
         ) : ["health", "usage", "changes"].includes(section) ? (
           <Reports kind={section} request={request} sessionId={sessionId} />
+        ) : section === "settings" ? (
+          <SettingsPage platform={overview?.tenantId === null} />
         ) : section === "system" && overview ? (
           <System overview={overview} />
         ) : (

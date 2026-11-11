@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { corsOptions } from "./cors";
+import { originAllowed } from "./cors";
 import { OperationsService } from "./domains/analytics/operations.service";
 import { proxyTrust } from "./trusted-proxy";
 // Modules
@@ -93,7 +93,12 @@ async function bootstrap() {
       defaultVersion: "1",
     });
     app.enableCors({
-      ...corsOptions(),
+      // Read per request, so a change in the dashboard settings applies without a restart.
+      origin: (
+        origin: string | undefined,
+        callback: (error: Error | null, allow: boolean) => void,
+      ) => callback(null, originAllowed(origin)),
+      credentials: false,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: [
         "Idempotency-Key",

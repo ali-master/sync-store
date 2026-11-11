@@ -19,6 +19,7 @@ export const sections = [
   ["analytics", "Analytics records", "▥"],
   ["archives", "Archives", "▣"],
   ["system", "System", "⚙"],
+  ["settings", "Settings", "⚙"],
 ];
 export const descriptions: Record<string, string> = {
   connect:
@@ -48,6 +49,8 @@ export const descriptions: Record<string, string> = {
   archives:
     "Inspect archived records. Archive restore and retention automation are not implemented.",
   system: "Connection health, runtime information and current operational boundaries.",
+  settings:
+    "Installation settings, stored in your database. A saved value overrides the environment on every replica within seconds.",
 };
 export const columns: Record<string, string[]> = {
   tenants: ["name", "_id", "isActive", "createdAt"],

@@ -37,30 +37,37 @@ The issuer must serve `/.well-known/openid-configuration`, and it must put a ver
 
 ## 2. Configure the API
 
-Set these variables on every API replica, then restart:
+### In the dashboard
+
+Open **Settings → Single sign-on**, fill in the issuer URL, client ID, client secret, button label and an allow-list, and select **Save changes**. The values are stored in your database and take effect on every API replica within five seconds; no restart is needed. The client secret is write-only: after saving, the page shows only whether it is set.
+
+The redirect URI can stay empty: it then defaults to the **Public API URL** setting followed by `/api/v1/sso/callback`. Register exactly that address with your provider.
+
+### With environment variables
+
+The same values can come from the environment, for example in Compose or Kubernetes. A value saved in the dashboard overrides the environment; **Use environment value** removes the override again.
 
 ```sh
 SSO_ISSUER=https://accounts.google.com
 SSO_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
 SSO_CLIENT_SECRET=your-client-secret
-SSO_REDIRECT_URI=https://sync.example.com/api/v1/sso/callback
 SSO_PROVIDER_NAME=Google
 SSO_ALLOWED_DOMAINS=example.com
 ```
 
-| Setting               | Purpose                                                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| `SSO_ISSUER`          | Required. The provider's issuer URL.                                                        |
-| `SSO_CLIENT_ID`       | Required. The client ID of the application you registered.                                  |
-| `SSO_CLIENT_SECRET`   | The client secret. Omit it for a public client; PKCE is always used.                        |
-| `SSO_REDIRECT_URI`    | Required. Exactly the redirect URI registered with the provider.                            |
-| `SSO_ALLOWED_EMAILS`  | Comma-separated email addresses that may sign in.                                           |
-| `SSO_ALLOWED_DOMAINS` | Comma-separated email domains that may sign in. Subdomains are not included; list each one. |
-| `SSO_PROVIDER_NAME`   | The name on the sign-in button. Default `SSO`.                                              |
-| `SSO_SCOPES`          | Scopes to request. Default `openid email profile`.                                          |
-| `SSO_SESSION_MINUTES` | How long a console session lasts, 1–1440. Default `480` (eight hours).                      |
+| Setting               | Purpose                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `SSO_ISSUER`          | Required. The provider's issuer URL.                                                                         |
+| `SSO_CLIENT_ID`       | Required. The client ID of the application you registered.                                                   |
+| `SSO_CLIENT_SECRET`   | The client secret. Omit it for a public client; PKCE is always used.                                         |
+| `SSO_REDIRECT_URI`    | Exactly the redirect URI registered with the provider. Default: the public API URL + `/api/v1/sso/callback`. |
+| `SSO_ALLOWED_EMAILS`  | Comma-separated email addresses that may sign in.                                                            |
+| `SSO_ALLOWED_DOMAINS` | Comma-separated email domains that may sign in. Subdomains are not included; list each one.                  |
+| `SSO_PROVIDER_NAME`   | The name on the sign-in button. Default `SSO`.                                                               |
+| `SSO_SCOPES`          | Scopes to request. Default `openid email profile`.                                                           |
+| `SSO_SESSION_MINUTES` | How long a console session lasts, 1–1440. Default `480` (eight hours).                                       |
 
-At least one of `SSO_ALLOWED_EMAILS` and `SSO_ALLOWED_DOMAINS` is required. Without an allow-list, anyone with an account at the provider could administer your installation, so the API refuses to start with a half-configured provider and tells you which settings are missing.
+At least one of `SSO_ALLOWED_EMAILS` and `SSO_ALLOWED_DOMAINS` is required. Without an allow-list, anyone with an account at the provider could administer your installation. The dashboard therefore refuses to save a half-configured provider, and the API refuses to start with one from the environment; both tell you which settings are missing.
 
 ## 3. Sign in
 
@@ -77,11 +84,11 @@ As with the administrator key, the session lives in the tab's memory only. Refre
 
 ### Revoke access
 
-| To                            | Do this                                                                                   |
-| ----------------------------- | ----------------------------------------------------------------------------------------- |
-| Remove one person             | Remove them from the allow-list and restart the API. Their session stops working at once. |
-| Sign everyone out immediately | Rotate the administrator key under **API keys**. Every SSO session is invalidated.        |
-| Turn SSO off                  | Clear `SSO_ISSUER` and `SSO_CLIENT_ID`, then restart the API.                             |
+| To                            | Do this                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| Remove one person             | Remove them from the allow-list in **Settings**. Their session stops working within seconds. |
+| Sign everyone out immediately | Rotate the administrator key under **API keys**. Every SSO session is invalidated.           |
+| Turn SSO off                  | Clear the issuer URL and the client ID in **Settings**, or in the environment and restart.   |
 
 Removing someone at the identity provider prevents new sign-ins; a session they already hold lasts until it expires, at most `SSO_SESSION_MINUTES`. Shorten that value if you need a tighter bound.
 

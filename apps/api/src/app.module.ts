@@ -13,6 +13,7 @@ import { envConfigLoader } from "@root/utils";
 // Enums & Constants
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { AdminModule } from "./domains/admin/admin.module";
+import { SettingsModule } from "./domains/settings/settings.module";
 import { OperationsModule } from "./domains/analytics/operations.module";
 import { SyncStoreMcpModule, syncStoreMcp } from "./domains/mcp/sync-store-mcp.module";
 // Types
@@ -104,6 +105,7 @@ import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
     }),
     ScheduleModule.forRoot(),
     DatabaseModule,
+    SettingsModule,
     ContextModule,
     SyncStorageModule,
     AnalyticsModule,

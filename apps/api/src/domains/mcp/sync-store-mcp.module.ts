@@ -2,7 +2,6 @@ import { Module, type Type, UseGuards, VERSION_NEUTRAL } from "@nestjs/common";
 import { CqrsModule } from "@nestjs/cqrs";
 import { McpModule } from "@nestjs/mcp";
 import { ApiExcludeController } from "@nestjs/swagger";
-import { corsOptions } from "../../cors";
 import { AdminModule } from "../admin/admin.module";
 import { SyncStorageModule } from "../sync-storage/sync-storage.module";
 import { AdminMcp } from "./admin.mcp";
@@ -41,9 +40,7 @@ export function syncStoreMcp(primitives: Type<unknown> = SyncStoreMcpModule) {
     endpointVersion: VERSION_NEUTRAL,
     // The route speaks JSON-RPC, so it is left out of the REST reference.
     decorators: [UseGuards(McpKeyGuard), ApiExcludeController()],
-    // A factory, so CORS_ALLOWED_ORIGINS is read after Nest has loaded the environment files.
     useFactory: () => {
-      const cors = corsOptions().origin;
       return {
         name: "sync-store",
         title: "Sync Store",
@@ -53,11 +50,9 @@ export function syncStoreMcp(primitives: Type<unknown> = SyncStoreMcpModule) {
         websiteUrl: "https://github.com/ali-master/sync-store",
         instructions: INSTRUCTIONS,
         include: [primitives],
-        http: {
-          // Browser clients follow the installation's CORS policy; clients outside a browser send
-          // no Origin and always pass. No ambient credentials exist: every request carries its key.
-          allowedOrigins: cors === "*" ? false : cors.map((origin) => new URL(origin).hostname),
-        },
+        // McpKeyGuard checks the Origin against the CORS setting on every request instead, so a
+        // change in the dashboard applies without a restart.
+        http: { allowedOrigins: false },
       };
     },
   });

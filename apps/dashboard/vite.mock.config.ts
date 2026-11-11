@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // Temporary: serves fake API responses so the dashboard can be viewed without MongoDB.
 // Not part of the project. Run: bun --bun vite --config <this file> --port 4100
 import { defineConfig, type Plugin } from "vite";
@@ -78,6 +79,26 @@ function report(kind: string, hours: number) {
 }
 
 let setupRequired = false;
+let mockRevision = 3;
+const def = (env: string, group: string, label: string, type: string, extra: Record<string, unknown> = {}) => ({
+  env, group, label, type, description: "Mock description of " + label + ".", source: "default", set: false, value: null,
+  environmentValue: null, environmentSet: false, defaultValue: null, ...extra,
+});
+const mockSettings: any[] = [
+  def("API_URL", "General", "Public API URL", "url", { source: "database", value: "https://sync.example.com", set: true, environmentValue: "http://localhost:3000", environmentSet: true }),
+  def("CORS_ALLOWED_ORIGINS", "General", "Allowed browser origins", "list", { source: "environment", value: "*", set: true, environmentValue: "*", environmentSet: true }),
+  def("HISTORY_RETENTION_DAYS", "Data", "History retention (days)", "integer", { min: 1, max: 3650, value: "30", defaultValue: "30" }),
+  def("SSO_ISSUER", "Single sign-on", "Issuer URL", "url", { source: "database", value: "https://accounts.google.com", set: true }),
+  def("SSO_CLIENT_ID", "Single sign-on", "Client ID", "text", { source: "database", value: "1234-abc.apps.googleusercontent.com", set: true }),
+  def("SSO_CLIENT_SECRET", "Single sign-on", "Client secret", "secret", { source: "database", set: true }),
+  def("SSO_REDIRECT_URI", "Single sign-on", "Redirect URI", "url"),
+  def("SSO_PROVIDER_NAME", "Single sign-on", "Button label", "text", { max: 40, value: "SSO", defaultValue: "SSO" }),
+  def("SSO_ALLOWED_EMAILS", "Single sign-on", "Allowed email addresses", "list"),
+  def("SSO_ALLOWED_DOMAINS", "Single sign-on", "Allowed email domains", "list", { source: "database", value: "example.com", set: true }),
+  def("SSO_SCOPES", "Single sign-on", "Scopes", "text", { value: "openid email profile", defaultValue: "openid email profile" }),
+  def("SSO_SESSION_MINUTES", "Single sign-on", "Session length (minutes)", "integer", { min: 1, max: 1440, value: "480", defaultValue: "480" }),
+  def("METRICS_TOKEN", "Monitoring", "Metrics token", "secret", { min: 32 }),
+];
 const mockApi = (): Plugin => ({
   name: "mock-api",
   enforce: "pre",
@@ -107,6 +128,36 @@ const mockApi = (): Plugin => ({
       if (!path.startsWith("admin/")) return send({ message: "Not mocked: " + path }, 404);
       if (!req.headers.authorization) return send({ message: "An administrator Bearer key is required" }, 401);
       const admin = path.slice("admin/".length);
+      if (admin === "about") {
+        const pkg = JSON.parse(readFileSync(root + "/../api/package.json", "utf8"));
+        const origin = "https://sync.example.com";
+        return send({
+          name: pkg.name, description: pkg.description, version: pkg.version, license: pkg.license,
+          author: pkg.author, contributors: [], repositoryUrl: String(pkg.repository?.url ?? "").replace(/^git\+/, "").replace(/\.git$/, ""),
+          issuesUrl: pkg.bugs?.url ?? null, docsUrl: pkg.homepage ?? null, keywords: pkg.keywords ?? [],
+          runtime: { bun: "1.4.4", node: "24.3.0" }, publicUrl: origin,
+          endpoints: { api: origin + "/api/v1", openapi: origin + "/api/docs", mcp: origin + "/mcp", metrics: origin + "/metrics", dashboard: origin + "/dashboard/" },
+        });
+      }
+      if (admin === "settings") {
+        if (req.method === "PATCH") {
+          let body = "";
+          req.on("data", (chunk) => (body += chunk));
+          req.on("end", () => {
+            const { values } = JSON.parse(body || "{}");
+            for (const [env, value] of Object.entries(values ?? {})) {
+              const item = mockSettings.find((s) => s.env === env);
+              if (!item) continue;
+              if (value === null) Object.assign(item, { source: item.environmentSet ? "environment" : "default", value: item.type === "secret" ? null : item.environmentValue ?? item.defaultValue, set: item.environmentSet });
+              else Object.assign(item, { source: "database", value: item.type === "secret" ? null : value, set: value !== "" });
+            }
+            mockRevision++;
+            send({ revision: mockRevision, updatedAt: new Date().toISOString(), updatedBy: "sync-store-bootstrap-admin", settings: mockSettings });
+          });
+          return;
+        }
+        return send({ revision: mockRevision, updatedAt: new Date().toISOString(), updatedBy: "sync-store-bootstrap-admin", settings: mockSettings });
+      }
       if (admin === "overview")
         return send({ tenantId: null, counts: totals, users: 412, activeSessions: 18, storageBytes: 48_392_112, totalCalls: 982_113, databaseLatencyMs: 3, uptimeSeconds: 93_784, database: "sync_store", runtime: "Bun", timestamp: new Date().toISOString() });
       if (admin.startsWith("resources/")) {

@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CheckCheck, Code2, Copy, KeyRound, Radio, ArrowUpRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { SyncStore } from "@usex/sync-store";
+import { CodeBlock } from "./agents/code-block";
+import { useConsole } from "@/lib/console-actions";
+import { useSession } from "@/lib/session";
 import { Alert, AlertContent, AlertIcon, AlertTitle } from "./motion/alert";
 import { AnimatedBadge } from "./motion/animated-badge";
 import { Button } from "./motion/button/base";
@@ -43,6 +48,14 @@ export function ConnectApp() {
     },
     [],
   );
+  const { request } = useConsole();
+  const { sessionId } = useSession();
+  const about = useQuery<{ publicUrl: string | null }>({
+    queryKey: ["console", sessionId, "about"],
+    queryFn: ({ signal }) => request("about", "GET", undefined, undefined, signal),
+  });
+  // The address applications use, from the Public API URL setting; this page's origin until it loads.
+  const serverUrl = about.data?.publicUrl ?? location.origin;
   const code =
     framework === "React"
       ? `import { SyncProvider, useSyncClient, useSyncValue, useSyncStatus } from "@usex/sync-store/react";
@@ -61,7 +74,7 @@ function Preferences() {
       : `import { SyncStore } from "@usex/sync-store";
 
 const { storage, expiresAt } = await SyncStore.connect({
-  serverUrl: ${JSON.stringify(location.origin)},
+  serverUrl: ${JSON.stringify(serverUrl)},
   session: async () => {
     // Your application's authenticated server endpoint.
     const response = await fetch("/my-app/sync-session", { cache: "no-store" });
@@ -220,10 +233,24 @@ console.log(storage.getStatus());
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
-            <TabsContent value={framework} className="mt-0 rounded-none">
-              <pre className="overflow-x-auto bg-muted/40 p-5 font-mono text-xs leading-6">
-                <code>{code}</code>
-              </pre>
+            <TabsContent value={framework} className="mt-0 space-y-3 rounded-none p-4">
+              <CodeBlock
+                code={code}
+                language={framework === "React" ? "tsx" : "typescript"}
+                filename={framework === "React" ? "preferences.tsx" : "sync.ts"}
+                copyable={false}
+              />
+              <p className="text-xs text-muted-foreground">
+                <code className={inlineCode}>serverUrl</code> is the{" "}
+                <Link
+                  to="/settings"
+                  search={{ page: 1, q: "" }}
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Public API URL
+                </Link>{" "}
+                setting: {serverUrl}
+              </p>
             </TabsContent>
           </Tabs>
         </Card>
