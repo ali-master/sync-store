@@ -1,0 +1,247 @@
+---
+title: MCP server
+description: Let AI assistants and agents read, write, version and administer Sync Store data through the Model Context Protocol, with the permissions of an API key.
+---
+
+## What it is
+
+The API serves a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server. An assistant that connects to it (Claude, Cursor, VS Code, your own agent) can look up a user's stored values, change them, restore earlier versions, work with branches and commits, and, with an administrator key, run the operations of the [dashboard](/docs/guides/dashboard).
+
+The server is part of the API process. There is nothing extra to deploy or configure.
+
+| Property       | Value                                                               |
+| -------------- | ------------------------------------------------------------------- |
+| Endpoint       | `/mcp` on the API origin, for example `https://api.example.com/mcp` |
+| Transport      | Streamable HTTP, stateless                                          |
+| Authentication | A Sync Store API key on every request                               |
+| Protocol       | Revision 2026-07-28 and the 2025 revisions, on the same endpoint    |
+
+The endpoint is outside the `/api/v1` prefix of the REST API.
+
+## Connect a client
+
+You need the endpoint URL and an [API key](/docs/guides/api-key-management). Send the key as a request header:
+
+```text
+Authorization: Bearer YOUR_API_KEY
+```
+
+`x-api-key: YOUR_API_KEY` works too. Add `x-user-id` to choose the user whose data the assistant works with by default.
+
+### Claude Code
+
+```sh
+claude mcp add --transport http sync-store https://api.example.com/mcp \
+  --header "Authorization: Bearer YOUR_API_KEY" \
+  --header "x-user-id: user_42"
+```
+
+### Clients configured with JSON
+
+Most clients take the same three values: the URL, the transport and the headers.
+
+```json
+{
+  "mcpServers": {
+    "sync-store": {
+      "type": "http",
+      "url": "https://api.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY",
+        "x-user-id": "user_42"
+      }
+    }
+  }
+}
+```
+
+### MCP Inspector
+
+To list and call everything the server exposes:
+
+```sh
+npx @modelcontextprotocol/inspector
+```
+
+Choose **Streamable HTTP**, enter the URL, add the `Authorization` header, and connect.
+
+### Clients that cannot send headers
+
+Append the key to the URL: `https://api.example.com/mcp?api_key=YOUR_API_KEY`. URLs are written to proxy and server logs, so use a key with the narrowest permissions and prefer headers when the client supports them.
+
+## Request headers
+
+| Header                                 | Required | Purpose                                                                    |
+| -------------------------------------- | -------- | -------------------------------------------------------------------------- |
+| `Authorization: Bearer` or `x-api-key` | Yes      | The API key. Session tokens (`ss_session.…`, `ss_sso.…`) are refused.      |
+| `x-user-id`                            | No       | The default user for data tools. Without it, each call must pass `userId`. |
+| `x-branch`                             | No       | The default [branch](/docs/guides/branches-and-commits). Default `main`.   |
+| `x-instance-id`                        | No       | Identifies this client as the origin of its writes. Default `mcp`.         |
+
+A request without a valid key is answered with HTTP 401 before any MCP message is read.
+
+## Whose data a call uses
+
+Every data tool acts for one user, on one branch, in the project and tenant of the API key:
+
+- **User**: the tool's `userId` argument, or else the `x-user-id` header. A call with neither is refused with a message that says so.
+- **Branch**: the tool's `branch` argument, or else the `x-branch` header, or else `main`.
+- **Project and tenant**: fixed by the key. A key cannot reach another [project's](/docs/guides/projects) or [tenant's](/docs/guides/multi-tenancy) data.
+
+As with the REST API, an application key does not prove who a user is: whoever holds the key can name any user ID in the key's project. Give an assistant a key scoped to what it should reach.
+
+## Permissions and quotas
+
+Each call is authorized as the REST request it is equivalent to, by the same code. A key therefore behaves over MCP exactly as it does over REST:
+
+- **Read and write permission.** Read tools need `canRead`; tools that change data need `canWrite`.
+- **Key prefixes.** A key limited to `cart/` can read and write only keys under `cart/`. `clear-storage`, the versioning tools and the conflict tools need a key without prefix limits.
+- **Allowed methods.** Reads count as `GET`, `set-item` as `PUT`, removals as `DELETE`, commits and restores as `POST`.
+- **Restrictions.** IP ranges, HTTPS and user-agent rules apply. A key restricted to website origins cannot be used over MCP, because assistants send no `Origin` header.
+- **Quotas and reports.** Each tool call, resource read and `describe-access` counts as one request against the key's quota and appears in [operational reports](/docs/guides/operational-reports). Connecting and listing tools is not charged.
+- **Administrator scope.** Tools named `admin-…` need an administrator key. With any other key they answer `Required API key scope: admin`.
+
+The key must have read permission to connect.
+
+## Tools
+
+Tools that only read are marked read-only, so clients can run them without asking. Tools that overwrite or delete are marked destructive.
+
+### Items
+
+| Tool              | What it does                                                                      |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `describe-access` | Report what the key may do, and the default user and branch. A good first call.   |
+| `get-item`        | Read one key. A missing key returns `found: false`.                               |
+| `list-keys`       | List a user's keys, in alphabetical order, optionally by prefix. Paged.           |
+| `list-items`      | List a user's items with their values, most recently changed first. Paged.        |
+| `set-item`        | Create a key or replace its whole value, and notify the user's connected devices. |
+| `remove-item`     | Delete one key. `existed` tells whether it held a value.                          |
+| `clear-storage`   | Delete every key of a user on a branch.                                           |
+
+Writes go through the same path as the SDK and the REST API: connected clients receive them, and they appear in [history](/docs/guides/history). `set-item`, `remove-item` and `clear-storage` accept a `requestId` for [safe retries](/docs/guides/idempotency).
+
+Lists are paged. `total` is the number of matching entries and `nextOffset` is `null` on the last page.
+
+### Item history
+
+| Tool                    | What it does                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| `list-item-history`     | List the retained versions of a key, newest first, including deletions.                    |
+| `preview-item-revision` | Show one revision next to the current value. Returns the `expected` value a restore needs. |
+| `restore-item-revision` | Make a revision current again. Refused if the item changed since the preview.              |
+
+### Branches and commits
+
+| Tool                  | What it does                                              |
+| --------------------- | --------------------------------------------------------- |
+| `list-branches`       | List a user's branches and their head commits.            |
+| `list-commits`        | List the commits of a branch, newest first.               |
+| `get-commit`          | Read one commit and the keys in its snapshot.             |
+| `get-commit-timeline` | Read the projected timeline of a branch's recent commits. |
+| `create-commit`       | Snapshot every key of a branch. Changes no stored value.  |
+| `create-branch`       | Create a branch from a commit.                            |
+| `restore-commit`      | Replace every key of a branch with a commit's contents.   |
+
+`create-commit` and `restore-commit` need `expectedHead`: the branch's head from `list-branches`, or `null` for a branch without commits. The call is refused if the branch moved in the meantime.
+
+### Conflicts
+
+| Tool                  | What it does                                                           |
+| --------------------- | ---------------------------------------------------------------------- |
+| `list-item-conflicts` | List the conflicts recorded for one item.                              |
+| `get-conflict-stats`  | Count a user's conflicts in a time range.                              |
+| `analyze-conflict`    | Check whether a write would be flagged as a conflict, without writing. |
+| `resolve-conflict`    | Record the value a strategy produces. Does not change the stored item. |
+
+### Administration
+
+These need an administrator key and are recorded in the audit log like the same actions in the dashboard. A tenant administrator key is limited to its tenant.
+
+| Tool                       | What it does                                                                                 |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `admin-overview`           | Live counts, stored bytes, connections, database response time.                              |
+| `admin-list-records`       | Browse stored items, history, keys, projects, tenants, sessions, conflicts, audits and more. |
+| `admin-report`             | The health, usage and changes [reports](/docs/guides/operational-reports).                   |
+| `admin-create-key`         | Create an API key. Returns its secret once.                                                  |
+| `admin-update-key`         | Change a key's permissions, quotas or restrictions.                                          |
+| `admin-rotate-key`         | Replace a key's secret. The old secret stops working at once.                                |
+| `admin-create-project`     | Create a project.                                                                            |
+| `admin-create-tenant`      | Create a tenant and its administrator key. Platform administrator only.                      |
+| `admin-update-tenant`      | Suspend or resume a tenant. Platform administrator only.                                     |
+| `admin-write-item`         | Store an item for any user.                                                                  |
+| `admin-delete-item`        | Delete an item of any user.                                                                  |
+| `admin-preview-history`    | Preview a retained version of any user's item.                                               |
+| `admin-restore-history`    | Restore a retained version of any user's item.                                               |
+| `admin-get-versioning`     | Read any user's branches, commits and timeline.                                              |
+| `admin-versioning-action`  | Commit, branch or restore any user's data.                                                   |
+| `admin-disconnect-session` | Close a live connection.                                                                     |
+| `admin-resolve-conflict`   | Record a resolution for any user's conflict.                                                 |
+| `admin-update-quota`       | Change a user's stored quota settings.                                                       |
+
+API key secrets returned by `admin-create-key`, `admin-rotate-key` and `admin-create-tenant` pass through the assistant and its provider. Create keys in the dashboard instead when that is not acceptable.
+
+## Resources
+
+Resources are data the client attaches to the conversation.
+
+| URI                               | Contents                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------- |
+| `sync-store://guide`              | How users, branches, keys, history and administrator tools work on this server.       |
+| `sync-store://items/{+key}`       | The current value of one key, for the user in `x-user-id`. A missing key is an error. |
+| `sync-store://keys/{userId}`      | Every key of one user.                                                                |
+| `sync-store://commits/{commitId}` | One commit of the user in `x-user-id`.                                                |
+
+## Prompts
+
+Prompts are templates a person picks in the client. Each one drives the tools in a safe order and tells the model to report only what the server returns.
+
+| Prompt                     | What it does                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `review-user-data`         | Summarize what a user has stored. Read-only.                                  |
+| `restore-previous-version` | Find an earlier value of a key and restore it after you confirm.              |
+| `resolve-item-conflicts`   | Inspect a key's conflicts and propose a resolution.                           |
+| `investigate-sync-health`  | Check the installation's health from the reports. Needs an administrator key. |
+
+## How results are reported
+
+- Arguments are validated against each tool's schema before the tool runs. A refused call returns an error that names the argument, and nothing is charged or changed.
+- A tool that fails returns a result marked as an error with the same message the REST API gives, for example `Write permission is required` or `Key is outside this API key's permitted prefixes`.
+- Stored values are returned as JSON exactly as stored. 64-bit counters are returned as strings so that no digits are lost.
+- The internal storage identity (the tenant, project and branch prefix of a user ID) is never returned by the data tools.
+
+## Browser-based clients
+
+Assistants, command-line tools and hosted connectors are not browsers and need no configuration. A client that calls the endpoint from a web page follows the installation's `CORS_ALLOWED_ORIGINS`: with an explicit list, only pages on those origins may call the endpoint; with the default `*`, any page may, and the API key remains the only credential. See [configuration](/docs/reference/configuration#browser-origins).
+
+## Limits
+
+- The endpoint is stateless: any API replica can serve any request, and no session affinity is needed.
+- A request body may be up to 1 MiB, which bounds the size of a value written with `set-item`.
+- Only the HTTP transport is served. The server cannot be launched as a local stdio process.
+- OAuth sign-in is not offered: authentication is by API key.
+- The legacy analytics routes, saved report views and client session tokens have no MCP tools.
+- Server-initiated requests such as elicitation are not used, so every tool works with clients of both protocol generations.
+
+## Security checklist
+
+- Serve the API over HTTPS, as for the REST API. See [deployment](/docs/guides/deployment).
+- Give each assistant its own key, so you can disable or rotate it alone.
+- Prefer a read-only key, or a key limited to key prefixes, unless the assistant must write.
+- Keep administrator keys out of assistants that process untrusted content: text the model reads can ask it to call tools.
+- Set quotas on keys used by agents that run unattended.
+
+## Troubleshooting
+
+| Symptom                                                          | Cause and fix                                                                      |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| HTTP 401 `An API key is required`                                | The client sent no key. Add the `Authorization: Bearer` header.                    |
+| HTTP 401 `Invalid or inactive API key`                           | The key is wrong, disabled or rotated.                                             |
+| HTTP 401 `The MCP endpoint accepts API keys, not session tokens` | Use an API key, not a client session or dashboard SSO token.                       |
+| HTTP 403 `Read permission is required`                           | The key cannot read. Connecting needs read permission.                             |
+| HTTP 403 `Domain is not allowed`                                 | The key is restricted to website origins. Use a key without that restriction.      |
+| HTTP 404 on `/api/v1/mcp`                                        | The endpoint is `/mcp`, outside the REST prefix.                                   |
+| `Whose data? Pass userId…`                                       | Neither `userId` nor the `x-user-id` header was sent.                              |
+| `Branch does not exist`                                          | Create the branch with `create-branch`, or use `main`.                             |
+| `Required API key scope: admin`                                  | An `admin-…` tool was called with an application key.                              |
+| `API key quota exceeded or key disabled`                         | The key reached a quota. Raise it under **API keys**, or wait for the next window. |

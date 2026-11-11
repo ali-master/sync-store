@@ -20,6 +20,10 @@ Every request requires `x-api-key`, `x-user-id` and `x-instance-id`. A write-cap
 
 URL-encode keys when placing them in paths. Clear affects the user's server-side store, not just one client's local namespace.
 
+## MCP endpoint
+
+`/mcp`, on the API origin and outside the `/api/v1` prefix, serves the [MCP server](/docs/guides/mcp) over Streamable HTTP. It takes the same API key, as `Authorization: Bearer` or `x-api-key`, and authorizes each tool call as the REST request it is equivalent to.
+
 ## Write a value
 
 ```sh

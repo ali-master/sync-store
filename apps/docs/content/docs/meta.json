@@ -10,6 +10,7 @@
     "guides/dashboard-sso",
     "guides/operational-reports",
     "guides/api-key-management",
+    "guides/mcp",
     "guides/client-sdk",
     "guides/react",
     "guides/offline-sync",

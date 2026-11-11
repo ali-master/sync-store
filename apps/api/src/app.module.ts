@@ -14,6 +14,7 @@ import { envConfigLoader } from "@root/utils";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { AdminModule } from "./domains/admin/admin.module";
 import { OperationsModule } from "./domains/analytics/operations.module";
+import { SyncStoreMcpModule, syncStoreMcp } from "./domains/mcp/sync-store-mcp.module";
 // Types
 import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 
@@ -107,6 +108,8 @@ import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
     SyncStorageModule,
     AnalyticsModule,
     AdminModule,
+    SyncStoreMcpModule,
+    syncStoreMcp(),
   ],
   providers: [
     {

@@ -123,7 +123,13 @@ export class ApiKeyGuard implements CanActivate {
   }
 
   /** Reject missing identities and enforce read/write permissions before touching storage. */
-  async authorize(request: Request, requiredScope?: string, credential?: string): Promise<boolean> {
+  async authorize(
+    request: Request,
+    requiredScope?: string,
+    credential?: string,
+    /** False authenticates a transport request without charging it; its operations are charged one by one. */
+    meter = true,
+  ): Promise<boolean> {
     const apiKey = credential ?? this.extractApiKey(request);
 
     if (!apiKey) {
@@ -245,8 +251,8 @@ export class ApiKeyGuard implements CanActivate {
     };
     if (!requiredScope) (request as any).metricsIdentity = dimensions;
     try {
-      await this.consumeQuota(apiKeyRecord.id);
-      if (!requiredScope)
+      if (meter) await this.consumeQuota(apiKeyRecord.id);
+      if (meter && !requiredScope)
         void this.operations?.record(
           { admitted: 1, [reading ? "reads" : "writes"]: 1 },
           dimensions,

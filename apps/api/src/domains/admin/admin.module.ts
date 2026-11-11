@@ -12,5 +12,6 @@ import { SsoService } from "./sso.service";
   imports: [SyncStorageModule],
   controllers: [AdminController, SetupController, SsoController],
   providers: [AdminService, AdminGuard, SetupService, SsoService],
+  exports: [AdminService],
 })
 export class AdminModule {}

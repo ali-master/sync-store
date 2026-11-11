@@ -21,6 +21,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       else host.switchToWs().getClient().emit("exception", response);
       return;
     }
+    // MCP calls have no HTTP reply to write: the MCP module turns the exception into the call's error.
+    if (host.getType<string>() !== "http") throw exception;
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<FastifyReply>();
     const request = ctx.getRequest<FastifyRequest>();

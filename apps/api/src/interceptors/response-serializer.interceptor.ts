@@ -33,7 +33,9 @@ export class ResponseSerializerInterceptor<T> implements NestInterceptor<T> {
     const req = context.switchToHttp().getRequest<FastifyRequest>();
 
     // Check if this request should skip serialization
-    const shouldNotBeLogged = /api\/(v\d)\/(metrics)/g.test(req.url);
+    // The MCP endpoint streams its own JSON-RPC response; there is no payload to wrap.
+    const shouldNotBeLogged =
+      /api\/(v\d)\/(metrics)/g.test(req.url) || req.url.split("?")[0] === "/mcp";
     if (shouldNotBeLogged) {
       return next.handle();
     }

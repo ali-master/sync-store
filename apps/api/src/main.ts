@@ -105,6 +105,12 @@ async function bootstrap() {
         "X-Requested-With",
         "X-User-Id",
         "X-Instance-Id",
+        // Model Context Protocol clients that run in a browser
+        "Mcp-Protocol-Version",
+        "Mcp-Method",
+        "Mcp-Name",
+        "Mcp-Session-Id",
+        "Last-Event-ID",
       ],
       exposedHeaders: [
         "Content-Type",
@@ -178,8 +184,8 @@ async function bootstrap() {
       },
     });
 
-    // Set global prefix
-    app.setGlobalPrefix("api");
+    // Set global prefix; the MCP endpoint stays at /mcp on the API origin
+    app.setGlobalPrefix("api", { exclude: ["mcp"] });
 
     // Use global exception filter
     app.useGlobalFilters(new GlobalExceptionFilter());
