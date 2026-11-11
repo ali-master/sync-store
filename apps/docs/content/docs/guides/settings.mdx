@@ -1,0 +1,105 @@
+---
+title: Installation settings
+description: Change the public URL, browser origins, retention, single sign-on and the metrics token from the dashboard, without restarting the API.
+---
+
+## What you can change
+
+Open **Settings** in the dashboard sidebar, under **Installation**. It lists every setting that can change while the API is running, grouped by what it affects:
+
+| Group          | Setting                    | What it does                                                                                                                                                                           |
+| -------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| General        | Public API URL             | The address applications and assistants use. It is shown as the SDK `serverUrl` in **Connect your app**, and it is the base of the MCP, metrics and single sign-on callback addresses. |
+| General        | Allowed browser origins    | The exact origins whose pages may call the API, such as `https://app.example.com`, or `*` for any origin. It applies to HTTP, Socket.IO and the MCP endpoint.                          |
+| Data           | History retention (days)   | How long newly captured versions of an item are kept, from 1 to 3650 days.                                                                                                             |
+| Single sign-on | Issuer, client ID, secret… | The OpenID Connect provider for dashboard sign-in. See [dashboard single sign-on](/docs/guides/dashboard-sso).                                                                         |
+| Monitoring     | Metrics token              | The bearer token Prometheus sends to `/metrics`. See [Prometheus metrics](/docs/guides/metrics).                                                                                       |
+
+Only the platform administrator can open the page: these settings apply to every tenant. A tenant administrator sees a short notice instead.
+
+![Installation settings grouped into General, Data, Single sign-on and Monitoring](/screenshots/dashboard-settings.jpg)
+
+## Where a value comes from
+
+Each setting is named after the environment variable it overrides, shown under its label (for example `API_URL`). The API uses the first of these that exists:
+
+1. **Saved in database**: a value you saved on this page.
+2. **From environment**: the environment variable, for example from Compose or Kubernetes.
+3. **Default**: the built-in default.
+
+A badge next to each setting shows which one is in effect. When a saved value hides an environment value, the page shows the environment value underneath, so you can see what you would return to.
+
+Values are stored in MongoDB in the `installation_settings` collection, so they survive restarts, image upgrades and redeployments, and every replica reads the same values.
+
+## Change a setting
+
+1. Edit one or more fields. Each changed field is marked **Unsaved**, and a bar at the bottom counts your changes.
+2. Select **Save changes**.
+
+The API checks all values together before it stores anything. It refuses, for example:
+
+- a URL that is not `http` or `https`, or that contains a user name or password;
+- an origin list with a path or a wildcard such as `https://*.example.com`;
+- a retention outside 1–3650 days;
+- a single sign-on provider without an allow-list, or with an issuer but no client ID.
+
+The message names the setting to fix, and nothing is saved until every value is valid.
+
+A saved change takes effect at once on the replica that saved it and within five seconds on every other replica. No restart is needed.
+
+If another administrator saved a change after you opened the page, saving is refused with "Settings changed since you loaded them". Reload the page and make your change again; nothing is overwritten silently.
+
+Every save is recorded in the **Activity log** as `admin.settings.update`, with the names of the changed settings and never their values.
+
+## Return to the environment value
+
+Select **Use environment value** under a saved setting (**Use default** when there is no environment variable), then **Save changes**. The saved value is removed, and the environment or the default applies again.
+
+To turn a feature off while the environment still sets it, save an empty value instead. For example, clear **Issuer URL** to turn single sign-on off without editing your deployment.
+
+## Secrets
+
+The single sign-on client secret and the metrics token are write-only. After you save one, the page only shows whether it is set; the API never returns it, not even to administrators.
+
+- To replace a secret, type the new value and save.
+- To remove it, select **Remove** and save.
+- For the metrics token, **Generate token** creates a random 64-character token. It is shown once with a **Copy** button; copy it into your Prometheus configuration before you save.
+
+## What stays in the environment
+
+Settings the API needs before it can read the database cannot be stored there. Set these in the environment and restart to change them:
+
+`DATABASE_URL`, `REDIS_URL`, `SOCKET_IO_PREFIX`, `JWT_SECRET`, `CSRF_SECRET`, `PORT`, `TRUSTED_PROXY_CIDRS`, and the TLS overlay settings `TLS_CERT_DIR` and `TLS_BIND_ADDRESS`.
+
+The API also validates the environment when it starts. A half-configured single sign-on provider in the environment stops the API from starting, with a message that names the missing setting.
+
+## Use the HTTP API
+
+The dashboard uses two administrator routes, which you can call with the platform administrator key:
+
+```sh
+# Read every setting and where its value comes from.
+curl https://sync.example.com/api/v1/admin/settings \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H 'x-user-id: admin' -H 'x-instance-id: terminal'
+
+# Save values. null removes a saved value; revision guards against concurrent edits.
+curl -X PATCH https://sync.example.com/api/v1/admin/settings \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H 'x-user-id: admin' -H 'x-instance-id: terminal' \
+  -H 'content-type: application/json' \
+  --data '{"revision": 3, "values": {"HISTORY_RETENTION_DAYS": "90", "SSO_SCOPES": null}}'
+```
+
+`revision` is optional; when you send it, the save is refused with 409 if the settings changed since you read them. The response has the same shape as the read: for each setting its `source` (`database`, `environment` or `default`), its `value` (always `null` for secrets) and whether it is `set`.
+
+## Troubleshooting
+
+| Symptom                                                                 | Cause and fix                                                                                                            |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Settings** is missing from the sidebar                                | You are signed in with a tenant administrator key. Sign in as the installation administrator.                            |
+| `SSO requires an issuer, a client ID, …`                                | Complete the provider: issuer, client ID and an allow-list. Or clear the issuer to turn single sign-on off.              |
+| `CORS_ALLOWED_ORIGINS must contain exact HTTP(S) origins or a single *` | Enter origins without a path or trailing slash, separated by commas.                                                     |
+| `Settings changed since you loaded them`                                | Another administrator saved first. Reload the page and repeat your change.                                               |
+| A replica still uses the old value                                      | Wait five seconds. If it persists, check that the replica can reach MongoDB; its log shows `Could not refresh settings`. |
+| A browser page is now refused                                           | Its origin is not in **Allowed browser origins**. Add it, or use `*` for public SDK access.                              |

@@ -61,6 +61,18 @@ curl --fail-with-body http://localhost:3000/api/v1/keys \
 
 A new database returns an empty list inside `payload`. An HTTP error means the service or credentials need attention; opening the documentation alone does not verify database access.
 
+## 4. Configure your installation
+
+In the dashboard, open **Settings** (under **Installation** in the sidebar):
+
+- Set **Public API URL** to the address your applications use, for example `https://sync.example.com`. **Connect your app** then shows it as the SDK `serverUrl`.
+- Set **Allowed browser origins** to the exact origins of your web applications.
+- Optionally configure [single sign-on](/docs/guides/dashboard-sso) for your team, and a **Metrics token** for [Prometheus](/docs/guides/metrics).
+
+These values are stored in your database and apply without a restart. See [Installation settings](/docs/guides/settings).
+
+AI assistants can reach your data through the [MCP server](/docs/guides/mcp) at `/mcp` on the same address, with an API key.
+
 ## Everyday commands
 
 Run these from the same repository folder:
@@ -102,8 +114,8 @@ Continue to the last command only if initialization succeeds. Existing keys and 
 
 ## Before exposing it to the internet
 
-The default setup listens on **localhost only** and does not publish MongoDB's port. Access it locally or through an SSH tunnel. For a public service, configure an HTTPS reverse proxy with Socket.IO support and set `API_URL` to the public origin.
+The default setup listens on **localhost only** and does not publish MongoDB's port. Access it locally or through an SSH tunnel. For a public service, configure an HTTPS reverse proxy with Socket.IO support and set the **Public API URL** in Settings (or `API_URL`) to the public origin.
 
 This is a simple single-server setup, not a high-availability installation. It uses a MongoDB administrator account for initialization and runtime; use a dedicated restricted runtime account for a hardened deployment. Back up MongoDB and test restoring it before relying on stored data.
 
-A shared API key does not authenticate individual users. Put user authentication in your trusted backend. Current CORS settings are permissive, multiple API replicas require shared Redis, and Prisma 8 MongoDB support is early access. See [API keys and security](/docs/guides/api-key-management) and [deployment limits](/docs/guides/deployment) before public use.
+A shared API key does not authenticate individual users. Put user authentication in your trusted backend. Browser origins default to `*` until you list them in Settings, multiple API replicas require shared Redis, and Prisma 8 MongoDB support is early access. See [API keys and security](/docs/guides/api-key-management) and [deployment limits](/docs/guides/deployment) before public use.

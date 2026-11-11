@@ -10,6 +10,14 @@ The TypeScript client provides local caching, queued offline writes and reconcil
 
 The API runs on Bun with MongoDB storage. Two clients share server data by user ID, while each instance maintains its own local cache and pending-operation outbox.
 
+## What's included
+
+- **Synchronized storage.** JSON values per user, delivered to connected devices, with history, branches and commits.
+- **Client SDK and React hooks.** Local caching, offline writes and reconnect recovery.
+- **Dashboard.** Manage data, keys, tenants, projects and reports. Your team can sign in with [single sign-on](/docs/guides/dashboard-sso), and you can change [installation settings](/docs/guides/settings) without a restart.
+- **[MCP server](/docs/guides/mcp).** AI assistants and agents read and change data through the Model Context Protocol, with the permissions of an API key.
+- **[Prometheus metrics](/docs/guides/metrics).** Request, sync, quota, outbox and database metrics at `/metrics`.
+
 ## Start here
 
 - [Self hosted](/docs/guides/self-hosted): run the API and MongoDB with Docker, without installing Bun.
@@ -20,7 +28,10 @@ The API runs on Bun with MongoDB storage. Two clients share server data by user 
 - [Offline synchronization](/docs/guides/offline-sync): understand reconnect, pending writes and delivery limits.
 - [HTTP and Socket.IO](/docs/reference/http-api): inspect the wire contract and response envelope.
 - [Deployment](/docs/guides/deployment): build and operate the service.
+- [Installation settings](/docs/guides/settings): set the public URL, browser origins and single sign-on from the dashboard.
+- [MCP server](/docs/guides/mcp): connect Claude, Cursor or your own agent.
+- [Prometheus metrics](/docs/guides/metrics): scrape and alert on the API.
 
 ## Before production
 
-Prisma 8 MongoDB support is early access. A shared API key does not authenticate individual users; use a trusted backend to enforce user identity. Realtime broadcasting currently requires a single API process, and delivery is at least once. Read the [security guide](/docs/guides/api-key-management) and [operational limits](/docs/guides/deployment) before deployment.
+Prisma 8 MongoDB support is early access. A shared API key does not authenticate individual users; use a trusted backend to enforce user identity. Multiple API processes need a shared Redis for realtime broadcasting, and delivery is at least once. Read the [security guide](/docs/guides/api-key-management) and [operational limits](/docs/guides/deployment) before deployment.

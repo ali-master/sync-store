@@ -212,7 +212,7 @@ Prompts are templates a person picks in the client. Each one drives the tools in
 
 ## Browser-based clients
 
-Assistants, command-line tools and hosted connectors are not browsers and need no configuration. A client that calls the endpoint from a web page follows the installation's `CORS_ALLOWED_ORIGINS`: with an explicit list, only pages on those origins may call the endpoint; with the default `*`, any page may, and the API key remains the only credential. See [configuration](/docs/reference/configuration#browser-origins).
+Assistants, command-line tools and hosted connectors are not browsers and need no configuration. A client that calls the endpoint from a web page follows the installation's allowed browser origins, set under **Settings → Allowed browser origins** or with `CORS_ALLOWED_ORIGINS`: with an explicit list, only pages on those origins may call the endpoint; with the default `*`, any page may, and the API key remains the only credential. See [configuration](/docs/reference/configuration#browser-origins).
 
 ## Limits
 

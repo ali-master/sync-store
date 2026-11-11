@@ -43,6 +43,28 @@ Build the SDK before starting the demo. Run the example's type check separately 
 
 Set SITE_URL before building deployed documentation; localhost Open Graph URLs cannot be fetched by social crawlers. Existing social caches may retain an old preview until refreshed.
 
+## Dashboard settings do not apply
+
+A value saved under **Settings** takes effect on every replica within five seconds. If a replica keeps an old value, check its log for `Could not refresh settings`: it cannot read MongoDB. A setting marked **From environment** is not saved in the database; save it to override the environment. See [Installation settings](/docs/guides/settings#troubleshooting).
+
+## Single sign-on fails
+
+The dashboard returns to the sign-in screen with the reason. The most common ones:
+
+- The email address is not on the allow-list.
+- The redirect URI differs from the one registered with the provider.
+- The client secret is wrong.
+
+See [dashboard single sign-on](/docs/guides/dashboard-sso#troubleshooting). The administrator key always works, so you can sign in with it and correct the settings.
+
+## An assistant cannot use the MCP server
+
+The MCP endpoint is `/mcp` on the API origin, not `/api/v1/mcp`. It needs an API key in the `Authorization: Bearer` or `x-api-key` header. Session tokens are refused. A key limited to website origins cannot be used, because assistants send no `Origin` header. See [MCP server](/docs/guides/mcp#troubleshooting).
+
+## Prometheus gets 401 from /metrics
+
+Send `Authorization: Bearer` with the metrics token from **Settings → Monitoring**, or with an administrator API key. Removing the token in the dashboard does not fall back to `METRICS_TOKEN`: an empty saved value means no token. To use the environment token again, select **Use environment value**. See [Prometheus metrics](/docs/guides/metrics).
+
 ## Report a reproducible issue
 
 Include the revision, Bun/MongoDB versions, transport, sanitized error, request trace ID, steps, and whether the problem occurs with one API process. Exclude API keys, database URLs containing passwords and private stored values.

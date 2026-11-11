@@ -1,62 +1,160 @@
 ---
 title: Dashboard
-description: Manage your Sync Store installation, credentials, data and connected sessions.
+description: Manage your Sync Store installation, credentials, data, settings and connected sessions.
 ---
 
 ## Open your console
 
-Start the API and open `/dashboard/` on the same server, for example `http://localhost:3000/dashboard/`. The dashboard ships with the API build. Docker users need no local Bun installation: follow [Self hosted](/docs/guides/self-hosted).
+Start the API and open `/dashboard/` on the same server, for example `http://localhost:3000/dashboard/`. The dashboard ships with the API build and the Docker image. Docker users need no local Bun installation: follow [Self hosted](/docs/guides/self-hosted).
 
-On a new installation, the dashboard opens a three-step onboarding flow:
+### First-time setup
 
-1. Select **Set up Sync Store**.
-2. Run `docker compose logs api`, copy the **Setup code**, and enter it with a name for your administrator. Select **Create administrator key**.
-3. Save the generated key in your password manager, confirm you saved it, and select **Open my console**.
+On a new installation, the dashboard opens a three-step setup. A stepper at the top of the card shows which step you are on.
 
-The setup code proves access to the server. It remains valid across restarts until setup completes. Setup cannot be repeated after the administrator has been created, including when that key is disabled. Existing installations show the normal sign-in screen.
+1. **Meet your console.** Select **Set up Sync Store**.
+2. **Create your administrator key.** Run `docker compose logs api`, copy the **Setup code**, and enter it with a name for your administrator. Select **Create administrator key**.
+3. **Save and start.** The key is shown once, with a **Copy** button. Save it in your password manager, confirm you saved it, and select **Open my console**.
 
-![First-time installation onboarding](/screenshots/onboarding.png)
+The setup code proves access to the server. It remains valid across restarts until setup completes. Setup cannot be repeated after the administrator has been created, including when that key is disabled.
 
-The administrator credential remains in this tab's memory only: refreshing or closing the page signs you out. It is never placed in the URL or browser storage. If the connection drops after key creation, use the recovery command below; do not reset your database.
+![First-time setup with a three-step stepper](/screenshots/onboarding.png)
 
-![Sync Store dashboard overview](/screenshots/dashboard.png)
+### Sign in
 
-To let your team sign in with your identity provider instead of sharing this key, set up [single sign-on](/docs/guides/dashboard-sso).
+An installation that is already set up shows the sign-in screen. Paste the administrator key and select **Open console**. When [single sign-on](/docs/guides/dashboard-sso) is configured, a **Continue with …** button above the key field signs you in with your identity provider instead.
 
-## Create an application key
+![Sign-in with single sign-on and the administrator key](/screenshots/sign-in.jpg)
 
-Open **API keys → Create key**, give it a recognizable name, choose read/write permissions and save. Copy the secret before closing the panel. Existing secrets are omitted from list and detail responses. Use a separate key for each trusted application; never give your installation administrator key to an application or playground user.
+The credential stays in this tab's memory only: refreshing or closing the page signs you out. It is never placed in the URL or in browser storage. If the connection drops after key creation, use the [recovery command](#recover-administrator-access); do not reset your database.
 
-Advanced settings accept JSON for expiration, request quotas, allowed HTTP methods, IP/origin/user-agent restrictions and HTTPS requirements. Unsupported settings are rejected. Disabling a key blocks subsequent authorization checks. Rotation replaces its secret immediately; update your application's configuration and disconnect old sessions when revoking access.
+## Find your way around
 
-## Explore and control your installation
+![Overview with live counts, records by collection and backend health](/screenshots/dashboard.png)
 
-![Data explorer with the shadcn record editor](/screenshots/dashboard-data.png)
+The sidebar groups the pages:
 
-| View          | What you can do                                                                                                                                                              |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overview      | Inspect live database counts, stored bytes, active sockets, uptime and database response time.                                                                               |
-| Data explorer | Search stored records, inspect JSON, create or edit a user's value, or delete an item. Writes use the same event path as the SDK, notifying connected clients.               |
-| API keys      | Create, inspect, edit, disable and rotate application credentials.                                                                                                           |
-| Connections   | Inspect live Socket.IO connections across replicas and disconnect a session. Clients may reconnect unless their key is also disabled.                                        |
-| Conflicts     | Inspect both values and record a deterministic resolution proposal. Review the result, then explicitly apply it in Data explorer. A proposal does not overwrite stored data. |
-| Quotas        | Inspect and edit existing user quota records. These are stored configuration; not every storage limit is currently enforced.                                                 |
-| Audit log     | Inspect recorded administrative changes without exposing credential secrets or stored values.                                                                                |
-| Analytics     | Browse persisted analytics records. No synthetic historical charts are generated.                                                                                            |
-| Archives      | Inspect existing archived records; this view does not restore or remove them.                                                                                                |
-| System        | Check the connected API origin, runtime, database and operational limits.                                                                                                    |
+| Group        | Pages                                                                    |
+| ------------ | ------------------------------------------------------------------------ |
+| Start        | Connect your app, Overview                                               |
+| Data         | Data explorer, Branches & commits, Version history                       |
+| Access       | API keys, Projects, Tenants (platform administrator only)                |
+| Monitor      | Sync health, Usage & quotas, Changes & growth, Connections, Activity log |
+| Advanced     | Conflicts, User quotas, Analytics records, Archives                      |
+| Installation | Settings (platform administrator only), System, About                    |
 
-Lists are paginated, 25 records per page. Search matches selected identifying fields rather than every nested JSON value. Refresh loads current server state; counts and connections are snapshots, not a continuous monitoring stream. The inspector exposes the full returned record. Destructive actions require confirmation.
+- **Sidebar.** The panel toggle in the top bar folds the sidebar to an icon rail. On small screens the sidebar is a slide-over menu that closes when you pick a page.
+- **Breadcrumb.** The top bar shows where you are: installation or tenant, project, then page. It also shows the branch when a data scope is selected.
+- **Connection status.** A badge reports **API connected**, **Connecting** or **Needs attention**. The refresh button reloads every view.
+- **Command palette.** Press <kbd>⌘K</kbd> on macOS or <kbd>Ctrl</kbd>+<kbd>K</kbd> elsewhere, or select **Search**. Type to jump to any page, or to refresh data, open the API reference or sign out.
+- **Appearance.** The appearance button cycles through **Light**, **Dark** and the device setting. **System** follows your device, including changes while the console is open. Your choice is saved in this browser; it never stores your key.
+- **Addresses.** Each page has its own address, such as `/dashboard/storage` or `/dashboard/keys`. Search, page number and data scope are kept in the URL, so Back and Forward restore your view. Opening a saved link after refreshing still requires signing in.
 
-Press <kbd>⌘K</kbd> (or <kbd>Ctrl</kbd>+<kbd>K</kbd>) to jump to any view or run an action such as refreshing data or signing out. The sidebar folds to an icon rail, and becomes a slide-over menu on small screens. Reports draw a time bucket without a sample as a gap, never as zero.
+![Command palette listing pages and actions](/screenshots/dashboard-command-palette.jpg)
 
-Each view has its own address, such as `/dashboard/storage` or `/dashboard/keys`. Search and page selection are retained in the URL, so browser Back and Forward restore your view. Opening a saved link after refreshing still requires signing in; credentials never appear in these URLs.
+## Overview
 
-## Settings and About
+**Overview** shows what is in your database right now:
 
-**Settings** (platform administrator only) edits the installation settings that can change at runtime: the public API URL, allowed browser origins, history retention, single sign-on and the metrics token. Values are saved in your database and override the environment; see [dashboard settings](/docs/reference/configuration#dashboard-settings).
+- **Stat cards.** Stored items and users, live connections, API keys and stored bytes.
+- **Records by collection.** A donut chart with each collection's exact share and count. Select a segment to open that collection.
+- **Backend.** MongoDB response time, runtime, database name, process uptime and lifetime key requests.
+- **Access and connections.** A bar chart of keys, projects, tenants, sessions and quotas.
 
-**About** shows the project's author, source repository, documentation and issue tracker, read from `apps/api/package.json` each time the page opens, together with this installation's REST, MCP, metrics and API reference addresses.
+These are measurements taken when the page loads, not a history. For trends, use the [reports](/docs/guides/operational-reports).
+
+## Records and the inspector
+
+Most pages list one kind of record, 25 per page, newest first. Search matches identifying fields such as IDs, names, user IDs and keys, not every nested JSON value. The table never sorts or filters only the loaded page; search and paging happen on the server.
+
+![Data explorer table with search and pagination](/screenshots/dashboard-data.png)
+
+Select the arrow at the end of a row to open the **inspector**, a panel on the right. It shows the record and the actions that apply to it:
+
+| Page            | What you can do in the inspector                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Data explorer   | Edit a user's JSON value or delete the item. Saving shows a before-and-after review first. Writes use the same path as the SDK, so connected clients are notified. |
+| Version history | Preview a retained version next to the current value and restore it. A restore is refused if the item changed since the preview.                                   |
+| API keys        | Change permissions, project, key prefixes, quotas, expiration and network restrictions; disable or rotate the key.                                                 |
+| Tenants         | Suspend or resume a tenant.                                                                                                                                        |
+| Connections     | Disconnect a live Socket.IO session on whichever replica holds it. The client may reconnect unless its key is also disabled.                                       |
+| Conflicts       | Record a resolution proposal with last write wins, first write wins or merge. Apply the resulting value yourself in Data explorer.                                 |
+| User quotas     | Edit the stored quota settings as JSON. Not every stored limit is enforced.                                                                                        |
+
+![Inspector panel editing a stored JSON value](/screenshots/dashboard-inspector.jpg)
+
+Every destructive action asks for confirmation in a dialog. While a change is being saved, the inspector cannot be closed, so a save is never abandoned halfway. A stored value that is not valid JSON is shown as it is stored, rather than hiding the inspector.
+
+### Create an application key
+
+Open **API keys → Create API key**, give it a recognizable name, choose read and write permissions, and save. The secret is shown once in a highlighted block with a **Copy** button; copy it before closing the panel. Existing secrets are never shown again in lists or details.
+
+Use a separate key for each trusted application, and never give the installation administrator key to an application or a playground user.
+
+The key form also sets:
+
+- **Project and key prefixes.** The project the key belongs to and the key prefixes it may read and write. A key's project cannot change after creation.
+- **Expiration.** A date and time in your local time zone, chosen with your browser's date and time field. Leave it empty for a key that does not expire.
+- **Quotas.** Requests per minute, hour, UTC day and UTC month.
+- **Restrictions.** Allowed HTTP methods, IP ranges, website origins and user agents, and whether HTTPS is required.
+
+Disabling a key blocks its next request. Rotation replaces the secret immediately: update your application's configuration, and disconnect old sessions when revoking access.
+
+## Reports
+
+**Sync health**, **Usage & quotas** and **Changes & growth** chart measured time series. Choose a window of one hour, 24 hours, 7 days or 30 days. Each headline number is compared with the preceding window of the same length.
+
+A time bucket without a sample is drawn as a gap in the line, never as zero, and each chart states how many intervals have samples. Select a point to see every value recorded for that interval, or save the filters as a named view and export the table as CSV. See [Operational reports](/docs/guides/operational-reports) for what each metric means.
+
+![Sync health report in dark mode](/screenshots/console-dark.jpg)
+
+## Data scope
+
+Pages that show one user's data have a **Data scope** bar. Use it to choose a tenant, project, user and branch. The scope is kept in the URL as you move between Data explorer, Version history, Connections, Conflicts and Branches & commits.
+
+Tenant administrators stay limited to their own tenant; the server validates every scope change. **Reset** returns to all permitted data. Data explorer hides deleted items; their retained versions remain in Version history.
+
+![Branches and commits for a scoped user](/screenshots/console-branches.jpg)
+
+## Connect your application
+
+**Connect your app** walks from a first credential to a verified change on a second client.
+
+### Code examples
+
+The JavaScript and React tabs show highlighted, ready-to-copy code. The `serverUrl` in the examples is the **Public API URL** from [Settings](/docs/guides/settings). Set it to the address your applications use, and the examples follow; until it is set, they show this page's own origin.
+
+### Connection check
+
+The optional connection check uses a **test application key**:
+
+1. It obtains a short-lived user session.
+2. It opens two independent SDK clients.
+3. It writes one uniquely named value.
+4. It waits for the second client to receive the change.
+
+A connected socket alone never marks delivery complete; the check passes only when the second client receives the change.
+
+The key must allow reads, writes, POST and DELETE, and access to `__sync_check__/`. Use a dedicated test user and an existing branch. The temporary value is removed after the check; its history, audit records and quota use remain. Credentials are cleared after the check and never included in the examples.
+
+![Highlighted SDK example with the connection checklist](/screenshots/connect-app.jpg)
+
+Your production backend must authenticate the user before issuing their session. See [browser sessions](/docs/guides/client-sdk#connect-a-browser-without-exposing-your-application-key). The check is an operator tool, not an application login flow.
+
+## Settings, System and About
+
+- **Settings** (platform administrator only) changes the public API URL, allowed browser origins, history retention, single sign-on and the metrics token. Values are saved in your database and apply without a restart. See [Installation settings](/docs/guides/settings).
+- **System** shows the database, runtime, API origin, database latency and uptime, and the current operational boundaries.
+- **About** shows the project's author with a link to their profile, the source repository, the documentation and the issue tracker, the version and the license. It also lists this installation's addresses: REST API, API reference, MCP server, Prometheus metrics and dashboard, each with a copy button.
+
+About reads `apps/api/package.json` each time the page opens. Edit its `author`, `repository`, `homepage` or `bugs` fields, and the page follows without a rebuild or restart.
+
+![About page with project links and installation addresses](/screenshots/dashboard-about.jpg)
+
+## On a phone
+
+The console works at phone width: the sidebar becomes a slide-over menu, tables scroll horizontally, and the inspector takes the full width.
+
+![Data explorer on a phone](/screenshots/console-mobile.jpg)
 
 ## Recover administrator access
 
@@ -66,90 +164,37 @@ From the server's repository directory:
 docker compose exec api bun run admin:key
 ```
 
-For a source installation, use `bun run --cwd apps/api admin:key` with the same database settings. This local operator command reads the existing credential; it does not reset the database or create another key. Protect terminal output and logs. Rotate the administrator key in the console if it has been exposed. The current tab adopts the new secret after rotation; other sessions must sign in again.
+For a source installation, use `bun run --cwd apps/api admin:key` with the same database settings. This local command reads the existing credential; it does not reset the database or create another key. Protect terminal output and logs.
 
-## Development
-
-The console uses Tailwind CSS 4, [beUI](https://beui.dev) components, charts and blocks, TanStack Router and TanStack Query. Router owns view/search URLs; Query owns server reads, cancellation and mutation invalidation. Records are paged, searched and ordered by the server, so the table never sorts a partial page. Signing out cancels reads and clears the in-memory query cache. Mutations are not retried automatically.
-
-Each view is its own file under `apps/dashboard/src/pages`, framed by `components/console-shell.tsx`; the record inspector lives in `components/inspector`. The beUI sources are vendored in `src/components/motion` and `src/components/charts`, so you can change them. Add another with `bunx --bun shadcn add @beui/<name>`; the registry is configured in `components.json`. Colours, radius and fonts are tokens in `src/styles.css`, for light and dark. Run `bun run --cwd apps/dashboard test` for URL validation and query-cache isolation checks, and `bun run --cwd apps/dashboard test:types` for type checking.
-
-The API build includes the dashboard automatically. For UI development, run `bun run --cwd apps/dashboard dev` and open `http://localhost:4100/dashboard/`. Vite proxies `/api` to `http://localhost:3000`; set `API_PROXY_TARGET` to use another local API. Browser requests use the console's own origin, so credentials are not sent to a user-entered server URL.
+If the key has been exposed, rotate it in **API keys**. The current tab adopts the new secret; other sessions must sign in again, and every [single sign-on](/docs/guides/dashboard-sso) session ends.
 
 ## Deployment boundaries
 
-The console grants installation-wide access. Keep it behind HTTPS and a trusted network or authenticated reverse proxy. It is an operator console, not an end-user account system. Application keys do not authenticate user IDs. With the shared Redis adapter, session listing and disconnection work across API replicas. See [security](/docs/guides/api-key-management) and [deployment limits](/docs/guides/deployment).
+The console grants installation-wide access. Keep it behind HTTPS and a trusted network or an authenticated reverse proxy. It is an operator console, not an end-user account system; application keys do not authenticate user IDs. With the shared Redis adapter, listing and disconnecting sessions works across API replicas. See [security](/docs/guides/api-key-management) and [deployment](/docs/guides/deployment).
 
 ## Customer workspaces and version graphs
 
-Platform administrators can create and suspend customer workspaces under **Tenants**.
-Each workspace has its own administrator key. **Branches & commits** provides user-scoped
-checkpoints, forks and whole-tree restores. See [Multi-tenancy](/docs/guides/multi-tenancy)
-and [Branches and commits](/docs/guides/branches-and-commits).
+Platform administrators create and suspend customer workspaces under **Tenants**. Each workspace has its own administrator key. **Branches & commits** provides user-scoped checkpoints, forks and whole-tree restores. See [Multi-tenancy](/docs/guides/multi-tenancy) and [Branches and commits](/docs/guides/branches-and-commits).
 
-## Find your workspace
+## Development
 
-The console groups pages into **Workspace**, **Access**, **Monitor**, and a collapsed
-**Advanced** section. Search the navigation by page name. On smaller screens, open
-the navigation drawer; selecting a page closes it automatically.
+The console is built with:
 
-Use **Data scope** to select a tenant, project, user and branch. The selection is
-preserved in the URL when moving between data, history, connections and branch
-pages. Tenant administrators remain limited to their own tenant; the server validates
-scope changes. Overview, access management and monitoring retain their own workspace
-scope and explicitly say so when a data filter is retained. Reset returns to all
-permitted data. Data explorer excludes deletion tombstones; retained changes remain
-available in Version history.
+- Tailwind CSS 4 and [beUI](https://beui.dev) components, charts and blocks;
+- TanStack Router, which owns page and search URLs;
+- TanStack Query, which owns server reads, cancellation and mutation invalidation.
 
-![Scoped branches and commits in the management console](/screenshots/console-branches.jpg)
+Signing out cancels reads and clears the in-memory query cache. Mutations are not retried automatically.
 
-## Connect your application
+Where things live, under `apps/dashboard/src`:
 
-Open **Connect your app** for JavaScript and React examples, then run the optional
-connection check using a **test application key**. The check obtains a short-lived
-user session, opens two independent SDK clients, writes one uniquely named value,
-and waits for a remote event on the second client. A connected socket alone never
-marks delivery complete.
+- **Pages:** each view is a file under `pages`, framed by `components/console-shell.tsx`.
+- **Inspector:** one file per record type, under `components/inspector`.
+- **beUI sources:** vendored in `components/motion`, `components/charts` and `components/agents`, so you can change them. Add another with `bunx --bun shadcn add @beui/<name>`; the registry is configured in `components.json`.
+- **Theme:** colours, radius and fonts are tokens in `styles.css`, for light and dark.
 
-The key must allow reads, writes, POST and DELETE, and access to `__sync_check__/`.
-Use a dedicated test user and an existing branch. The temporary value is removed
-after the check; its history, audit records and quota consumption remain. If cleanup
-cannot be confirmed, the console shows the exact key and user to inspect. Credentials
-are cleared after the test and never included in the generated code.
+The API build includes the dashboard automatically. For UI development:
 
-![Verified session, connection, write and receipt steps](/screenshots/connect-app.jpg)
-
-Your production backend must authenticate the user before issuing their session.
-See [browser sessions](/docs/guides/client-sdk#connect-a-browser-without-exposing-your-application-key).
-The console's verification form is an operator tool, not an application login flow.
-
-## Review a data edit
-
-Saving a JSON value opens a before-and-after review. Invalid JSON is rejected before
-confirmation. The previous value is the record as opened; ordinary edits can still
-overwrite intervening writes. Version restore uses its existing expected-revision
-check to reject concurrent changes.
-
-![Mobile console with scoped data and a confirmed edit](/screenshots/console-mobile.jpg)
-
-### Appearance and navigation
-
-The console uses a shared workspace header, a searchable sidebar and focused content panels.
-Press **⌘K** on macOS or **Ctrl+K** on other platforms to focus navigation search.
-Use **Appearance** in the top bar (also available before sign-in) to choose **Light**, **Dark** or **System**.
-System follows your device's appearance, including changes while the console is open.
-Your choice is saved in this browser and shared across tabs; it does not store your administrator key.
-When browser storage is unavailable, appearance still works for the current page.
-
-![Console in light mode with the shared workspace header and connection guide](/screenshots/console-light.jpg)
-
-![Console in dark mode with matching navigation, forms and connection checklist](/screenshots/console-dark.jpg)
-
-### Choose an API key expiration
-
-In the create or edit key form, open **Expiration date** to select a day from the calendar,
-then choose the hour and minute in your local time zone. **Done** closes the picker;
-you still need to save the key form to apply the change. **Clear date** removes the expiration.
-Existing expiration timestamps are preserved when you edit other key settings without changing the date.
-
-![API key expiration calendar with hour and minute controls](/screenshots/date-picker.jpg)
+- `bun run --cwd apps/dashboard dev` serves it at `http://localhost:4100/dashboard/`, and Vite proxies `/api` to `http://localhost:3000`. Set `API_PROXY_TARGET` to use another API.
+- `bun --bun vite --config vite.mock.config.ts --port 4100`, from `apps/dashboard`, serves it against built-in sample data instead, with no API or database.
+- `bun run --cwd apps/dashboard test` runs the unit tests, and `bun run --cwd apps/dashboard test:types` type-checks.

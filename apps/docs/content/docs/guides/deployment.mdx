@@ -18,6 +18,8 @@ TRUSTED_PROXY_CIDRS=YOUR_RESERVED_PROXY_IP
 API_URL=https://sync.example.com
 ```
 
+After the first start, keep the public origin in the dashboard under **Settings → Public API URL** as well, or instead of `API_URL`: a saved value overrides the environment on every replica. See [Installation settings](/docs/guides/settings).
+
 Then use all three Compose files:
 
 ```sh
@@ -59,6 +61,15 @@ bun run start:prod
 Supply API_URL, DATABASE_URL, JWT_SECRET and CSRF_SECRET to the running process. The database provider connects and pings MongoDB at startup. A listening port alone is not a complete readiness check; perform an authorized read/write against an isolated readiness identity.
 
 ## Docker
+
+Released images are published to Docker Hub as `alimaster/sync-store`, for `linux/amd64` and `linux/arm64`. Pin a version such as `1.1.0` in production; `latest` follows the newest release.
+
+```sh
+docker pull alimaster/sync-store:1.1.0
+docker run --rm -p 3000:3000 --env-file /secure/path/api.env alimaster/sync-store:1.1.0
+```
+
+To build the image yourself from source:
 
 ```sh
 docker build -f apps/api/Dockerfile -t sync-store .
@@ -102,6 +113,16 @@ Cluster session listing uses inter-node requests and may fail during a Redis out
 
 When Redis becomes ready again, each API closes its local sync connections at the transport level. The SDK automatically reconnects and reloads MongoDB state. This also repairs events that never reached Redis during the interruption. Expect a brief reconnect; custom clients must reconnect and reconcile their state too.
 
+### Settings across replicas
+
+[Installation settings](/docs/guides/settings) saved in the dashboard are stored in MongoDB. Each replica reloads them every five seconds, so a change made through one replica reaches the others within that time, with no restart and no Redis dependency. Environment variables must still be identical on every replica: a replica with a different environment would fall back to different values for settings that are not saved in the database.
+
+### MCP and metrics behind the proxy
+
+The supplied Nginx configuration forwards every path, so the [MCP server](/docs/guides/mcp) at `/mcp` and [Prometheus metrics](/docs/guides/metrics) at `/metrics` need no extra location blocks. The MCP endpoint is stateless: any replica can serve any request, without sticky sessions. Its streamed responses send `X-Accel-Buffering: no`, so Nginx forwards progress events as they happen.
+
+Metrics are per replica. Scraping through the proxy reaches a different replica each time, so let Prometheus scrape each replica directly on the internal network (with Compose, through Docker DNS service discovery for `api`). The cluster-wide gauges carry `scope="cluster"`; read them from one replica instead of summing them.
+
 ### Atomic server outbox
 
 Each storage document contains its pending events. A MongoDB transaction changes the value or deletion flag, increments the version, appends an immutable event, and records retained history. When supplied, the request receipt commits in the same transaction. Set, remove, clear and imports use this path. Clear is transactional across the user's selected items; an import remains a sequence of individual writes. Very large clear operations may exceed MongoDB's transaction limits and fail without committing; use smaller individual deletes in that case.
@@ -119,7 +140,7 @@ The stream remains bounded: outbox durability covers the MongoDB-to-Redis handof
 ## Required architecture decisions
 
 - Put per-user authentication and authorization in a trusted backend before exposing sync storage.
-- Restrict public origins and configure TLS/proxy trust deliberately; local CORS is permissive.
+- Restrict public origins in **Settings → Allowed browser origins** (or `CORS_ALLOWED_ORIGINS`) and configure TLS/proxy trust deliberately; the default `*` is permissive.
 - Configure the shared Redis adapter before running multiple API processes.
 - Account for at-least-once mutation replay; the SDK does not deduplicate accepted writes after lost acknowledgements.
 - Protect persisted browser data; the former encryption option is unsupported.

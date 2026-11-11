@@ -160,6 +160,7 @@ export default function HomePage() {
           {[
             ["React integration", "Hooks, state and component lifecycles", "/docs/guides/react"],
             ["API reference", "HTTP endpoints and Socket.IO events", "/docs/reference/http-api"],
+            ["MCP server", "Connect AI assistants and agents", "/docs/guides/mcp"],
             [
               "Configuration",
               "Server, client and environment settings",

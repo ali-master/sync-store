@@ -26,7 +26,7 @@ URL-encode keys when placing them in paths. Clear affects the user's server-side
 
 ## Prometheus metrics
 
-`GET /metrics`, on the API origin and outside the `/api/v1` prefix, returns this replica's [Prometheus metrics](/docs/guides/metrics) in text exposition format 0.0.4. Send `Authorization: Bearer` with the `METRICS_TOKEN` or an API key with the `admin` scope; anything else gets a plain-text 401. Scrapes are not charged to the key's quota and do not appear in the operational reports.
+`GET /metrics`, on the API origin and outside the `/api/v1` prefix, returns this replica's [Prometheus metrics](/docs/guides/metrics) in text exposition format 0.0.4. Send `Authorization: Bearer` with the metrics token (from **Settings → Monitoring** or `METRICS_TOKEN`) or an API key with the `admin` scope; anything else gets a plain-text 401. Scrapes are not charged to the key's quota and do not appear in the operational reports.
 
 ## Write a value
 
@@ -69,20 +69,34 @@ Surface the returned message without exposing credentials. Inspect request trace
 
 The console uses `/api/v1/admin` with `Authorization: Bearer YOUR_ADMIN_KEY`, `x-user-id` and `x-instance-id` headers. Installation and tenant administrators have `admin` scope; tenant credentials are restricted to their own workspace. Responses use the same `payload` envelope. Never put this credential in a public client or URL.
 
-| Method and path                            | Request / behavior                                                                                                                                                                                                                      |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /overview`                            | Current collection counts, live sockets and database health.                                                                                                                                                                            |
-| `GET /resources/:resource?page=1&q=search` | 25 records per page; resources: `projects`, `history`, `tenants` (platform only), `keys`, `storage`, `sessions`, `conflicts`, `quotas`, `audits`, `analytics`, `archives`. Key secrets are excluded. Optional `userId` filters by user. |
-| `POST /keys`                               | `{ "name": "My app", "canRead": true, "canWrite": false }`; returns `{ id, key }` once.                                                                                                                                                 |
-| `PATCH /keys/:id`                          | Editable permission/restriction settings only. Credentials, scopes and counters cannot be assigned.                                                                                                                                     |
-| `POST /keys/:id/rotate`                    | No body; returns the replacement `{ key }` once.                                                                                                                                                                                        |
-| `POST /storage`                            | `{ "userId": "user-1", "key": "preferences", "value": { "theme": "light" } }`; overwrites through normal synchronization.                                                                                                               |
-| `POST /storage/delete`                     | `{ "userId": "user-1", "key": "preferences" }`.                                                                                                                                                                                         |
-| `POST /sessions/:id/disconnect`            | No body; disconnects a live socket on its owning replica.                                                                                                                                                                               |
-| `POST /conflicts/:id/resolve`              | `{ "strategy": "last_write_wins" }`; also supports `first_write_wins` and `merge`. Records a proposal only.                                                                                                                             |
-| `PATCH /quotas/:id`                        | Updates existing stored quota configuration; `maxStorageBytes` is a decimal string.                                                                                                                                                     |
+| Method and path                            | Request / behavior                                                                                                                                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /overview`                            | Current collection counts, live sockets and database health.                                                                                                                                                                             |
+| `GET /resources/:resource?page=1&q=search` | 25 records per page; resources: `projects`, `history`, `tenants` (platform only), `keys`, `storage`, `sessions`, `conflicts`, `quotas`, `audits`, `analytics`, `archives`. Key secrets are excluded. Optional `userId` filters by user.  |
+| `POST /keys`                               | `{ "name": "My app", "canRead": true, "canWrite": false }`; returns `{ id, key }` once.                                                                                                                                                  |
+| `PATCH /keys/:id`                          | Editable permission/restriction settings only. Credentials, scopes and counters cannot be assigned.                                                                                                                                      |
+| `POST /keys/:id/rotate`                    | No body; returns the replacement `{ key }` once.                                                                                                                                                                                         |
+| `POST /storage`                            | `{ "userId": "user-1", "key": "preferences", "value": { "theme": "light" } }`; overwrites through normal synchronization.                                                                                                                |
+| `POST /storage/delete`                     | `{ "userId": "user-1", "key": "preferences" }`.                                                                                                                                                                                          |
+| `POST /sessions/:id/disconnect`            | No body; disconnects a live socket on its owning replica.                                                                                                                                                                                |
+| `POST /conflicts/:id/resolve`              | `{ "strategy": "last_write_wins" }`; also supports `first_write_wins` and `merge`. Records a proposal only.                                                                                                                              |
+| `PATCH /quotas/:id`                        | Updates existing stored quota configuration; `maxStorageBytes` is a decimal string.                                                                                                                                                      |
+| `GET /settings`                            | Platform administrator only. Every [installation setting](/docs/guides/settings) with its `source` (`database`, `environment` or `default`), its `value` (`null` for secrets), whether it is `set`, and the settings `revision`.         |
+| `PATCH /settings`                          | Platform administrator only. `{ "values": { "API_URL": "https://sync.example.com", "SSO_SCOPES": null }, "revision": 3 }`; a string is saved, `null` removes the saved value. Validated together; 409 when `revision` is stale. Audited. |
+| `GET /about`                               | Project information read from `apps/api/package.json` (author, repository, documentation, issues, version, license) and this installation's REST, MCP, metrics and dashboard addresses.                                                  |
 
 An unknown resource or missing record returns 404; invalid settings return 400; restricting the installation administrator returns 409. Do not send an empty JSON body with a JSON content type for bodyless operations. See [dashboard](/docs/guides/dashboard) for operational limits and recovery.
+
+### Dashboard single sign-on
+
+These public routes run the [single sign-on](/docs/guides/dashboard-sso) flow for the dashboard. While no provider is configured, the status route reports `enabled: false`, the login and callback routes return the browser to the dashboard with an explanation, and the session route returns 404.
+
+| Method and path            | Behavior                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/sso`          | `{ "enabled": true, "name": "Google" }` in the `payload` envelope: whether the sign-in button is shown, and its label.   |
+| `GET /api/v1/sso/login`    | Redirects the browser to the identity provider, with PKCE, `state` and `nonce`.                                          |
+| `GET /api/v1/sso/callback` | The redirect URI registered with the provider. Completes the sign-in and returns the browser to `/dashboard/`.           |
+| `POST /api/v1/sso/session` | Collects, once, the session of a completed sign-in from its HttpOnly cookie. Use the returned token as the admin bearer. |
 
 ## Socket.IO transport
 
