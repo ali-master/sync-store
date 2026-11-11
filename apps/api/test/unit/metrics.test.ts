@@ -165,7 +165,8 @@ describe("exposition", () => {
     expect(typed.get("sync_store_build_info")).toBe("gauge");
     expect(typed.get("sync_store_process_start_time_seconds")).toBe("gauge");
     expect(typed.get("sync_store_http_request_duration_seconds")).toBe("histogram");
-    expect(text).toContain('version="1.0.0"');
+    // The version comes from apps/api/package.json, so a release bump must not break this test.
+    expect(text).toContain(`version="${(await import("../../package.json")).version}"`);
     if (process.versions.bun) {
       expect(text).toContain('runtime="bun ' + process.versions.bun + '"');
       // Collectors that report nothing or zeros under Bun are not exposed.
