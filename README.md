@@ -77,6 +77,8 @@ Once the service is running:
 The dashboard serves daily administration; `/api/docs` provides the interactive API
 reference. For multiple backend replicas, follow the
 [deployment guide](apps/docs/content/docs/guides/deployment.mdx).
+For the managed Kubernetes installation, see the
+[CI/CD and deployment runbook](docs/cicd-deployment.md).
 
 ## Choose your next step
 
