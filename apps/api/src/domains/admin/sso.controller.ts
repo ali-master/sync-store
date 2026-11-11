@@ -48,6 +48,7 @@ export class SsoController {
   }
 
   @Get("login")
+  @HttpCode(302)
   @ApiOperation({ summary: "Redirect the browser to the identity provider" })
   async login(@Res() reply: FastifyReply) {
     try {
@@ -63,6 +64,7 @@ export class SsoController {
   }
 
   @Get("callback")
+  @HttpCode(302)
   @ApiOperation({ summary: "Complete the sign-in and return the browser to the dashboard" })
   async callback(
     @Query() query: Record<string, unknown>,
