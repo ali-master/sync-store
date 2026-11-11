@@ -71,6 +71,7 @@ const sections = [
   "archives",
   "system",
   "settings",
+  "about",
 ];
 const routes = sections.map((section) =>
   createRoute({

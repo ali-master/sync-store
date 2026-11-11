@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { about } from "../settings/about";
 import { SettingsService } from "../settings/settings.service";
 import { AdminGuard } from "./admin.guard";
 import { AdminService } from "./admin.service";
@@ -49,4 +50,12 @@ export class SettingsController {
     return result;
   }
 
+  @Get("about")
+  @Header("Cache-Control", "no-store")
+  @ApiOperation({
+    summary: "Read project information from package.json and this installation's addresses",
+  })
+  about() {
+    return about();
+  }
 }

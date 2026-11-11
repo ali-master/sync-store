@@ -16,6 +16,7 @@ import { Records } from "./pages/records";
 import { SignIn } from "./pages/sign-in";
 import { System } from "./pages/system";
 import { SettingsPage } from "./pages/settings";
+import { AboutPage } from "./pages/about";
 import { VersioningPage } from "./pages/versioning";
 
 /** Manage a single installation with a memory-only administrator credential. */
@@ -179,6 +180,8 @@ export default function App({ section }: { section: string }) {
           <Reports kind={section} request={request} sessionId={sessionId} />
         ) : section === "settings" ? (
           <SettingsPage platform={overview?.tenantId === null} />
+        ) : section === "about" ? (
+          <AboutPage />
         ) : section === "system" && overview ? (
           <System overview={overview} />
         ) : (

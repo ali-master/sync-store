@@ -20,6 +20,7 @@ export const sections = [
   ["archives", "Archives", "▣"],
   ["system", "System", "⚙"],
   ["settings", "Settings", "⚙"],
+  ["about", "About", "ⓘ"],
 ];
 export const descriptions: Record<string, string> = {
   connect:
@@ -51,6 +52,8 @@ export const descriptions: Record<string, string> = {
   system: "Connection health, runtime information and current operational boundaries.",
   settings:
     "Installation settings, stored in your database. A saved value overrides the environment on every replica within seconds.",
+  about:
+    "The project behind this installation, read from its package.json, and the addresses it serves.",
 };
 export const columns: Record<string, string[]> = {
   tenants: ["name", "_id", "isActive", "createdAt"],

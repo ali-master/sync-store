@@ -7,6 +7,7 @@ import {
   Gauge,
   GitBranch,
   History,
+  Info,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -81,6 +82,7 @@ export const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { id: "settings", title: "Settings", icon: SlidersHorizontal },
       { id: "system", title: "System", icon: Settings2 },
+      { id: "about", title: "About", icon: Info },
     ],
   },
 ];
