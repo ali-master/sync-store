@@ -22,6 +22,22 @@ The Nest application reads its environment files, including `apps/api/.env.local
 
 No initial API-key environment variables are required. Open `/dashboard/` and complete onboarding with the setup code from the API logs to create your administrator credential. See [dashboard and credential recovery](/docs/guides/dashboard).
 
+### Dashboard single sign-on
+
+All optional. Setting `SSO_ISSUER` or `SSO_CLIENT_ID` turns the feature on, and the API then requires the others marked required. See [dashboard single sign-on](/docs/guides/dashboard-sso).
+
+| Setting               | Purpose                                                                    |
+| --------------------- | -------------------------------------------------------------------------- |
+| `SSO_ISSUER`          | Required. OpenID Connect issuer URL of your identity provider.             |
+| `SSO_CLIENT_ID`       | Required. Client ID registered with the provider.                          |
+| `SSO_CLIENT_SECRET`   | Client secret; omit for a public client.                                   |
+| `SSO_REDIRECT_URI`    | Required. `<API origin>/api/v1/sso/callback`, as registered.               |
+| `SSO_ALLOWED_EMAILS`  | Comma-separated addresses that may sign in. One allow-list is required.    |
+| `SSO_ALLOWED_DOMAINS` | Comma-separated email domains that may sign in.                            |
+| `SSO_PROVIDER_NAME`   | Sign-in button label; default `SSO`.                                       |
+| `SSO_SCOPES`          | Requested scopes; default `openid email profile`.                          |
+| `SSO_SESSION_MINUTES` | Console session lifetime, 1–1440; default 480.                             |
+
 [Operational reports](/docs/guides/operational-reports) store minute metrics and
 metadata-only change events for 90 days. Shared storage-size snapshots run once per
 minute across replicas. There is no additional service or secret to configure.

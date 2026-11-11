@@ -67,6 +67,17 @@ import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
           .required()
           .description("Secret key for CSRF token generation"),
 
+        // Dashboard single sign-on (OpenID Connect); all optional, validated together at boot
+        SSO_ISSUER: Joi.string().uri().optional().allow(""),
+        SSO_CLIENT_ID: Joi.string().optional().allow(""),
+        SSO_CLIENT_SECRET: Joi.string().optional().allow(""),
+        SSO_REDIRECT_URI: Joi.string().uri().optional().allow(""),
+        SSO_SCOPES: Joi.string().optional().allow(""),
+        SSO_PROVIDER_NAME: Joi.string().max(40).optional().allow(""),
+        SSO_ALLOWED_EMAILS: Joi.string().optional().allow(""),
+        SSO_ALLOWED_DOMAINS: Joi.string().optional().allow(""),
+        SSO_SESSION_MINUTES: Joi.number().integer().min(1).max(1440).optional(),
+
         // CORS
         CORS_ALLOWED_ORIGINS: Joi.string().default("*"),
 

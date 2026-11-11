@@ -123,8 +123,8 @@ export class ApiKeyGuard implements CanActivate {
   }
 
   /** Reject missing identities and enforce read/write permissions before touching storage. */
-  async authorize(request: Request, requiredScope?: string): Promise<boolean> {
-    const apiKey = this.extractApiKey(request);
+  async authorize(request: Request, requiredScope?: string, credential?: string): Promise<boolean> {
+    const apiKey = credential ?? this.extractApiKey(request);
 
     if (!apiKey) {
       throw new UnauthorizedException("API key is required");

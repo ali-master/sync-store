@@ -12,6 +12,7 @@ import { Versioning } from "./components/versioning";
 import { Reports } from "./components/reports";
 import { KeyPolicyFields } from "./components/key-policy-fields";
 import { readKeyPolicy } from "./lib/key-policy";
+import { readSsoReturn, ssoRequest } from "./lib/sso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -192,6 +193,25 @@ export default function App({ section }: { section: string }) {
     setSecret("");
     setConfirm(null);
   }, [query, page, dataScope.scopeUser, dataScope.projectId, dataScope.tenantId, dataScope.branch]);
+
+  const [ssoError, setSsoError] = useState("");
+  const sso = useQuery<{ enabled: boolean; name: string }>({
+    queryKey: ["sso-status"],
+    queryFn: () => ssoRequest(),
+    enabled: !token,
+  });
+  /** After the identity provider redirects back, collect the session once and clean the URL. */
+  useEffect(() => {
+    const returned = readSsoReturn(location.hash);
+    if (!returned.collect && !returned.error) return;
+    history.replaceState(history.state, "", location.pathname + location.search);
+    setSsoError(returned.error);
+    if (returned.collect)
+      ssoRequest("/session", "POST").then(
+        (session) => setToken(session.token),
+        (failure) => setSsoError(failure.message),
+      );
+  }, []);
 
   /** Call only this dashboard's API origin; never persist credentials in web storage. */
   async function request(
@@ -417,7 +437,23 @@ export default function App({ section }: { section: string }) {
             YOUR INSTALLATION
           </span>
           <h2>Welcome back.</h2>
-          <p>Connect with the administrator key you saved during setup.</p>
+          {sso.data?.enabled ? (
+            <>
+              <p>Sign in with your organization account, or use the administrator key.</p>
+              <Button
+                type="button"
+                variant="default"
+                onClick={() => location.assign("/api/v1/sso/login")}
+              >
+                Continue with {sso.data.name} →
+              </Button>
+              <span className="block border-t pt-6 text-xs text-muted-foreground">
+                Or connect with the administrator key
+              </span>
+            </>
+          ) : (
+            <p>Connect with the administrator key you saved during setup.</p>
+          )}
           <Label>
             Administrator key
             <Input
@@ -429,16 +465,16 @@ export default function App({ section }: { section: string }) {
               placeholder="ss_admin_…"
             />
           </Label>
-          <Button type="submit" variant="default" disabled={busy}>
+          <Button type="submit" variant={sso.data?.enabled ? "outline" : "default"} disabled={busy}>
             {busy ? "Connecting…" : "Open console →"}
           </Button>
 
-          {error && (
+          {(error || ssoError) && (
             <p
               role="alert"
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
             >
-              {error}
+              {error || ssoError}
             </p>
           )}
           <div className="space-y-3 border-t pt-6 text-xs leading-6 text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1">

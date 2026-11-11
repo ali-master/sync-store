@@ -60,3 +60,16 @@ test("data scope survives navigation as bounded strings and resets without a use
   });
   expect(validateSearch({ scopeUser: "x".repeat(200) }).scopeUser).toHaveLength(128);
 });
+
+test("single sign-on return markers are recognized without trusting other fragments", async () => {
+  const { readSsoReturn } = await import("../src/lib/sso");
+  expect(readSsoReturn("#sso")).toEqual({ collect: true, error: "" });
+  expect(readSsoReturn("#sso-error=eve%40evil.dev%20is%20not%20allowed")).toEqual({
+    collect: false,
+    error: "eve@evil.dev is not allowed",
+  });
+  expect(readSsoReturn("#sso-error=%E0%A4%A").error).toBe("Sign-in failed. Try again.");
+  expect(readSsoReturn("#sso-error=" + "x".repeat(900)).error).toHaveLength(300);
+  for (const hash of ["", "#", "#ssomething", "#section"])
+    expect(readSsoReturn(hash)).toEqual({ collect: false, error: "" });
+});

@@ -1,0 +1,113 @@
+---
+title: Dashboard single sign-on
+description: Let your team open the Sync Store console with your identity provider instead of sharing the administrator key.
+---
+
+## What it does
+
+Single sign-on (SSO) adds a **Continue with …** button to the console sign-in screen. People sign in with your identity provider (Google Workspace, Microsoft Entra ID, Okta, Keycloak, Auth0 or any other OpenID Connect provider), and the console opens with installation-administrator access. The administrator key keeps working, so you always have a way in if the provider is down.
+
+SSO is off until you configure it. It is for operators of your installation only; it does not sign in the end users of your applications.
+
+## Before you start
+
+- Finish [first-time setup](/docs/guides/dashboard#open-your-console). SSO sessions act for the installation administrator, so that administrator must exist.
+- Serve the console over HTTPS in production. See [deployment](/docs/guides/deployment).
+- Decide who may administer the installation: specific email addresses, whole email domains, or both.
+
+## 1. Register Sync Store with your identity provider
+
+Create an OpenID Connect **web application** (authorization code flow) in your provider and set its redirect URI to your API origin followed by `/api/v1/sso/callback`:
+
+```text
+https://sync.example.com/api/v1/sso/callback
+```
+
+Request the `openid`, `email` and `profile` scopes. Note the issuer URL, the client ID and, if your provider issued one, the client secret.
+
+| Provider           | Issuer URL                                           |
+| ------------------ | ---------------------------------------------------- |
+| Google             | `https://accounts.google.com`                        |
+| Microsoft Entra ID | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
+| Okta               | `https://<your-domain>.okta.com`                     |
+| Keycloak           | `https://<host>/realms/<realm>`                      |
+| Auth0              | `https://<tenant>.auth0.com`                         |
+
+The issuer must serve `/.well-known/openid-configuration`, and it must put a verified `email` claim in the ID token. In Microsoft Entra ID, add the optional `email` claim to the ID token of the app registration. Use a single-tenant issuer; the multi-tenant `common` endpoint is not supported.
+
+## 2. Configure the API
+
+Set these variables on every API replica, then restart:
+
+```sh
+SSO_ISSUER=https://accounts.google.com
+SSO_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
+SSO_CLIENT_SECRET=your-client-secret
+SSO_REDIRECT_URI=https://sync.example.com/api/v1/sso/callback
+SSO_PROVIDER_NAME=Google
+SSO_ALLOWED_DOMAINS=example.com
+```
+
+| Setting               | Purpose                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| `SSO_ISSUER`          | Required. The provider's issuer URL.                                                        |
+| `SSO_CLIENT_ID`       | Required. The client ID of the application you registered.                                  |
+| `SSO_CLIENT_SECRET`   | The client secret. Omit it for a public client; PKCE is always used.                        |
+| `SSO_REDIRECT_URI`    | Required. Exactly the redirect URI registered with the provider.                            |
+| `SSO_ALLOWED_EMAILS`  | Comma-separated email addresses that may sign in.                                           |
+| `SSO_ALLOWED_DOMAINS` | Comma-separated email domains that may sign in. Subdomains are not included; list each one. |
+| `SSO_PROVIDER_NAME`   | The name on the sign-in button. Default `SSO`.                                              |
+| `SSO_SCOPES`          | Scopes to request. Default `openid email profile`.                                          |
+| `SSO_SESSION_MINUTES` | How long a console session lasts, 1–1440. Default `480` (eight hours).                      |
+
+At least one of `SSO_ALLOWED_EMAILS` and `SSO_ALLOWED_DOMAINS` is required. Without an allow-list, anyone with an account at the provider could administer your installation, so the API refuses to start with a half-configured provider and tells you which settings are missing.
+
+## 3. Sign in
+
+Open `/dashboard/`. The sign-in screen now shows **Continue with Google** (or the name you set) above the administrator-key form. Select it, sign in at your provider, and the console opens.
+
+As with the administrator key, the session lives in the tab's memory only. Refreshing the page signs you out; select the button again, which is immediate while you are still signed in at the provider.
+
+## How a session is secured
+
+- The sign-in uses the authorization code flow with PKCE, a `state` value and a `nonce`. The API checks the ID token's issuer, audience, expiry and nonce before trusting its email address.
+- The session reaches the console through a one-time, `HttpOnly`, same-site cookie that the console exchanges immediately. It never appears in a URL, and the console does not write it to browser storage.
+- A session authorizes the administration routes only. It cannot be used as an application API key, and the administrator key itself is never sent to the browser.
+- Each sign-in is written to the **Audit log** as `admin.sso.login` with the person's email address.
+
+### Revoke access
+
+| To                            | Do this                                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| Remove one person             | Remove them from the allow-list and restart the API. Their session stops working at once. |
+| Sign everyone out immediately | Rotate the administrator key under **API keys**. Every SSO session is invalidated.        |
+| Turn SSO off                  | Clear `SSO_ISSUER` and `SSO_CLIENT_ID`, then restart the API.                             |
+
+Removing someone at the identity provider prevents new sign-ins; a session they already hold lasts until it expires, at most `SSO_SESSION_MINUTES`. Shorten that value if you need a tighter bound.
+
+## Local development
+
+With the console's Vite dev server, send the callback through its proxy so the browser returns to the dev server:
+
+```sh
+SSO_REDIRECT_URI=http://localhost:4100/api/v1/sso/callback
+```
+
+Register the same URI with your provider.
+
+## Limits
+
+- SSO sessions are installation administrators. Tenant administrators continue to sign in with their [tenant administrator key](/docs/guides/multi-tenancy).
+- Actions taken in the console are recorded under the installation administrator; the person is identified by the `admin.sso.login` entry for that session.
+- SAML is not supported. Most SAML providers also offer OpenID Connect.
+
+## Troubleshooting
+
+| Message                                                         | Cause and fix                                                                                             |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `… is not allowed to administer this installation`              | The email address is not in `SSO_ALLOWED_EMAILS` and its domain is not in `SSO_ALLOWED_DOMAINS`.          |
+| `The sign-in request expired or was not started here`           | More than ten minutes passed, or the callback opened in another browser. Start again from the console.    |
+| `The identity provider did not return a verified email address` | Release the `email` claim to the application, and verify the address at the provider.                     |
+| `The identity provider rejected the authorization code`         | The client secret is wrong, or `SSO_REDIRECT_URI` differs from the registered URI.                        |
+| `Finish installation setup before signing in with SSO`          | Complete first-time setup, or re-enable the installation administrator key.                               |
+| `Sign-in failed. Check the API logs and try again.`             | The API could not reach the provider or its discovery document does not match `SSO_ISSUER`. See the logs. |
