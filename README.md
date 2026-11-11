@@ -79,12 +79,15 @@ reference. For multiple backend replicas, follow the
 [deployment guide](apps/docs/content/docs/guides/deployment.mdx).
 For the managed Kubernetes installation, see the
 [CI/CD and deployment runbook](docs/cicd-deployment.md).
+For a portable Kubernetes installation, use the
+[Helm chart and installation guide](charts/sync-store/README.md).
 
 ## Choose your next step
 
 | Your goal | Start here |
 | --- | --- |
 | Run Sync Store on your own server | [Self hosting](apps/docs/content/docs/guides/self-hosted.mdx) |
+| Install on Kubernetes with Helm | [Helm chart](charts/sync-store/README.md) |
 | Connect an application | [Client SDK](packages/client-sdk/README.md) |
 | Explore a working example | [Examples](examples/README.md) |
 | Manage credentials and data | [Dashboard guide](apps/docs/content/docs/guides/dashboard.mdx) |

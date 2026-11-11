@@ -1,0 +1,36 @@
+# Generic render/validation example. Create these Secrets before installation.
+replicaCount: 2
+existingSecret: sync-store-production
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+env:
+  API_URL: "https://sync.example.com/api"
+  CORS_ALLOWED_ORIGINS: "https://sync.example.com"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  SSO_ISSUER: "https://identity.example.com/realms/example"
+  SSO_CLIENT_ID: "sync-store-dashboard"
+  SSO_REDIRECT_URI: "https://sync.example.com/api/v1/sso/callback"
+  SSO_PROVIDER_NAME: "Keycloak"
+  SSO_ALLOWED_EMAILS: "admin@example.com"
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: sync.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: sync-store-tls
+      hosts:
+        - sync.example.com
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

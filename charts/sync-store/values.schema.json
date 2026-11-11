@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sync Store Helm values",
+  "type": "object",
+  "required": ["replicaCount", "image", "existingSecret", "env", "service", "migration", "strategy"],
+  "properties": {
+    "replicaCount": {"type": "integer", "minimum": 1},
+    "nameOverride": {"type": "string", "maxLength": 63, "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+    "fullnameOverride": {"type": "string", "maxLength": 54, "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+    "existingSecret": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"},
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string"},
+        "digest": {"type": "string", "pattern": "^$|^sha256:[a-f0-9]{64}$"},
+        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1}}}
+    },
+    "env": {
+      "type": "object",
+      "required": ["API_URL"],
+      "propertyNames": {"pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "not": {"enum": ["PORT", "NODE_ENV"]}},
+      "additionalProperties": {"type": "string"},
+      "properties": {"API_URL": {"type": "string", "pattern": "^https?://.+"}}
+    },
+    "extraEnv": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {"name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "not": {"enum": ["PORT", "NODE_ENV"]}}},
+        "oneOf": [
+          {"required": ["value"], "properties": {"value": {"type": "string"}}, "not": {"required": ["valueFrom"]}},
+          {"required": ["valueFrom"], "properties": {"valueFrom": {"type": "object"}}, "not": {"required": ["value"]}}
+        ]
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": ["type", "port"],
+      "properties": {
+        "type": {"enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "annotations": {"$ref": "#/definitions/stringMap"}
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "className": {"type": "string"},
+        "annotations": {"$ref": "#/definitions/stringMap"},
+        "hosts": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["host", "paths"],
+            "properties": {
+              "host": {"type": "string", "minLength": 1},
+              "paths": {
+                "type": "array", "minItems": 1,
+                "items": {
+                  "type": "object", "required": ["path", "pathType"],
+                  "properties": {
+                    "path": {"type": "string", "pattern": "^/"},
+                    "pathType": {"enum": ["Prefix", "Exact", "ImplementationSpecific"]}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tls": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "migration": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "backoffLimit": {"type": "integer", "minimum": 0},
+        "activeDeadlineSeconds": {"type": "integer", "minimum": 1},
+        "resources": {"type": "object"}
+      }
+    },
+    "strategy": {
+      "type": "object", "required": ["type"],
+      "properties": {
+        "type": {"enum": ["Recreate", "RollingUpdate"]},
+        "rollingUpdate": {"type": "object"}
+      },
+      "if": {"properties": {"type": {"const": "Recreate"}}},
+      "then": {"not": {"required": ["rollingUpdate"]}}
+    },
+    "resources": {"type": "object"},
+    "startupProbe": {"type": "object"},
+    "readinessProbe": {"type": "object"},
+    "livenessProbe": {"type": "object"},
+    "podAnnotations": {"$ref": "#/definitions/stringMap"},
+    "podLabels": {
+      "allOf": [{"$ref": "#/definitions/stringMap"}],
+      "propertyNames": {"not": {"enum": ["app.kubernetes.io/name", "app.kubernetes.io/instance", "app.kubernetes.io/component"]}}
+    },
+    "automountServiceAccountToken": {"type": "boolean"},
+    "podSecurityContext": {"type": "object"},
+    "securityContext": {"type": "object"},
+    "nodeSelector": {"$ref": "#/definitions/stringMap"},
+    "tolerations": {"type": "array"},
+    "affinity": {"type": "object"},
+    "podDisruptionBudget": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "minAvailable": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "string", "pattern": "^(100|[0-9]{1,2})%$"}]}
+      }
+    }
+  },
+  "definitions": {
+    "stringMap": {"type": "object", "additionalProperties": {"type": "string"}}
+  }
+}
