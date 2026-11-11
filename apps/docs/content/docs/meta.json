@@ -9,6 +9,7 @@
     "guides/dashboard",
     "guides/dashboard-sso",
     "guides/operational-reports",
+    "guides/metrics",
     "guides/api-key-management",
     "guides/mcp",
     "guides/client-sdk",

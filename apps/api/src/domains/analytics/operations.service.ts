@@ -5,6 +5,7 @@ import { Database, InjectDatabase } from "@root/modules/db";
 import { quotaWindows, quotaWindow } from "../sync-storage/services/quota-window";
 import { accessPolicy } from "../sync-storage/services/access-policy";
 import { randomUUID } from "node:crypto";
+import { metrics } from "../metrics/metrics.service";
 
 // Project IDs are server-validated ASCII identifiers embedded in the storage namespace.
 const projectExpression = {
@@ -149,6 +150,7 @@ export class OperationsService implements OnModuleInit {
     values: Record<string, number>,
     dimensions: { project?: string; apiKeyId?: string; tenantId?: string } = {},
   ) {
+    metrics.operation(values, dimensions);
     const time = new Date(Math.floor(Date.now() / 60000) * 60000);
     const project = dimensions.project ?? "",
       apiKeyId = dimensions.apiKeyId ?? "";
@@ -181,6 +183,7 @@ export class OperationsService implements OnModuleInit {
   published(timestamp: number, tenantId = "default") {
     const latency = Math.max(0, Date.now() - timestamp);
     const bucket = latencyBounds.findIndex((bound) => latency <= bound);
+    metrics.outboxLatency.observe(latency / 1000);
     return this.record(
       {
         published: 1,

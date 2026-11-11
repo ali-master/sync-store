@@ -4,6 +4,7 @@ import { StorageItem } from "../entities/storage-item.entity";
 import { randomUUID } from "node:crypto";
 import type { Models } from "@root/modules/db/contract.d";
 import { mutationSession } from "../repositories/mutation-context";
+import { metrics } from "../../metrics/metrics.service";
 type SyncConflict = Omit<Models.unbound_SyncConflict, "item">;
 
 export enum ConflictResolutionStrategy {
@@ -182,6 +183,11 @@ export class ConflictResolutionService {
         .insertOne({ _id: id, ...fields, createdAt }, { session });
       conflict = { ...data, createdAt } as SyncConflict;
     } else conflict = await db.orm.sync_conflicts.create(data);
+    metrics.conflicts.inc({
+      type: Object.values<string>(ConflictType).includes(data.conflictType)
+        ? data.conflictType
+        : "other",
+    });
 
     this.logger.log(`Created conflict record ${conflict.id} for item ${itemId}`);
     return conflict;
@@ -316,6 +322,12 @@ export class ConflictResolutionService {
       aiModel: options.aiModel,
       humanReviewed: options.userReview || false,
       resolvedAt: new Date(),
+    });
+    metrics.conflictResolutions.inc({
+      strategy: Object.values<string>(ConflictResolutionStrategy).includes(strategy)
+        ? strategy
+        : "other",
+      status: result.needsManualResolution ? "pending" : "resolved",
     });
 
     this.logger.log(

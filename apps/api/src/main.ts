@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { originAllowed } from "./cors";
 import { OperationsService } from "./domains/analytics/operations.service";
+import { metrics } from "./domains/metrics/metrics.service";
 import { proxyTrust } from "./trusted-proxy";
 // Modules
 import { AppModule } from "@root/app.module";
@@ -133,6 +134,7 @@ async function bootstrap() {
 
     const fastify = app.getHttpAdapter().getInstance();
     const operations = app.get(OperationsService);
+    metrics.instrument(fastify);
     fastify.addHook("onResponse", async (request: any, reply: any) => {
       if (!request.metricsIdentity) return;
       void operations.record(
@@ -189,8 +191,8 @@ async function bootstrap() {
       },
     });
 
-    // Set global prefix; the MCP endpoint stays at /mcp on the API origin
-    app.setGlobalPrefix("api", { exclude: ["mcp"] });
+    // Set global prefix; the MCP and Prometheus endpoints stay at /mcp and /metrics on the API origin
+    app.setGlobalPrefix("api", { exclude: ["mcp", "metrics"] });
 
     // Use global exception filter
     app.useGlobalFilters(new GlobalExceptionFilter());

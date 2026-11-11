@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import type { ClientSession } from "mongodb";
 import type { Database } from "@root/modules/db";
+import { metrics } from "../../metrics/metrics.service";
 
 export const mutationSession = new AsyncLocalStorage<ClientSession>();
 
@@ -40,7 +41,17 @@ function canonical(value: any): any {
 }
 
 /** Commit the receipt, storage mutation and embedded outbox together across replicas. */
-export async function runMutation<T>(
+export function runMutation<T>(
+  database: Database,
+  userId: string,
+  requestId: string | undefined,
+  payload: unknown,
+  work: () => Promise<T>,
+): Promise<T> {
+  return metrics.mutation(payload, () => receipted(database, userId, requestId, payload, work));
+}
+
+async function receipted<T>(
   database: Database,
   userId: string,
   requestId: string | undefined,
@@ -63,13 +74,18 @@ export async function runMutation<T>(
   try {
     // A unique receipt serializes concurrent requests, including different keys and clear operations.
     for (let attempt = 0; ; attempt++) {
+      // Counted once the transaction commits; a retried transaction decides again.
+      let replayed = false;
       try {
-        return (await session.withTransaction(
+        const result = (await session.withTransaction(
           async () => {
             const receipt = await receipts.findOne({ _id: id }, { session });
+            replayed = Boolean(receipt);
             if (receipt) {
-              if (receipt.fingerprint !== fingerprint)
+              if (receipt.fingerprint !== fingerprint) {
+                metrics.idempotency.inc({ result: "mismatch" });
                 throw new ConflictException("Idempotency-Key already used for another operation");
+              }
               return receipt.result;
             }
             await receipts.insertOne({ _id: id, fingerprint, result: null as T }, { session });
@@ -83,6 +99,8 @@ export async function runMutation<T>(
           },
           { readConcern: { level: "snapshot" }, writeConcern: { w: "majority", j: true } },
         )) as T;
+        metrics.idempotency.inc({ result: replayed ? "replay" : "first" });
+        return result;
       } catch (error) {
         if ((error as { code?: number }).code !== 11000 || attempt >= 4) throw error;
       }

@@ -58,6 +58,12 @@ All optional. Setting `SSO_ISSUER` or `SSO_CLIENT_ID` turns the feature on, and 
 | `SSO_SCOPES`          | Requested scopes; default `openid email profile`.                       |
 | `SSO_SESSION_MINUTES` | Console session lifetime, 1–1440; default 480.                          |
 
+### Prometheus metrics
+
+| Setting         | Purpose                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `METRICS_TOKEN` | Optional bearer token for `GET /metrics`. Use a long random value. Without it, only API keys with the `admin` scope can scrape. See [Prometheus metrics](/docs/guides/metrics). |
+
 [Operational reports](/docs/guides/operational-reports) store minute metrics and
 metadata-only change events for 90 days. Shared storage-size snapshots run once per
 minute across replicas. There is no additional service or secret to configure.

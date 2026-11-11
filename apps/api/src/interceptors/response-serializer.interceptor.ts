@@ -33,9 +33,10 @@ export class ResponseSerializerInterceptor<T> implements NestInterceptor<T> {
     const req = context.switchToHttp().getRequest<FastifyRequest>();
 
     // Check if this request should skip serialization
-    // The MCP endpoint streams its own JSON-RPC response; there is no payload to wrap.
+    // The MCP endpoint streams its own JSON-RPC response and /metrics sends Prometheus text.
+    const path = req.url.split("?")[0];
     const shouldNotBeLogged =
-      /api\/(v\d)\/(metrics)/g.test(req.url) || req.url.split("?")[0] === "/mcp";
+      /api\/(v\d)\/(metrics)/g.test(req.url) || path === "/mcp" || path === "/metrics";
     if (shouldNotBeLogged) {
       return next.handle();
     }

@@ -24,6 +24,10 @@ URL-encode keys when placing them in paths. Clear affects the user's server-side
 
 `/mcp`, on the API origin and outside the `/api/v1` prefix, serves the [MCP server](/docs/guides/mcp) over Streamable HTTP. It takes the same API key, as `Authorization: Bearer` or `x-api-key`, and authorizes each tool call as the REST request it is equivalent to.
 
+## Prometheus metrics
+
+`GET /metrics`, on the API origin and outside the `/api/v1` prefix, returns this replica's [Prometheus metrics](/docs/guides/metrics) in text exposition format 0.0.4. Send `Authorization: Bearer` with the `METRICS_TOKEN` or an API key with the `admin` scope; anything else gets a plain-text 401. Scrapes are not charged to the key's quota and do not appear in the operational reports.
+
 ## Write a value
 
 ```sh

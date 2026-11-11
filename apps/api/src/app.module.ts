@@ -16,6 +16,7 @@ import { AdminModule } from "./domains/admin/admin.module";
 import { SettingsModule } from "./domains/settings/settings.module";
 import { OperationsModule } from "./domains/analytics/operations.module";
 import { SyncStoreMcpModule, syncStoreMcp } from "./domains/mcp/sync-store-mcp.module";
+import { MetricsModule } from "./domains/metrics/metrics.module";
 // Types
 import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 
@@ -112,6 +113,7 @@ import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
     AdminModule,
     SyncStoreMcpModule,
     syncStoreMcp(),
+    MetricsModule,
   ],
   providers: [
     {

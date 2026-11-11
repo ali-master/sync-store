@@ -13,6 +13,7 @@ import { SyncStorageRepository } from "../repositories/sync-storage.repository";
 import { inMutation, mutationSession, runMutation } from "../repositories/mutation-context";
 import { appendCommit, groupingCommit } from "../repositories/version-store";
 import { branchName, branchUser, versionScope } from "./access-policy";
+import { metrics } from "../../metrics/metrics.service";
 
 /** Branches and commits use Prisma reads; session-bound writes and time series are explicit native exceptions. */
 @Injectable()
@@ -133,8 +134,12 @@ export class VersioningService implements OnModuleInit {
     );
   }
 
+  fork(userId: string, body: any) {
+    return metrics.track(metrics.versioning, { operation: "fork" }, this.createFork(userId, body));
+  }
+
   /** Fork a committed tree atomically; a failed clone never leaves a half-populated branch. */
-  async fork(userId: string, body: any) {
+  private async createFork(userId: string, body: any) {
     const name = branchName(body?.name);
     if (name === "main" || typeof body?.commitId !== "string")
       throw new BadRequestException("Choose a new branch name and source commit");

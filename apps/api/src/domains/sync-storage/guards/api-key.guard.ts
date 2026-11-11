@@ -8,6 +8,7 @@ import {
   Optional,
 } from "@nestjs/common";
 import { OperationsService } from "../../analytics/operations.service";
+import { metrics } from "../../metrics/metrics.service";
 import { Request } from "express";
 import { Reflector } from "@nestjs/core";
 import type { Socket } from "socket.io";
@@ -105,6 +106,7 @@ export class ApiKeyGuard implements CanActivate {
       protocol: proxy.protocol,
       ip: proxy.ip,
       socket: { remoteAddress: client.handshake.address },
+      transport: "socket",
     } as unknown as Request;
     await this.authorize(request);
     const record = (request as any).apiKey;
@@ -129,6 +131,22 @@ export class ApiKeyGuard implements CanActivate {
     credential?: string,
     /** False authenticates a transport request without charging it; its operations are charged one by one. */
     meter = true,
+  ): Promise<boolean> {
+    try {
+      const allowed = await this.check(request, requiredScope, credential, meter);
+      metrics.authorization(request);
+      return allowed;
+    } catch (error) {
+      metrics.authorization(request, error);
+      throw error;
+    }
+  }
+
+  private async check(
+    request: Request,
+    requiredScope: string | undefined,
+    credential: string | undefined,
+    meter: boolean,
   ): Promise<boolean> {
     const apiKey = credential ?? this.extractApiKey(request);
 

@@ -20,6 +20,7 @@ import { GetAllItemsQuery } from "../queries/impl/get-all-items.query";
 import { permits, storageTenant } from "../services/access-policy";
 import { socketCorsOrigin } from "../../../cors";
 import { OperationsService } from "../../analytics/operations.service";
+import { metrics } from "../../metrics/metrics.service";
 
 interface SyncMessage {
   requestId?: string;
@@ -327,7 +328,10 @@ export class SyncStorageGateway implements OnGatewayConnection, OnGatewayDisconn
         (await this.apiKeyGuard.canReceive(socket.data, key)) ? socket.id : null,
       ),
     );
-    return allowed.filter((id): id is string => id !== null);
+    const rooms = allowed.filter((id): id is string => id !== null);
+    metrics.deliveries.inc({ result: "delivered" }, rooms.length);
+    metrics.deliveries.inc({ result: "skipped" }, allowed.length - rooms.length);
+    return rooms;
   }
 
   broadcastToRooms(rooms: string[], event: string, data: unknown): void {

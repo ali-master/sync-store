@@ -145,6 +145,7 @@ export class McpAccess {
       protocol: http.protocol,
       ip: http.ip,
       socket: http.socket ?? {},
+      transport: "mcp",
     } as any;
   }
 

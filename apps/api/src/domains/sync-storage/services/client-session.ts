@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { UnauthorizedException } from "@nestjs/common";
+import { metrics } from "../../metrics/metrics.service";
 
 export interface ClientSession {
   keyId: string;
@@ -20,6 +21,7 @@ export function issueClientSession(
   const body = Buffer.from(JSON.stringify({ keyId: key.id, userId, branch, expiresAt })).toString(
     "base64url",
   );
+  metrics.clientSessions.inc();
   return { token: `ss_session.${body}.${signature(body, key.key)}`, expiresAt };
 }
 

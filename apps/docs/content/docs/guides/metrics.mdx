@@ -1,0 +1,188 @@
+---
+title: Prometheus metrics
+description: Scrape each API replica's counters, latency histograms and cluster gauges at /metrics.
+---
+
+Every API replica serves [Prometheus](https://prometheus.io/) metrics at `GET /metrics` on the
+API origin, outside the `/api/v1` prefix, in text exposition format 0.0.4. The response is never
+cached (`Cache-Control: no-store`) and is not listed in the OpenAPI document.
+
+Use it for alerting and long-term dashboards. The [operational reports](/docs/guides/operational-reports)
+in the dashboard stay the place to inspect usage by API key and to browse the last 90 days without
+running Prometheus.
+
+## Authentication
+
+The endpoint is closed by default. Send `Authorization: Bearer <credential>`, where the credential is
+one of:
+
+- the metrics token: generate it in the dashboard under **Settings → Monitoring → Metrics token**, or set `METRICS_TOKEN` in the environment (see [configuration](/docs/reference/configuration#prometheus-metrics)); a token saved in the dashboard takes effect on every replica within seconds; or
+- an API key with the `admin` scope.
+
+Any other request, including one without a credential, gets `401` with a short plain-text body.
+A scrape is not charged to the key's quota and does not appear in the usage reports. A dedicated
+`METRICS_TOKEN` is the better choice: it grants nothing but read access to the metrics, while an
+administrator key can manage the whole installation.
+
+```yaml
+scrape_configs:
+  - job_name: sync-store
+    metrics_path: /metrics
+    scheme: https
+    authorization:
+      type: Bearer
+      credentials: "<your METRICS_TOKEN>"
+    # Scrape every replica directly, not through the load balancer.
+    static_configs:
+      - targets: ["api-1.internal:3000", "api-2.internal:3000"]
+```
+
+To keep the token out of the configuration file, use `credentials_file: /path/to/token` in place of
+`credentials`.
+
+## Replicas and cluster-wide gauges
+
+Each replica exposes **its own** process-local counters, the standard Prometheus model: scrape every
+replica and aggregate with `sum()` or `rate()` as usual.
+
+Some gauges describe state shared by the whole cluster: the outbox backlog, collection sizes and the
+storage snapshot. Every replica reads the same value at scrape time, so these carry
+`scope="cluster"`. **Do not `sum()` them across replicas**: that multiplies the value by the number of
+replicas. Take one replica's value with `max by (...)`:
+
+```promql
+# Correct: pending events per tenant, then the cluster total
+sum(max by (tenant) (sync_store_outbox_pending_events))
+
+# Wrong: counts the backlog once per replica
+sum(sync_store_outbox_pending_events)
+```
+
+The outbox and storage gauges come from the snapshot the API takes once a minute for the
+operational reports, so they move in one-minute steps; `sync_store_snapshot_timestamp_seconds`
+says when that snapshot was taken. Collection counts are MongoDB estimates.
+
+A scrape runs only cheap queries (a ping, `estimatedDocumentCount`, the latest snapshot), concurrently
+and with a two-second limit each. If one fails, the scrape still returns everything else, the gauges of
+that source are absent (`sync_store_mongodb_ping_seconds` is `NaN`) and
+`sync_store_scrape_error{source="..."}` is `1`. The sources are `mongodb_ping`, `collection_counts`,
+`outbox_snapshot` and `storage_snapshot`.
+
+## Metrics
+
+All names start with `sync_store_`, counters end in `_total`, durations are in seconds and sizes in
+bytes. Labels never contain user IDs, storage keys, raw URLs or credentials; API-key IDs are not used
+as labels either. Per-key usage is in the dashboard reports. `tenant` and `project` are the tenant
+and project IDs (`default` when none).
+
+### Process
+
+| Metric                                                                                                                         | Type    | Labels                               | Meaning                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `sync_store_build_info`                                                                                                        | gauge   | `version`, `runtime`, `node_env`     | Always 1; API version and runtime (`bun 1.4.4`).                                                 |
+| `sync_store_process_start_time_seconds`                                                                                        | gauge   |                                      | Process start time, Unix seconds.                                                                |
+| `sync_store_process_cpu_seconds_total`                                                                                         | counter |                                      | CPU time; also `_user_` and `_system_` variants.                                                 |
+| `sync_store_process_resident_memory_bytes`                                                                                     | gauge   |                                      | Resident memory.                                                                                 |
+| `sync_store_nodejs_eventloop_lag_seconds`                                                                                      | gauge   |                                      | Event-loop lag; also `_min_`, `_max_`, `_mean_`, `_stddev_`, `_p50_`, `_p90_`, `_p99_` variants. |
+| `sync_store_nodejs_heap_size_total_bytes`, `sync_store_nodejs_heap_size_used_bytes`, `sync_store_nodejs_external_memory_bytes` | gauge   |                                      | JavaScript heap, as the runtime reports it.                                                      |
+| `sync_store_nodejs_version_info`                                                                                               | gauge   | `version`, `major`, `minor`, `patch` | The Node.js version the runtime implements.                                                      |
+
+Under Bun the API does not expose the garbage-collection histogram, the active handle, request and
+resource counts or the per-space heap sizes: Bun does not report them, so they would only show zeros.
+Bun's heap figures come from its JavaScriptCore engine, so used can momentarily exceed total.
+
+### HTTP
+
+| Metric                                     | Type      | Labels                           | Meaning                                                                                                                                               |
+| ------------------------------------------ | --------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync_store_http_requests_total`           | counter   | `method`, `route`, `status_code` | Completed requests. `route` is the route template, such as `/api/v1/item/:key`, or `unmatched`; `status_code` is `aborted` when the client went away. |
+| `sync_store_http_request_duration_seconds` | histogram | `method`, `route`, `status_code` | Request duration.                                                                                                                                     |
+| `sync_store_http_requests_in_flight`       | gauge     |                                  | Requests being processed.                                                                                                                             |
+| `sync_store_http_request_size_bytes`       | histogram | `method`, `route`                | Request body size, from `Content-Length`.                                                                                                             |
+| `sync_store_http_response_size_bytes`      | histogram | `method`, `route`                | Response size, for responses sent with `Content-Length` (compressed and streamed responses are not observed).                                         |
+| `sync_store_tenant_http_requests_total`    | counter   | `tenant`, `project`, `outcome`   | Storage requests attributed to a project, as the usage report counts them; `outcome` is `ok`, `error` or `rate_limited`.                              |
+
+### Authorization and quotas
+
+| Metric                                    | Type    | Labels                           | Meaning                                                                                                                                                                                                                    |
+| ----------------------------------------- | ------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync_store_api_key_authorizations_total` | counter | `transport`, `result`            | Every API-key check. `transport` is `http`, `socket`, `mcp` or `metrics`; `result` is `allowed`, `missing`, `invalid`, `expired`, `identity`, `inactive_tenant`, `scope`, `permission`, `restriction`, `quota` or `error`. |
+| `sync_store_client_sessions_issued_total` | counter |                                  | Client session tokens issued.                                                                                                                                                                                              |
+| `sync_store_quota_admissions_total`       | counter | `tenant`, `project`, `operation` | Operations admitted and charged to a quota; `operation` is `read` or `write`.                                                                                                                                              |
+| `sync_store_quota_rejections_total`       | counter | `tenant`, `project`              | Operations refused because the quota was exhausted.                                                                                                                                                                        |
+
+### Storage, conflicts and versioning
+
+| Metric                                          | Type      | Labels                              | Meaning                                                                                                                                                    |
+| ----------------------------------------------- | --------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync_store_storage_operations_total`           | counter   | `operation`, `transport`, `outcome` | `set`, `remove`, `clear` and `restore`, by transport (`http`, `socket`, `mcp`, `internal`); `outcome` is `ok`, `rejected` (refused with a 4xx) or `error`. |
+| `sync_store_storage_operation_duration_seconds` | histogram | `operation`, `transport`            | Duration, including the MongoDB transaction.                                                                                                               |
+| `sync_store_idempotent_requests_total`          | counter   | `result`                            | Mutations with a request ID: `first`, `replay` of the stored result, or `mismatch` (the ID was reused for another operation).                              |
+| `sync_store_conflicts_detected_total`           | counter   | `type`                              | Recorded write conflicts by type.                                                                                                                          |
+| `sync_store_conflict_resolutions_total`         | counter   | `strategy`, `status`                | Recorded conflicts resolved; `status` is `resolved` or `pending`.                                                                                          |
+| `sync_store_history_snapshots_total`            | counter   |                                     | Versions written to the retained history.                                                                                                                  |
+| `sync_store_versioning_operations_total`        | counter   | `operation`, `outcome`              | `commit`, `fork` and `restore` (of a commit).                                                                                                              |
+
+### Realtime and outbox
+
+| Metric                                         | Type      | Labels             | Meaning                                                                                                |
+| ---------------------------------------------- | --------- | ------------------ | ------------------------------------------------------------------------------------------------------ |
+| `sync_store_sockets_connected`                 | gauge     | `tenant`           | Authenticated sockets open on this replica.                                                            |
+| `sync_store_socket_connections_total`          | counter   | `tenant`           | Authenticated connections.                                                                             |
+| `sync_store_socket_disconnections_total`       | counter   | `tenant`           | Disconnections of authenticated sockets.                                                               |
+| `sync_store_socket_events_total`               | counter   | `event`, `outcome` | Socket.IO events handled after authorization, such as `sync:set`.                                      |
+| `sync_store_realtime_deliveries_total`         | counter   | `result`           | Recipient sockets of a change: `delivered`, or `skipped` because they may no longer read the key.      |
+| `sync_store_outbox_published_total`            | counter   | `tenant`           | Change events published.                                                                               |
+| `sync_store_outbox_publish_failures_total`     | counter   | `tenant`           | Failed drain attempts; the event is retried.                                                           |
+| `sync_store_outbox_publish_latency_seconds`    | histogram |                    | Change to publication, including queue time. Buckets match the operational report: 0.01 to 60 seconds. |
+| `sync_store_outbox_pending_events`             | gauge     | `tenant`, `scope`  | **Cluster-wide.** Events waiting in the outbox.                                                        |
+| `sync_store_outbox_oldest_pending_age_seconds` | gauge     | `tenant`, `scope`  | **Cluster-wide.** Age of the oldest pending event.                                                     |
+
+### Sign-in and MCP
+
+| Metric                                 | Type      | Labels                    | Meaning                                                                                                                                 |
+| -------------------------------------- | --------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync_store_sso_sign_ins_total`        | counter   | `outcome`                 | Dashboard SSO sign-ins: `success`, `refused` (by the provider or an invalid request), `not_allowed` (not on the allow-list) or `error`. |
+| `sync_store_mcp_calls_total`           | counter   | `kind`, `name`, `outcome` | MCP calls; `kind` is `tool`, `resource` or `prompt`, `outcome` is `ok` or `error`.                                                      |
+| `sync_store_mcp_call_duration_seconds` | histogram | `kind`, `name`            | MCP call duration.                                                                                                                      |
+
+### Database and storage size
+
+| Metric                                  | Type  | Labels                       | Meaning                                                                                |
+| --------------------------------------- | ----- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| `sync_store_mongodb_ping_seconds`       | gauge |                              | Ping round trip from this replica at scrape time; `NaN` when it failed.                |
+| `sync_store_collection_documents`       | gauge | `collection`, `scope`        | **Cluster-wide.** Estimated documents in each collection the dashboard overview lists. |
+| `sync_store_storage_items`              | gauge | `tenant`, `project`, `scope` | **Cluster-wide.** Live items in the latest storage snapshot.                           |
+| `sync_store_storage_value_bytes`        | gauge | `tenant`, `project`, `scope` | **Cluster-wide.** Logical bytes of live values.                                        |
+| `sync_store_storage_history_bytes`      | gauge | `tenant`, `project`, `scope` | **Cluster-wide.** BSON bytes of retained history.                                      |
+| `sync_store_storage_history_versions`   | gauge | `tenant`, `project`, `scope` | **Cluster-wide.** Retained history versions.                                           |
+| `sync_store_snapshot_timestamp_seconds` | gauge | `source`, `scope`            | When the `outbox` and `storage` snapshots were taken.                                  |
+| `sync_store_scrape_error`               | gauge | `source`                     | 1 when a scrape-time source could not be read.                                         |
+
+## Example queries
+
+```promql
+# HTTP error rate (5xx) across all replicas
+sum(rate(sync_store_http_requests_total{status_code=~"5.."}[5m]))
+  / sum(rate(sync_store_http_requests_total[5m]))
+
+# p95 HTTP latency per route
+histogram_quantile(0.95,
+  sum by (le, route) (rate(sync_store_http_request_duration_seconds_bucket[5m])))
+
+# Outbox backlog and its oldest event (cluster-wide gauges: max per tenant, never sum replicas)
+sum(max by (tenant) (sync_store_outbox_pending_events))
+max(sync_store_outbox_oldest_pending_age_seconds)
+
+# p95 publication latency
+histogram_quantile(0.95, sum by (le) (rate(sync_store_outbox_publish_latency_seconds_bucket[5m])))
+
+# Quota rejections per project
+sum by (tenant, project) (rate(sync_store_quota_rejections_total[5m]))
+
+# Refused API-key checks by reason
+sum by (result) (rate(sync_store_api_key_authorizations_total{result!="allowed"}[5m]))
+
+# Alert when a scrape-time source keeps failing
+max by (source) (sync_store_scrape_error) == 1
+```

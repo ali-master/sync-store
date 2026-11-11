@@ -9,6 +9,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import { Database, InjectDatabase } from "../../modules/db";
 import { AdminService } from "./admin.service";
 import { BOOTSTRAP_KEY_ID } from "./bootstrap-key";
+import { metrics } from "../metrics/metrics.service";
 import { effectiveEnv } from "../settings/settings.store";
 
 export interface SsoSession {
@@ -248,8 +249,12 @@ export class SsoService {
     };
   }
 
+  complete(query: Record<string, unknown>, stateCookie: string | undefined) {
+    return metrics.signIn(this.signIn(query, stateCookie));
+  }
+
   /** Finish a sign-in: exchange the code, validate the identity and issue a dashboard session. */
-  async complete(query: Record<string, unknown>, stateCookie: string | undefined) {
+  private async signIn(query: Record<string, unknown>, stateCookie: string | undefined) {
     this.requireEnabled();
     if (typeof query.error === "string")
       throw new UnauthorizedException(

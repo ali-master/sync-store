@@ -14,6 +14,7 @@ import { StorageItem } from "../entities/storage-item.entity";
 import { InjectDatabase, Database } from "@root/modules/db";
 import type { Models } from "@root/modules/db/contract.d";
 import { mutationSession, runMutation, inMutation } from "./mutation-context";
+import { metrics } from "../../metrics/metrics.service";
 
 interface StorageData {
   userId: string;
@@ -235,13 +236,14 @@ export class SyncStorageRepository {
       instanceId,
       expiresAt: new Date(Date.now() + days * 86400000),
     };
-    await this.database.native
+    const written = await this.database.native
       .collection<{ _id: string; [key: string]: any }>("storage_history")
       .updateOne(
         { _id: snapshot._id },
         { $setOnInsert: snapshot },
         { upsert: true, session: mutationSession.getStore() },
       );
+    if (written.upsertedCount) metrics.historySnapshots.inc();
   }
 
   /** Persist a metadata-only report event atomically with the new storage version. */
