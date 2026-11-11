@@ -29,7 +29,7 @@
     },
     "apps/api": {
       "name": "@usex/api",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "dependencies": {
         "@fastify/compress": "^9.3.0",
         "@fastify/static": "^10.1.10",
@@ -181,7 +181,7 @@
     },
     "packages/client-sdk": {
       "name": "@usex/sync-store",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "socket.io-client": "^4.8.4",
       },

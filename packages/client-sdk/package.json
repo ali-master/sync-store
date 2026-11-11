@@ -1,6 +1,6 @@
 {
   "name": "@usex/sync-store",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Keep JSON application data in sync across tabs and devices with real-time updates, offline write queues, reconnect recovery and React hooks for self-hosted Sync Store.",
   "keywords": [
     "sync-store",
