@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { DataScope } from "@/components/data-scope";
 import { Button } from "@/components/motion/button/base";
 import { Input } from "@/components/motion/input";
-import type { Row } from "@/lib/console";
+import { prettyJson, type Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
 import { labelClass, textareaClass } from "./sheet";
 
@@ -32,7 +32,7 @@ export function StorageInspector({ selected, dataScope }: { selected: Row; dataS
         }
         setError("");
         setConfirm({
-          before: selected._new ? "New item" : JSON.stringify(JSON.parse(selected.value), null, 2),
+          before: selected._new ? "New item" : prettyJson(selected.value),
           after: JSON.stringify(value, null, 2),
           text:
             "Save this value to " +

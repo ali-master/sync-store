@@ -17,7 +17,13 @@ export function QuotaInspector({ selected }: { selected: Row }) {
       onSubmit={(e) => {
         e.preventDefault();
         void run(async () => {
-          await request("quotas/" + selected._id, "PATCH", JSON.parse(editor));
+          let settings: unknown;
+          try {
+            settings = JSON.parse(editor);
+          } catch {
+            throw new Error("Quota settings must be a valid JSON object.");
+          }
+          await request("quotas/" + selected._id, "PATCH", settings);
           mutationDone("Stored quota settings updated.");
         });
       }}

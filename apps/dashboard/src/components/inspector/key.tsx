@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/motion/select";
-import { bootstrapId, policyFields, type Row } from "@/lib/console";
+import { bootstrapId, parseJson, policyFields, type Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
 import { readKeyPolicy } from "@/lib/key-policy";
 import { useSession } from "@/lib/session";
@@ -64,7 +64,9 @@ export function KeyInspector({
   const [canRead, setCanRead] = useState<boolean>(selected.canRead ?? true);
   const rootKey = selected._id === bootstrapId;
   // The root key shows no access section, so its metadata is never read.
-  const access = rootKey ? undefined : JSON.parse(selected.metadata || "{}").access;
+  const access = rootKey
+    ? undefined
+    : parseJson<{ access?: any }>(selected.metadata || "{}", {}).access;
   // The select has no form value of its own; the hidden input carries it into the submitted form.
   const [projectId, setProjectId] = useState<string>(access?.projectId || "default");
   return (

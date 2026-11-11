@@ -73,3 +73,12 @@ test("single sign-on return markers are recognized without trusting other fragme
   for (const hash of ["", "#", "#ssomething", "#section"])
     expect(readSsoReturn(hash)).toEqual({ collect: false, error: "" });
 });
+
+test("stored values that are not valid JSON are shown, not thrown", async () => {
+  const { parseJson, prettyJson } = await import("../src/lib/console");
+  expect(prettyJson('{"a":1}')).toBe('{\n  "a": 1\n}');
+  expect(prettyJson("not json")).toBe("not json");
+  expect(prettyJson(undefined)).toBe("null");
+  expect(parseJson("{bad", { access: undefined })).toEqual({ access: undefined });
+  expect(parseJson('{"access":{"projectId":"p"}}', {})).toEqual({ access: { projectId: "p" } });
+});

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/motion/button/base";
-import { display, type Row } from "@/lib/console";
+import { display, prettyJson, type Row } from "@/lib/console";
 import { useConsole } from "@/lib/console-actions";
 import { helpClass, labelClass, textareaClass } from "./sheet";
 
@@ -28,9 +28,7 @@ export function HistoryInspector({ selected }: { selected: Row }) {
         <textarea
           readOnly
           rows={8}
-          value={
-            selected.isDeleted ? "Deleted" : JSON.stringify(JSON.parse(selected.value), null, 2)
-          }
+          value={selected.isDeleted ? "Deleted" : prettyJson(selected.value)}
           className={textareaClass}
         />
       </label>
@@ -60,7 +58,7 @@ export function HistoryInspector({ selected }: { selected: Row }) {
               className={textareaClass}
               value={
                 historyPreview.current && !historyPreview.current.isDeleted
-                  ? JSON.stringify(JSON.parse(historyPreview.current.value), null, 2)
+                  ? prettyJson(historyPreview.current.value)
                   : "Deleted or missing"
               }
             />

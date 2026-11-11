@@ -144,3 +144,23 @@ export function formatDuration(seconds: number): string {
   if (hours < 24) return hours + " h " + (minutes % 60) + " min";
   return Math.floor(hours / 24) + " d " + (hours % 24) + " h";
 }
+
+/** Pretty-print stored JSON text; a value that is not valid JSON is shown as it is stored. */
+export function prettyJson(text: unknown): string {
+  if (typeof text !== "string") return JSON.stringify(text ?? null, null, 2);
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
+}
+
+/** Parse stored JSON text, or return the fallback instead of crashing the view. */
+export function parseJson<T>(text: unknown, fallback: T): T {
+  if (typeof text !== "string") return fallback;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
+  }
+}
