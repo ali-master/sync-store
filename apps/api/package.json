@@ -1,6 +1,6 @@
 {
   "name": "@usex/api",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Sync Store API service",
   "private": true,
   "author": {
