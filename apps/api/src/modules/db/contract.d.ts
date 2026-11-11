@@ -22,7 +22,7 @@ import type {
 } from '@prisma/orm-mongo/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'922f2f4a6ca1bdb756f67e35e7a16c99832ed21c005b9dcb30d9b1c2960585d4'>;
+  StorageHashBase<'7de24e9478b2468c112b05b8df3ec0f61e0b0b83d5a2632adc17d53dd1c24f14'>;
 export type ExecutionHash =
   ExecutionHashBase<'c261b9688a1e2ddf9f6dbf1bae0c1978f193703bc6effb506da4936a42d13bb2'>;
 export type ProfileHash =
@@ -38,14 +38,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 
 export namespace Models {
@@ -336,6 +338,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'key' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'key_1';
                   readonly unique: true;
                 },
                 {
@@ -345,14 +348,17 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: '_id' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'tenantId_1_createdAt_1__id_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'isActive' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'isActive_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'expiresAt' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'expiresAt_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -456,6 +462,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: '_id' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'tenantId_1_createdAt_1__id_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -484,15 +491,18 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'date' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1_date_1';
                   readonly unique: true;
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'date' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'date_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -570,18 +580,22 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'key' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'key_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'archivedAt' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'archivedAt_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'expiresAt' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'expiresAt_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -631,22 +645,27 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'instanceId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'instanceId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'action' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'action_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'createdAt' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'createdAt_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'ipAddress' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'ipAddress_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -693,24 +712,29 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'itemId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'itemId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'status' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'status_1';
                 },
                 {
                   readonly keys: readonly [
                     { readonly direction: 1; readonly field: 'conflictType' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'conflictType_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'createdAt' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'createdAt_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -758,6 +782,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                   readonly unique: true;
                 },
               ];
@@ -829,31 +854,37 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'socketId' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1_instanceId_1_socketId_1';
                   readonly unique: true;
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'instanceId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'instanceId_1';
                 },
                 {
                   readonly keys: readonly [
                     { readonly direction: 1; readonly field: 'connectedAt' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'connectedAt_1';
                 },
                 {
                   readonly keys: readonly [
                     { readonly direction: 1; readonly field: 'lastActivity' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'lastActivity_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'ipAddress' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'ipAddress_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -905,37 +936,45 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'key' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1_key_1';
                   readonly unique: true;
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'userId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'instanceId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'instanceId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'timestamp' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'timestamp_1';
                 },
                 {
                   readonly keys: readonly [
                     { readonly direction: 1; readonly field: 'lastModified' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'lastModified_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'isDeleted' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'isDeleted_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'ttl' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'ttl_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'priority' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'priority_1';
                 },
                 {
                   readonly keys: readonly [
@@ -944,6 +983,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'key' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'userId_1_isDeleted_1_key_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -1010,6 +1050,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: '_id' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'createdAt_1__id_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -1057,6 +1098,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'name' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'owner_1_name_1';
                   readonly unique: true;
                 },
               ];
@@ -1089,6 +1131,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: '_id' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'owner_1_branch_1_createdAt_1__id_1';
                 },
                 {
                   readonly keys: readonly [
@@ -1096,6 +1139,7 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'createdAt' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'projected_1_createdAt_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -2553,7 +2597,6 @@ type ContractBase = Omit<
     };
   };
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

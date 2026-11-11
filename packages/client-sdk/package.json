@@ -82,12 +82,11 @@
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@usex/tsconfig": "workspace:*",
-    "npm": "^12.2.1",
     "react": "^19.3.1",
     "release-it": "^21.1.2",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "packageManager": "bun@1.4.4",
   "peerDependencies": {

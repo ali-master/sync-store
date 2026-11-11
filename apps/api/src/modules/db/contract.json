@@ -2365,6 +2365,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "key_1",
                   "unique": true
                 },
                 {
@@ -2382,7 +2383,8 @@
                       "field": "_id"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "tenantId_1_createdAt_1__id_1"
                 },
                 {
                   "keys": [
@@ -2391,7 +2393,8 @@
                       "field": "isActive"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "isActive_1"
                 },
                 {
                   "keys": [
@@ -2400,7 +2403,8 @@
                       "field": "expiresAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "expiresAt_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -2697,7 +2701,8 @@
                       "field": "_id"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "tenantId_1_createdAt_1__id_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -2747,6 +2752,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "userId_1_date_1",
                   "unique": true
                 },
                 {
@@ -2756,7 +2762,8 @@
                       "field": "userId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1"
                 },
                 {
                   "keys": [
@@ -2765,7 +2772,8 @@
                       "field": "date"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "date_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -2906,7 +2914,8 @@
                       "field": "userId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1"
                 },
                 {
                   "keys": [
@@ -2915,7 +2924,8 @@
                       "field": "key"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "key_1"
                 },
                 {
                   "keys": [
@@ -2924,7 +2934,8 @@
                       "field": "archivedAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "archivedAt_1"
                 },
                 {
                   "keys": [
@@ -2933,7 +2944,8 @@
                       "field": "expiresAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "expiresAt_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -3026,7 +3038,8 @@
                       "field": "userId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1"
                 },
                 {
                   "keys": [
@@ -3035,7 +3048,8 @@
                       "field": "instanceId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "instanceId_1"
                 },
                 {
                   "keys": [
@@ -3044,7 +3058,8 @@
                       "field": "action"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "action_1"
                 },
                 {
                   "keys": [
@@ -3053,7 +3068,8 @@
                       "field": "createdAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_1"
                 },
                 {
                   "keys": [
@@ -3062,7 +3078,8 @@
                       "field": "ipAddress"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "ipAddress_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -3185,7 +3202,8 @@
                       "field": "itemId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "itemId_1"
                 },
                 {
                   "keys": [
@@ -3194,7 +3212,8 @@
                       "field": "userId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1"
                 },
                 {
                   "keys": [
@@ -3203,7 +3222,8 @@
                       "field": "status"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "status_1"
                 },
                 {
                   "keys": [
@@ -3212,7 +3232,8 @@
                       "field": "conflictType"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "conflictType_1"
                 },
                 {
                   "keys": [
@@ -3221,7 +3242,8 @@
                       "field": "createdAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -3319,6 +3341,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "userId_1",
                   "unique": true
                 }
               ],
@@ -3443,6 +3466,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "userId_1_instanceId_1_socketId_1",
                   "unique": true
                 },
                 {
@@ -3452,7 +3476,8 @@
                       "field": "userId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1"
                 },
                 {
                   "keys": [
@@ -3461,7 +3486,8 @@
                       "field": "instanceId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "instanceId_1"
                 },
                 {
                   "keys": [
@@ -3470,7 +3496,8 @@
                       "field": "connectedAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "connectedAt_1"
                 },
                 {
                   "keys": [
@@ -3479,7 +3506,8 @@
                       "field": "lastActivity"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "lastActivity_1"
                 },
                 {
                   "keys": [
@@ -3488,7 +3516,8 @@
                       "field": "ipAddress"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "ipAddress_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -3604,6 +3633,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "userId_1_key_1",
                   "unique": true
                 },
                 {
@@ -3613,7 +3643,8 @@
                       "field": "userId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1"
                 },
                 {
                   "keys": [
@@ -3622,7 +3653,8 @@
                       "field": "instanceId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "instanceId_1"
                 },
                 {
                   "keys": [
@@ -3631,7 +3663,8 @@
                       "field": "timestamp"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "timestamp_1"
                 },
                 {
                   "keys": [
@@ -3640,7 +3673,8 @@
                       "field": "lastModified"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "lastModified_1"
                 },
                 {
                   "keys": [
@@ -3649,7 +3683,8 @@
                       "field": "isDeleted"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "isDeleted_1"
                 },
                 {
                   "keys": [
@@ -3658,7 +3693,8 @@
                       "field": "ttl"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "ttl_1"
                 },
                 {
                   "keys": [
@@ -3667,7 +3703,8 @@
                       "field": "priority"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "priority_1"
                 },
                 {
                   "keys": [
@@ -3684,7 +3721,8 @@
                       "field": "key"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "userId_1_isDeleted_1_key_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -3813,7 +3851,8 @@
                       "field": "_id"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_1__id_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -3895,6 +3934,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "owner_1_name_1",
                   "unique": true
                 }
               ],
@@ -3956,7 +3996,8 @@
                       "field": "_id"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "owner_1_branch_1_createdAt_1__id_1"
                 },
                 {
                   "keys": [
@@ -3969,7 +4010,8 @@
                       "field": "createdAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "projected_1_createdAt_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -4027,7 +4069,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "922f2f4a6ca1bdb756f67e35e7a16c99832ed21c005b9dcb30d9b1c2960585d4"
+    "storageHash": "7de24e9478b2468c112b05b8df3ec0f61e0b0b83d5a2632adc17d53dd1c24f14"
   },
   "execution": {
     "executionHash": "c261b9688a1e2ddf9f6dbf1bae0c1978f193703bc6effb506da4936a42d13bb2",
