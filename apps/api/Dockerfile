@@ -3,6 +3,7 @@ WORKDIR /app
 COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --cwd apps/api db:generate
+RUN bun run --cwd apps/api db:check-migrations
 RUN bun run --cwd packages/utils build && bun run --cwd packages/client-sdk build && bun run --cwd apps/api build
 
 FROM --platform=$BUILDPLATFORM oven/bun:1.4.4 AS runtime-deps
@@ -13,6 +14,8 @@ COPY . .
 RUN cpu="$TARGETARCH"; if [ "$cpu" = "amd64" ]; then cpu=x64; fi; \
     bun install --frozen-lockfile --ignore-scripts --production --filter @usex/api --filter @usex/utils --cpu="$cpu"
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
+COPY --from=build /app/apps/api/src/modules/db/contract.json /app/apps/api/src/modules/db/contract.json
+COPY --from=build /app/apps/api/src/modules/db/contract.d.ts /app/apps/api/src/modules/db/contract.d.ts
 COPY --from=build /app/apps/dashboard/dist /app/apps/dashboard/dist
 COPY --from=build /app/packages/utils/dist /app/packages/utils/dist
 # Keep the API tools, compiled dashboard and workspace dependency links only.
