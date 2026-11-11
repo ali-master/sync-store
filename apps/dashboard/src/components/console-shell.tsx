@@ -242,14 +242,8 @@ export function ConsoleShell({
           <ThemePicker />
         </header>
 
-        <div
-          className={
-            "mx-auto w-full flex-1 space-y-6 px-4 py-6 sm:px-8 sm:py-8 " +
-            (section === "versioning" || section === "projects" || section === "tenants"
-              ? "max-w-4xl"
-              : "max-w-7xl")
-          }
-        >
+        {/* Every page uses the full width of the content area; only prose keeps a reading width. */}
+        <div className="w-full min-w-0 flex-1 space-y-6 px-4 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
