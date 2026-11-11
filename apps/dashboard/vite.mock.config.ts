@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { SETTINGS } from "../api/src/domains/settings/settings.store";
 // Temporary: serves fake API responses so the dashboard can be viewed without MongoDB.
 // Not part of the project. Run: bun --bun vite --config <this file> --port 4100
 import { defineConfig, type Plugin } from "vite";
@@ -80,32 +81,30 @@ function report(kind: string, hours: number) {
 
 let setupRequired = false;
 let mockRevision = 3;
-const def = (env: string, group: string, label: string, type: string, extra: Record<string, unknown> = {}) => ({
-  env, group, label, type, description: "Mock description of " + label + ".", source: "default", set: false, value: null,
-  environmentValue: null, environmentSet: false, defaultValue: null, ...extra,
-});
-const mockSettings: any[] = [
-  def("API_URL", "General", "Public API URL", "url", { source: "database", value: "https://sync.example.com", set: true, environmentValue: "http://localhost:3000", environmentSet: true }),
-  def("CORS_ALLOWED_ORIGINS", "General", "Allowed browser origins", "list", { source: "environment", value: "*", set: true, environmentValue: "*", environmentSet: true }),
-  def("HISTORY_RETENTION_DAYS", "Data", "History retention (days)", "integer", { min: 1, max: 3650, value: "30", defaultValue: "30" }),
-  def("SSO_ISSUER", "Single sign-on", "Issuer URL", "url", { source: "database", value: "https://accounts.google.com", set: true }),
-  def("SSO_CLIENT_ID", "Single sign-on", "Client ID", "text", { source: "database", value: "1234-abc.apps.googleusercontent.com", set: true }),
-  def("SSO_CLIENT_SECRET", "Single sign-on", "Client secret", "secret", { source: "database", set: true }),
-  def("SSO_REDIRECT_URI", "Single sign-on", "Redirect URI", "url"),
-  def("SSO_PROVIDER_NAME", "Single sign-on", "Button label", "text", { max: 40, value: "SSO", defaultValue: "SSO" }),
-  def("SSO_ALLOWED_EMAILS", "Single sign-on", "Allowed email addresses", "list"),
-  def("SSO_ALLOWED_DOMAINS", "Single sign-on", "Allowed email domains", "list", { source: "database", value: "example.com", set: true }),
-  def("SSO_SCOPES", "Single sign-on", "Scopes", "text", { value: "openid email profile", defaultValue: "openid email profile" }),
-  def("SSO_SESSION_MINUTES", "Single sign-on", "Session length (minutes)", "integer", { min: 1, max: 1440, value: "480", defaultValue: "480" }),
-  def("METRICS_TOKEN", "Monitoring", "Metrics token", "secret", { min: 32 }),
-];
+// The real setting definitions, so the Settings page shows the API's labels and descriptions.
+const mockState: Record<string, Record<string, unknown>> = {
+  API_URL: { source: "database", value: "https://sync.example.com", set: true, environmentValue: "http://localhost:3000", environmentSet: true },
+  CORS_ALLOWED_ORIGINS: { source: "environment", value: "https://app.example.com", set: true, environmentValue: "https://app.example.com", environmentSet: true },
+  HISTORY_RETENTION_DAYS: { value: "30", defaultValue: "30" },
+  SSO_ISSUER: { source: "database", value: "https://accounts.google.com", set: true },
+  SSO_CLIENT_ID: { source: "database", value: "1234567890-abc.apps.googleusercontent.com", set: true },
+  SSO_CLIENT_SECRET: { source: "database", set: true },
+  SSO_PROVIDER_NAME: { source: "database", value: "Google", set: true, defaultValue: "SSO" },
+  SSO_ALLOWED_DOMAINS: { source: "database", value: "example.com", set: true },
+  SSO_SCOPES: { value: "openid email profile", defaultValue: "openid email profile" },
+  SSO_SESSION_MINUTES: { value: "480", defaultValue: "480" },
+};
+const mockSettings: any[] = SETTINGS.map((definition) => ({
+  ...definition, source: "default", set: false, value: null, environmentValue: null, environmentSet: false, defaultValue: null,
+  ...mockState[definition.env],
+}));
 const mockApi = (): Plugin => ({
   name: "mock-api",
   enforce: "pre",
   // Start signed in, unless MOCK_SIGNED_OUT=1: the real session lives in memory and a reload loses it.
   transform(code, id) {
     if (!process.env.MOCK_SIGNED_OUT && id.endsWith("/src/lib/session.tsx"))
-      return code.replace('const [token, setToken] = useState("");', 'const [token, setToken] = useState("mock-admin-key");');
+      return code.replace('const [token, setToken] = useState("");', 'const [token, setToken] = useState(() => (location.search.includes("signed-out") ? "" : "mock-admin-key"));');
   },
   configureServer(server) {
     server.middlewares.use((req, res, next) => {

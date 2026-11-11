@@ -9,6 +9,15 @@
         "cd apps/dashboard && exec bun --bun vite --config vite.mock.config.ts --port 4100 --strictPort"
       ],
       "port": 4100
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/docs && exec bun --bun next start -p 4000"
+      ],
+      "port": 4000
     }
   ]
 }
