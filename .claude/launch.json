@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard-mock",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/dashboard && exec bun --bun vite --config vite.mock.config.ts --port 4100 --strictPort"
+      ],
+      "port": 4100
+    }
+  ]
+}
