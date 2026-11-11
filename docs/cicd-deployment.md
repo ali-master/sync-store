@@ -227,6 +227,26 @@ kubectl --context mom-admin@mom -n sync-store get events --sort-by=.lastTimestam
 
 ## Rollback
 
+### Prisma contract compatibility
+
+The Docker build regenerates the database contract and runs
+`bun run --cwd apps/api db:check-migrations`. This offline check requires a
+migration path from every checked-in historical storage state (and a fresh
+database) to the generated contract. The runtime image copies the same generated
+contract from the build stage.
+
+Prisma release candidates can change the storage format even when
+`contract.prisma` is unchanged. The deployed migration history currently uses
+`@prisma/orm-mongo` **8.0.0-rc.22** with `prisma` **8.0.0-rc.29**. Upgrading to
+rc.23/rc.33 changed index metadata and the storage hash, producing
+`MIGRATION.PATH_UNREACHABLE` during startup. Keep the compatible pair pinned until
+a tested upgrade can read the old snapshots and migrate existing data. Do not
+reset the database, rewrite migration history, or use `db:push` to bypass this
+failure. Validate dependency upgrades against a restored test database before
+production.
+
+### Application rollback
+
 For a normal code regression, revert the offending application change on GitHub
 `master`. The resulting new commit goes through the same build and deployment
 path, preserving a clear release history.
