@@ -1,0 +1,131 @@
+# Number of application replicas. Multiple replicas require shared Redis 7.2+
+# with AOF enabled; provide REDIS_URL in existingSecret.
+replicaCount: 1
+
+# Override generated resource names when necessary.
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # Published application image; custom images must include the migration CLI.
+  repository: alimaster/sync-store
+  # Empty tag uses Chart.appVersion. A digest takes precedence over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+# Existing registry credentials, for example [{name: registry-credentials}].
+imagePullSecrets: []
+
+# Pre-create this Secret in the release namespace. Required keys:
+# DATABASE_URL (MongoDB replica set), JWT_SECRET and CSRF_SECRET.
+# Optional keys include REDIS_URL, SSO_CLIENT_SECRET and METRICS_TOKEN.
+# All keys are loaded as environment variables. Never commit secret values.
+existingSecret: sync-store-secrets
+
+# Non-secret application environment. PORT and NODE_ENV are managed by the chart.
+# Set API_URL to the externally reachable URL, including /api.
+env:
+  API_URL: "http://localhost:3000/api"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+# Additional Kubernetes EnvVar entries (for example valueFrom references).
+extraEnv: []
+
+service:
+  # Application traffic, including the dashboard and WebSockets.
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+ingress:
+  # Forward all paths to the application; API clients keep native API-key auth.
+  enabled: false
+  className: ""
+  # Set controller-specific WebSocket timeouts and TLS settings here.
+  annotations: {}
+  hosts:
+    - host: sync.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # Reference existing TLS Secrets; the chart does not issue certificates.
+  tls: []
+
+migration:
+  # Run one pre-install/pre-upgrade Job using the application image and Secret.
+  # Disable only when migrations are managed separately before each rollout.
+  enabled: true
+  # Failed Jobs remain available for diagnosis until the next attempt.
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+
+# Recreate is safe for a single replica and causes brief upgrade downtime.
+# Use RollingUpdate for multiple replicas after configuring shared Redis.
+strategy:
+  type: Recreate
+
+# Starting budgets for the application only; MongoDB/Redis are external.
+# Measure production load and adjust these values.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+# /api/v1/setup is public and does not perform a complete database health check.
+startupProbe:
+  httpGet:
+    path: /api/v1/setup
+    port: http
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 60
+readinessProbe:
+  httpGet:
+    path: /api/v1/setup
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+livenessProbe:
+  tcpSocket:
+    port: http
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+# Metadata shared by application and migration Pods.
+podAnnotations: {}
+podLabels: {}
+# The application does not need Kubernetes API credentials.
+automountServiceAccountToken: false
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+# Scheduling constraints shared by application and migration Pods.
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podDisruptionBudget:
+  # Enable for multiple replicas; minAvailable: 1 blocks drains of a lone Pod.
+  enabled: false
+  minAvailable: 1

@@ -1,0 +1,17 @@
+Sync Store {{ .Chart.AppVersion }} is configured with Secret {{ .Values.existingSecret }}.
+
+{{- if .Values.ingress.enabled }}
+Open your configured ingress hostname at /dashboard/.
+{{- else }}
+Access the dashboard locally:
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "sync-store.fullname" . }} 3000:{{ .Values.service.port }}
+  http://localhost:3000/dashboard/
+{{- end }}
+
+For first-time setup, find the setup code in application logs:
+  kubectl --namespace {{ .Release.Namespace }} logs deployment/{{ include "sync-store.fullname" . }}
+
+Keep the administrator key and Secret values secure. After rotating a Secret,
+restart the Deployment to reload environment variables.
+
+See charts/sync-store/README.md for migrations, Redis, SSO and upgrade procedures.

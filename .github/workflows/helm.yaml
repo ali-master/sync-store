@@ -1,0 +1,41 @@
+name: Helm chart
+
+on:
+  push:
+    branches: [master]
+    paths: ["charts/sync-store/**", ".github/workflows/helm.yaml"]
+  pull_request:
+    paths: ["charts/sync-store/**", ".github/workflows/helm.yaml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+        with:
+          version: v3.17.3
+      - name: Lint, render and package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          helm lint charts/sync-store --strict
+          helm lint charts/sync-store --strict --values charts/sync-store/ci/production-values.yaml
+          mkdir -p rendered dist
+          helm template sync-store charts/sync-store --namespace sync-store > rendered/default.yaml
+          helm template sync-store charts/sync-store --namespace sync-store \
+            --values charts/sync-store/ci/production-values.yaml > rendered/production.yaml
+          helm package charts/sync-store --destination dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sync-store-helm-chart
+          path: |
+            dist/*.tgz
+            rendered/*.yaml
+          if-no-files-found: error
+          retention-days: 14
