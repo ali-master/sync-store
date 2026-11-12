@@ -1,4 +1,5 @@
-import { Module, type Type, UseGuards, VERSION_NEUTRAL } from "@nestjs/common";
+import { type DynamicModule, Module, type Type, UseGuards, VERSION_NEUTRAL } from "@nestjs/common";
+import { APP_INTERCEPTOR } from "@nestjs/core";
 import { CqrsModule } from "@nestjs/cqrs";
 import { McpModule } from "@nestjs/mcp";
 import { ApiExcludeController } from "@nestjs/swagger";
@@ -9,6 +10,7 @@ import { ConflictsMcp } from "./conflicts.mcp";
 import { McpAccess, McpKeyGuard } from "./mcp-access";
 import { PromptsMcp } from "./prompts.mcp";
 import { StorageMcp } from "./storage.mcp";
+import { ToonInterceptor } from "./toon.interceptor";
 import { VersioningMcp } from "./versioning.mcp";
 
 /** The tools, resources and prompts of the MCP server, and the API-key access they share. */
@@ -27,14 +29,15 @@ set-item replaces a whole value: read the current value first when you change pa
 Lists are paged: nextOffset, nextBefore or hasMore tell you that more exists.
 Ask the user to confirm before clear-storage, restore-commit, admin-rotate-key and other destructive tools.
 Tools named admin-* need an administrator key. Never repeat an API key secret after showing it once.
+Results are TOON (Token-Oriented Object Notation) when that takes fewer tokens than JSON: "key: value" lines, indentation for nesting, and a list of records as a header such as items[2]{key,version}: followed by one comma-separated row per record. Strings that would read as numbers, booleans or null are quoted.
 Report exactly what the tools return, including errors.`;
 
 /**
  * The Model Context Protocol server, at /mcp on the API origin: outside the `api` prefix and the URI
  * version, authenticated by API key on the route and again on every call.
  */
-export function syncStoreMcp(primitives: Type<unknown> = SyncStoreMcpModule) {
-  return McpModule.forRootAsync({
+export function syncStoreMcp(primitives: Type<unknown> = SyncStoreMcpModule): DynamicModule {
+  const server = McpModule.forRootAsync({
     imports: [primitives],
     path: "mcp",
     endpointVersion: VERSION_NEUTRAL,
@@ -56,4 +59,12 @@ export function syncStoreMcp(primitives: Type<unknown> = SyncStoreMcpModule) {
       };
     },
   });
+  // Every tool and resource result is encoded for the model here, never in the primitives.
+  return {
+    ...server,
+    providers: [
+      ...(server.providers ?? []),
+      { provide: APP_INTERCEPTOR, useClass: ToonInterceptor },
+    ],
+  };
 }

@@ -207,8 +207,30 @@ Prompts are templates a person picks in the client. Each one drives the tools in
 
 - Arguments are validated against each tool's schema before the tool runs. A refused call returns an error that names the argument, and nothing is charged or changed.
 - A tool that fails returns a result marked as an error with the same message the REST API gives, for example `Write permission is required` or `Key is outside this API key's permitted prefixes`.
-- Stored values are returned as JSON exactly as stored. 64-bit counters are returned as strings so that no digits are lost.
+- Stored values are returned exactly as stored. 64-bit counters are returned as strings so that no digits are lost.
 - The internal storage identity (the tenant, project and branch prefix of a user ID) is never returned by the data tools.
+
+### Compact results for the model
+
+To keep results cheap for a language model, the text block that the model reads is written in [TOON](https://toonformat.dev) (Token-Oriented Object Notation, media type `text/toon`) whenever that takes fewer tokens than compact JSON. TOON leaves out the quotes and braces of JSON and writes a list of uniform records as one header and one row per record:
+
+```text
+total: 60
+hasMore: true
+items[2]{key,version,lastModified}:
+  cart/items,2,"2026-11-12T09:30:00.000Z"
+  profile,1,"2026-11-12T09:31:00.000Z"
+```
+
+A page of 25 records takes about half the tokens of the same JSON. A single item takes about a quarter fewer.
+
+- **Exact values.** The server decodes every TOON text again before it sends it. If the decoded value is not exactly the same as the result, the text is sent as JSON instead. A string that reads like a number, a boolean or `null` keeps its quotes.
+- **Smaller output.** When TOON would not use fewer tokens, for example for an empty list, the text is compact JSON.
+- **Programmatic clients.** Tools with an output schema also return `structuredContent` as plain JSON, as before. Programs can read that and need no TOON decoder.
+- **Resources.** Resources follow the same rule, and each resource content gives its format in `mimeType` (`text/toon` or `application/json`).
+- **Arguments.** Tool arguments are not affected and stay JSON.
+
+The encoding is done in one place, an interceptor around every tool and resource (`apps/api/src/domains/mcp/toon.interceptor.ts`). To decode TOON in your own code, use [`@toon-format/toon`](https://github.com/toon-format/toon).
 
 ## Browser-based clients
 

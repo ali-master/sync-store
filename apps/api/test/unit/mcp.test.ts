@@ -7,6 +7,7 @@ import { connectMcpClient } from "@nestjs/mcp/testing";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type { Client } from "@modelcontextprotocol/client";
+import { decode } from "@toon-format/toon";
 import { AdminService } from "../../src/domains/admin/admin.service";
 import { OperationsService } from "../../src/domains/analytics/operations.service";
 import { AdminMcp } from "../../src/domains/mcp/admin.mcp";
@@ -256,6 +257,14 @@ async function connect(headers: Record<string, string>, era: "modern" | "legacy"
   return client;
 }
 const text = (result: any) => (result.content as { text: string }[])[0].text;
+/** What a model reads is TOON, or JSON when that is shorter; both decode to the same value. */
+const parsed = (body: string) => {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return decode(body);
+  }
+};
 
 test("every tool is described for the model and says whether it changes anything", async () => {
   const registry = moduleRef.get(McpRegistry);
@@ -319,7 +328,9 @@ test("items round-trip with exact values, paging and an honest not-found", async
 
   const read = await client.callTool({ name: "get-item", arguments: { key: "preferences" } });
   expect(read.structuredContent).toMatchObject({ found: true, item: { value, version: 1 } });
-  expect(JSON.parse(text(read))).toEqual(read.structuredContent);
+  expect(parsed(text(read))).toEqual(read.structuredContent);
+  // structuredContent stays JSON for programs; the text block the model reads is TOON.
+  expect(text(read)).toStartWith("found: true\n");
 
   const missing = await client.callTool({ name: "get-item", arguments: { key: "Preferences" } });
   expect(missing.isError).toBeFalsy();
@@ -453,7 +464,7 @@ test("calls name their user, and credentials other than an API key are refused",
 
 test("history, versioning and conflict tools return parsed, JSON-safe results", async () => {
   const client = await connect({ "x-api-key": "app-key", "x-user-id": "alice" });
-  const history = JSON.parse(
+  const history = parsed(
     text(await client.callTool({ name: "list-item-history", arguments: { key: "preferences" } })),
   );
   expect(history).toMatchObject({
@@ -462,12 +473,12 @@ test("history, versioning and conflict tools return parsed, JSON-safe results", 
     revisions: [{ revision: "rec:2", version: 2, value: { theme: "dark" }, isDeleted: false }],
   });
   expect(JSON.stringify(history)).not.toContain("internal-identity");
-  const long = JSON.parse(
+  const long = parsed(
     text(await client.callTool({ name: "list-item-history", arguments: { key: "long" } })),
   );
   expect(long.nextBefore).toBe("long:1");
 
-  const preview = JSON.parse(
+  const preview = parsed(
     text(
       await client.callTool({
         name: "preview-item-revision",
@@ -478,7 +489,7 @@ test("history, versioning and conflict tools return parsed, JSON-safe results", 
   // A 64-bit version from MongoDB becomes the integer that restore requires.
   expect(preview.expected).toEqual({ id: "rec", version: 3 });
   expect(preview.current.value).toEqual({ theme: "light" });
-  const restored = JSON.parse(
+  const restored = parsed(
     text(
       await client.callTool({
         name: "restore-item-revision",
@@ -498,16 +509,14 @@ test("history, versioning and conflict tools return parsed, JSON-safe results", 
   expect(gone.isError).toBe(true);
   expect(text(gone)).toBe("Retained version not found");
 
-  const branches = JSON.parse(
-    text(await client.callTool({ name: "list-branches", arguments: {} })),
-  );
+  const branches = parsed(text(await client.callTool({ name: "list-branches", arguments: {} })));
   expect(branches).toEqual({ branches: [{ name: "main", head: null, createdAt: null }] });
-  const commit = JSON.parse(
+  const commit = parsed(
     text(await client.callTool({ name: "get-commit", arguments: { commitId: "c1" } })),
   );
   expect(commit).toMatchObject({ id: "c1", keyCount: 1, createdAt: "1970-01-01T00:00:00.000Z" });
   expect(commit.owner).toBeUndefined();
-  const created = JSON.parse(
+  const created = parsed(
     text(
       await client.callTool({
         name: "create-commit",
@@ -525,9 +534,7 @@ test("history, versioning and conflict tools return parsed, JSON-safe results", 
     (await client.callTool({ name: "create-commit", arguments: { message: "No head" } })).isError,
   ).toBe(true);
 
-  const stats = JSON.parse(
-    text(await client.callTool({ name: "get-conflict-stats", arguments: {} })),
-  );
+  const stats = parsed(text(await client.callTool({ name: "get-conflict-stats", arguments: {} })));
   expect(stats).toMatchObject({ totalConflicts: 2, pendingConflicts: 1, resolvedShare: 0.5 });
   const unknown = await client.callTool({
     name: "resolve-conflict",
@@ -543,16 +550,14 @@ test("history, versioning and conflict tools return parsed, JSON-safe results", 
 
 test("administrator tools act as the key and keep filters honest", async () => {
   const client = await connect({ "x-api-key": "admin-key" });
-  const overview = JSON.parse(
-    text(await client.callTool({ name: "admin-overview", arguments: {} })),
-  );
+  const overview = parsed(text(await client.callTool({ name: "admin-overview", arguments: {} })));
   expect(overview).toEqual({
     actor: "admin",
     users: 3,
     storageBytes: "12",
     timestamp: "1970-01-01T00:00:00.000Z",
   });
-  const records = JSON.parse(
+  const records = parsed(
     text(
       await client.callTool({
         name: "admin-list-records",
@@ -579,13 +584,13 @@ test("administrator tools act as the key and keep filters honest", async () => {
   });
   expect(text(wrongFilter)).toContain("userId cannot filter keys");
 
-  const report = JSON.parse(
+  const report = parsed(
     text(
       await client.callTool({ name: "admin-report", arguments: { report: "health", hours: 168 } }),
     ),
   );
   expect(report).toEqual({ query: { hours: "168" }, tenant: null, series: [] });
-  const key = JSON.parse(
+  const key = parsed(
     text(
       await client.callTool({
         name: "admin-create-key",
@@ -595,7 +600,7 @@ test("administrator tools act as the key and keep filters honest", async () => {
   );
   expect(key).toEqual({ id: "new", key: "ss_new", body: { name: "Web", canWrite: true } });
 
-  const action = JSON.parse(
+  const action = parsed(
     text(
       await client.callTool({
         name: "admin-versioning-action",
@@ -618,19 +623,19 @@ test("resources and prompts are served, and a missing resource is an error", asy
   expect((guide.contents[0] as { text: string }).text).toContain("describe-access");
   await client.callTool({ name: "set-item", arguments: { key: "cart/items", value: [1, 2] } });
   const item = await client.readResource({ uri: "sync-store://items/cart/items" });
-  expect(JSON.parse((item.contents[0] as { text: string }).text)).toMatchObject({
+  expect(parsed((item.contents[0] as { text: string }).text)).toMatchObject({
     key: "cart/items",
     value: [1, 2],
   });
   await expect(client.readResource({ uri: "sync-store://items/none" })).rejects.toThrow();
   const keysOf = await client.readResource({ uri: "sync-store://keys/dana" });
-  expect(JSON.parse((keysOf.contents[0] as { text: string }).text)).toEqual({
+  expect(parsed((keysOf.contents[0] as { text: string }).text)).toEqual({
     userId: "dana",
     branch: "main",
     keys: ["cart/items"],
   });
   const commit = await client.readResource({ uri: "sync-store://commits/c1" });
-  expect(JSON.parse((commit.contents[0] as { text: string }).text).id).toBe("c1");
+  expect(parsed((commit.contents[0] as { text: string }).text).id).toBe("c1");
   await expect(
     (await connect({})).readResource({ uri: "sync-store://items/cart/items" }),
   ).rejects.toThrow();

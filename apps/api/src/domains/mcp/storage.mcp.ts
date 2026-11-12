@@ -10,6 +10,7 @@ import { GetItemQuery } from "../sync-storage/queries/impl/get-item.query";
 import { GetKeysQuery } from "../sync-storage/queries/impl/get-keys.query";
 import { SyncStorageRepository } from "../sync-storage/repositories/sync-storage.repository";
 import { permits, versionScope } from "../sync-storage/services/access-policy";
+import { TOON_MIME_TYPE } from "./toon.interceptor";
 import { json, McpAccess, page, paging, publicItem, requestId, who } from "./mcp-access";
 
 const key = z
@@ -511,8 +512,8 @@ export class StorageMcp {
     name: "item",
     title: "A stored item",
     description:
-      "The current value of one key, as JSON, for the user in the x-user-id request header and the branch in x-branch (default main).",
-    mimeType: "application/json",
+      "The current value of one key, as TOON (or JSON when that is smaller), for the user in the x-user-id request header and the branch in x-branch (default main).",
+    mimeType: TOON_MIME_TYPE,
   })
   async itemResource({ key }: { key: string }, ctx: McpContext) {
     const name = decoded(key);
@@ -533,8 +534,8 @@ export class StorageMcp {
     name: "keys",
     title: "A user's stored keys",
     description:
-      "Every key one user has stored on the branch in x-branch (default main), as a JSON array in alphabetical order.",
-    mimeType: "application/json",
+      "Every key one user has stored on the branch in x-branch (default main), as a list in alphabetical order, in TOON (or JSON when that is smaller).",
+    mimeType: TOON_MIME_TYPE,
   })
   async keysResource({ userId }: { userId: string }, ctx: McpContext) {
     const identity = await this.access.authorize(

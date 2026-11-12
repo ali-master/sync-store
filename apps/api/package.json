@@ -69,6 +69,7 @@
     "@nestjs/websockets": "^12.4.2",
     "@prisma/orm-mongo": "8.0.0-rc.22",
     "@socket.io/redis-streams-adapter": "^0.3.1",
+    "@toon-format/toon": "^4.4.0",
     "@usex/utils": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",

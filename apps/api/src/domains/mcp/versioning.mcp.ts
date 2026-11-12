@@ -4,6 +4,7 @@ import * as z from "zod";
 import { VersioningService } from "../sync-storage/services/versioning.service";
 import { json, McpAccess, requestId, who } from "./mcp-access";
 import { decoded } from "./storage.mcp";
+import { TOON_MIME_TYPE } from "./toon.interceptor";
 
 type Target = { userId?: string; branch?: string };
 
@@ -208,8 +209,8 @@ export class VersioningMcp {
     name: "commit",
     title: "A commit",
     description:
-      "One commit of the user in the x-user-id request header, as JSON: branch, parent, message, time and the keys in its snapshot.",
-    mimeType: "application/json",
+      "One commit of the user in the x-user-id request header, as TOON (or JSON when that is smaller): branch, parent, message, time and the keys in its snapshot.",
+    mimeType: TOON_MIME_TYPE,
   })
   async commitResource({ commitId }: { commitId: string }, ctx: McpContext) {
     const id = decoded(commitId);

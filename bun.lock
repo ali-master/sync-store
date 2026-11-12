@@ -29,7 +29,7 @@
     },
     "apps/api": {
       "name": "@usex/api",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "dependencies": {
         "@fastify/compress": "^9.3.0",
         "@fastify/static": "^10.1.10",
@@ -53,6 +53,7 @@
         "@nestjs/websockets": "^12.4.2",
         "@prisma/orm-mongo": "8.0.0-rc.22",
         "@socket.io/redis-streams-adapter": "^0.3.1",
+        "@toon-format/toon": "^4.4.0",
         "@usex/utils": "workspace:*",
         "class-transformer": "^0.5.1",
         "class-validator": "^0.15.1",
@@ -1464,6 +1465,8 @@
     "@tokenizer/inflate": ["@tokenizer/inflate@0.6.0", "", { "dependencies": { "debug": "^4.4.3", "strtok3": "^10.6.2", "token-types": "^6.1.2" } }, "sha512-+0RDxhBkyT9xMnGdJAwmats9yxRLR8ypJrQgrnLqOu4Gv/aHlnxYgdGVy2QTwvBl6IF/w2Hr+ZNirH+iMUbVZA=="],
 
     "@tokenizer/token": ["@tokenizer/token@0.3.0", "", {}, "sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A=="],
+
+    "@toon-format/toon": ["@toon-format/toon@4.4.0", "", {}, "sha512-A6UcsVoWbNdhdLNhJbe6JpRlocmf/DZGG57fur3bd8oQtsjBaKWo2hHbOU2zTuy+byUmLIOyP1xJeitopCZzpQ=="],
 
     "@ts-morph/common": ["@ts-morph/common@0.27.0", "", { "dependencies": { "fast-glob": "^3.3.3", "minimatch": "^10.0.1", "path-browserify": "^1.0.1" } }, "sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ=="],
 
