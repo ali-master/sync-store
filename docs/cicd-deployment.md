@@ -1,9 +1,9 @@
 # CI/CD and deployment
 
 This runbook describes the Sync Store installation at
-<https://sync-store.revue.ir/dashboard/>. Application source lives in this
+<https://sync-store.example.com/dashboard/>. Application source lives in this
 repository. Image builds and Kubernetes deployment configuration live in the
-private [DevOps / addons](https://gitlab.mom.ir/devops/addons) repository.
+private [DevOps / addons](https://gitlab.example.com/devops/addons) repository.
 Access to that GitLab project and the Kubernetes cluster is required for the
 operator commands below.
 
@@ -49,7 +49,7 @@ tag does not change the pod template and therefore does not restart a running po
 ### 2. Build and publish
 
 `ci/build-sync-store.sh` verifies the source artifact SHA and builds the upstream
-`apps/api/Dockerfile` with rootless BuildKit on the `mom-kubernetes` GitLab runner.
+`apps/api/Dockerfile` with rootless BuildKit on the Kubernetes GitLab runner.
 The image contains the API and compiled dashboard. The Dockerfile installs locked
 dependencies with Bun, generates the database client, builds the shared packages
 and dashboard/API, and assembles the production runtime.
@@ -57,7 +57,7 @@ and dashboard/API, and assembles the production runtime.
 The image is published to:
 
 ```text
-registry.mom.ir/devops/addons/sync-store:upstream-<SHA12>-<recipe-revision>
+registry.example.com/devops/addons/sync-store:upstream-<SHA12>-<recipe-revision>
 ```
 
 Registry credentials come from GitLab's built-in CI variables and are written to
@@ -136,22 +136,22 @@ The native client is public, uses the standard authorization-code flow and
 requires PKCE S256. It does not require a client secret. Its exact redirect URI is:
 
 ```text
-https://sync-store.revue.ir/api/v1/sso/callback
+https://sync-store.example.com/api/v1/sso/callback
 ```
 
 The application ConfigMap sets:
 
 ```dotenv
-API_URL=https://sync-store.revue.ir
-SSO_ISSUER=https://oauth.revue.ir/realms/mom
+API_URL=https://sync-store.example.com
+SSO_ISSUER=https://id.example.com/realms/example
 SSO_CLIENT_ID=sync-store-dashboard
-SSO_REDIRECT_URI=https://sync-store.revue.ir/api/v1/sso/callback
+SSO_REDIRECT_URI=https://sync-store.example.com/api/v1/sso/callback
 SSO_PROVIDER_NAME=Keycloak
 SSO_ALLOWED_EMAILS=<comma-separated approved administrator email addresses>
 ```
 
 The deployed allow-list grants installation administrator access only to the
-approved Ali and Mohsen accounts. Keycloak must supply their verified email
+approved operator accounts. Keycloak must supply their verified email
 addresses in ID tokens; `openid email profile` are the default scopes. Native
 SSO authorizes by the configured email allow-list, not the legacy
 `sync-store-admin` realm role. Do not enable a broad email-domain allow-list as a
@@ -175,12 +175,12 @@ for session behavior and access revocation.
 Run from an authorized operator environment with the intended Kubernetes context:
 
 ```sh
-kubectl --context mom-admin@mom -n argocd get application sync-store
-kubectl --context mom-admin@mom -n sync-store rollout status deployment/sync-store --timeout=300s
-kubectl --context mom-admin@mom -n sync-store get pods
-kubectl --context mom-admin@mom -n sync-store get deployment sync-store \
+kubectl --context <cluster-context> -n argocd get application sync-store
+kubectl --context <cluster-context> -n sync-store rollout status deployment/sync-store --timeout=300s
+kubectl --context <cluster-context> -n sync-store get pods
+kubectl --context <cluster-context> -n sync-store get deployment sync-store \
   -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
-kubectl --context mom-admin@mom -n sync-store get pods -l app=sync-store \
+kubectl --context <cluster-context> -n sync-store get pods -l app=sync-store \
   -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[0].imageID}{"\n"}{end}'
 ```
 
@@ -219,10 +219,10 @@ SHA. Retry that failed GitLab pipeline/job or run a new pipeline on infrastructu
 Useful diagnostics (avoid sharing logs that contain credentials or user data):
 
 ```sh
-kubectl --context mom-admin@mom -n sync-store describe deployment sync-store
-kubectl --context mom-admin@mom -n sync-store logs deployment/sync-store -c migrate --tail=100
-kubectl --context mom-admin@mom -n sync-store logs deployment/sync-store -c api --tail=100
-kubectl --context mom-admin@mom -n sync-store get events --sort-by=.lastTimestamp
+kubectl --context <cluster-context> -n sync-store describe deployment sync-store
+kubectl --context <cluster-context> -n sync-store logs deployment/sync-store -c migrate --tail=100
+kubectl --context <cluster-context> -n sync-store logs deployment/sync-store -c api --tail=100
+kubectl --context <cluster-context> -n sync-store get events --sort-by=.lastTimestamp
 ```
 
 ## Rollback
