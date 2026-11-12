@@ -1,8 +1,8 @@
 # Sync Store Helm chart
 
 This chart installs the Sync Store API, dashboard and WebSocket server from the
-published `alimaster/sync-store` image. Chart `0.1.0` defaults to application
-`1.1.2`. It creates a Deployment, Service, migration Job and optional Ingress and
+published `alimaster/sync-store` image. Chart `0.2.0` defaults to application
+`1.2.0`. It creates a Deployment, Service, migration Job and optional Ingress and
 PodDisruptionBudget. MongoDB, Redis, TLS certificates and credentials are managed
 outside this chart.
 
@@ -196,7 +196,7 @@ helm package charts/sync-store --destination /tmp/sync-store-chart
 ```
 
 The `Helm chart` GitHub Actions workflow lints, renders and packages chart
-changes. Its downloadable artifact contains `sync-store-0.1.0.tgz`. This
+changes. Its downloadable artifact contains `sync-store-0.2.0.tgz`. This
 validation workflow does not install the chart or change a running release.
 The chart is distributed from this repository; no Helm repository or OCI
 registry is required for a local-path installation.
