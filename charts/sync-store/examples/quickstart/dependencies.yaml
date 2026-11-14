@@ -1,0 +1,202 @@
+# Evaluation dependencies, intentionally separate from the application release.
+# Use managed/operated replica sets, backups and least-privilege users in production.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sync-store-mongodb-scripts
+data:
+  start.sh: |
+    #!/usr/bin/env bash
+    set -Eeuo pipefail
+    if [ ! -s /data/db/replica.key ]; then
+      openssl rand -base64 756 > /data/db/replica.key
+    fi
+    chmod 400 /data/db/replica.key
+    chown mongodb:mongodb /data/db/replica.key
+    exec /usr/local/bin/docker-entrypoint.sh mongod --replSet rs0 \
+      --keyFile /data/db/replica.key --bind_ip_all
+  ready.js: |
+    const admin = db.getSiblingDB("admin");
+    if (!admin.auth(process.env.MONGO_INITDB_ROOT_USERNAME,
+                    process.env.MONGO_INITDB_ROOT_PASSWORD)) quit(1);
+    try {
+      const hello = admin.runCommand({ hello: 1 });
+      if (hello.isWritablePrimary && hello.setName === "rs0") quit(0);
+      rs.status();
+    } catch (error) {
+      if (error.code === 94) {
+        rs.initiate({ _id: "rs0", members: [
+          { _id: 0, host: "sync-store-mongodb:27017" }
+        ] });
+      } else { throw error; }
+    }
+    quit(1);
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sync-store-mongodb
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: sync-store-example-mongodb
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sync-store-mongodb
+spec:
+  serviceName: sync-store-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sync-store-example-mongodb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sync-store-example-mongodb
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: mongodb
+          image: mongo:8.0
+          command: [bash, /scripts/start.sh]
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: example-admin
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sync-store-example-databases
+                  key: MONGODB_PASSWORD
+          ports:
+            - name: mongodb
+              containerPort: 27017
+          startupProbe:
+            exec:
+              command: [mongosh, --quiet, --file, /scripts/ready.js]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [mongosh, --quiet, --file, /scripts/ready.js]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: sync-store-mongodb-scripts
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sync-store-redis
+spec:
+  selector:
+    app.kubernetes.io/name: sync-store-example-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sync-store-redis
+spec:
+  serviceName: sync-store-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sync-store-example-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sync-store-example-redis
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:8-alpine
+          command: [sh, -ec]
+          args:
+            - exec redis-server --appendonly yes --appendfsync always
+              --maxmemory 128mb --maxmemory-policy noeviction
+              --requirepass "$REDISCLI_AUTH"
+          env:
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: sync-store-example-databases
+                  key: REDIS_PASSWORD
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: [redis-cli, ping]
+          livenessProbe:
+            exec:
+              command: [redis-cli, ping]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi

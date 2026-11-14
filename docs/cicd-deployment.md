@@ -1,272 +1,116 @@
-# CI/CD and deployment
+# CI/CD and Kubernetes deployment example
 
-This runbook describes the Sync Store installation at
-<https://sync-store.example.com/dashboard/>. Application source lives in this
-repository. Image builds and Kubernetes deployment configuration live in the
-private [DevOps / addons](https://gitlab.example.com/devops/addons) repository.
-Access to that GitLab project and the Kubernetes cluster is required for the
-operator commands below.
+This guide describes a generic release process for self-hosting Sync Store.
+All hostnames, paths and names are examples. Choose your own registry, CI runner,
+Kubernetes provider and secret manager. Keep actual environment values and
+credentials private; this repository does not contain a site's deployment state.
 
-## Release flow
+## Try the complete example first
 
-```text
-GitHub: ali-master/sync-store, master
-  -> Kubernetes GitHub poller (every minute)
-  -> GitLab: devops/addons, main
-       prepare-sync-store -> build-sync-store -> deploy-sync-store
-  -> GitOps commit: source revision + image tag
-  -> Argo CD: sync-store
-  -> Kubernetes: sync-store namespace
-```
+The [Helm chart](../charts/sync-store/README.md) contains a
+[quick-start installer](../charts/sync-store/examples/quickstart/README.md) with
+MongoDB, Redis, persistent volumes and generated credentials. Use it to understand
+the application before designing a production environment.
 
-A push to GitHub `master` is detected by the shared poller used for IPU and
-Telegram Relay. It triggers a pipeline on the protected GitLab `main` branch.
-There is no GitHub Actions deployment and no direct deployment from a developer
-laptop. A GitHub commit alone is not evidence of a successful release: check the
-image build, GitOps commit, and Argo CD health.
+## Build and validate
 
-The poller runs once per minute, but detection, runner availability, image build,
-image pull, database initialization and readiness checks all add time. Deployment
-is not instantaneous.
+The checked-in `Helm chart` GitHub Actions workflow runs for chart changes on
+pushes to `master`, pull requests and manual dispatch. It lints the default,
+quick-start and production-example values, renders manifests and uploads a
+packaged chart. It does **not** deploy to a cluster or build an application image.
+Other workflows in `.github/workflows` have their own triggers and permissions.
+Check the Actions page for the actual result of each run.
 
-### 1. Prepare the source
-
-`ci/prepare-sync-store.sh` clones GitHub `master`, validates the full commit SHA,
-and publishes the exact source checkout as a pipeline artifact. Its dotenv
-artifact supplies `SYNC_STORE_SHA`, `SYNC_STORE_IMAGE_TAG` and
-`SYNC_STORE_CHANGED` to the next jobs.
-
-The image tag follows `upstream-<12-character-SHA>-<recipe-revision>`. The exact
-recipe revision is defined in the private CI scripts. Bump it consistently in all three Sync Store CI scripts
-when a recipe change requires a new image for the same application commit.
-
-If both `gitops/vendor/sync-store` and the deployed image tag already match, the
-build and deployment scripts exit successfully without changing the installation.
-An infrastructure commit containing `[rebuild-sync-store]` forces a rebuild.
-Prefer a new recipe suffix when a new rollout is required: rebuilding an existing
-tag does not change the pod template and therefore does not restart a running pod.
-
-### 2. Build and publish
-
-`ci/build-sync-store.sh` verifies the source artifact SHA and builds the upstream
-`apps/api/Dockerfile` with rootless BuildKit on the Kubernetes GitLab runner.
-The image contains the API and compiled dashboard. The Dockerfile installs locked
-dependencies with Bun, generates the database client, builds the shared packages
-and dashboard/API, and assembles the production runtime.
-
-The image is published to:
-
-```text
-registry.example.com/devops/addons/sync-store:upstream-<SHA12>-<recipe-revision>
-```
-
-Registry credentials come from GitLab's built-in CI variables and are written to
-a temporary Docker configuration removed when the job exits. The build requests
-4 GiB of ephemeral storage and permits up to 12 GiB; the runner and namespace
-limits must permit this. The job timeout is 60 minutes.
-
-This image job is a production build, not a complete test suite. It does not
-replace the API's unit, integration or type checks. Run the relevant tests when
-changing application behavior.
-
-### 3. Record the release and let Argo CD deploy
-
-`ci/deploy-sync-store.sh` runs only after the build succeeds. It checks GitHub
-`master` again and skips a build superseded by a newer source commit. All addons
-deployment jobs use the `addons-main` resource group so their GitOps writes are
-serialized.
-
-The job fetches the latest infrastructure `main`, updates the
-`gitops/vendor/sync-store` gitlink and the image in
-`gitops/apps/sync-store/kustomization.yaml`, and pushes a deployment commit. Its
-commit message includes the source URL and the GitLab pipeline URL. The job uses
-the existing protected `RELAY_GIT_PUSH_TOKEN`; despite its historical name, that
-credential is shared by these addons deployment jobs. Do not put its value in
-source files, logs or documentation.
-
-Argo CD reconciles the `sync-store` application from these Kustomize manifests.
-GitLab's deploy job records the desired version; it does not itself wait for
-Kubernetes health. Confirm `Synced` and `Healthy` before treating a release as
-complete.
-
-## Infrastructure layout
-
-These paths are relative to the private addons repository:
-
-| Path | Responsibility |
-| --- | --- |
-| `.gitlab-ci.yml` | Prepare, build and deploy jobs and their dependencies |
-| `ci/prepare-sync-store.sh` | Fetch source and detect a required build |
-| `ci/build-sync-store.sh` | Build and publish the production image |
-| `ci/deploy-sync-store.sh` | Record the source and image in GitOps |
-| `gitops/vendor/sync-store` | Git submodule pointer for the deployed source |
-| `gitops/apps/sync-store/` | Application, data services, storage, routes and policies |
-| `gitops/apps/telegram-relay/github-poller.yaml` | Shared GitHub polling CronJob |
-| `gitops/charts/keycloak/values.yaml` | Managed Keycloak client configuration |
-| `scripts/verify-sync-store-sso.py` | Deployment authentication smoke checks |
-
-Sync Store runs one API/dashboard replica with a `Recreate` strategy. An upgrade
-can briefly interrupt service. Its `migrate` init container runs `bun run
-db:deploy` using the same image before the API starts. MongoDB uses a persistent
-single-node replica set; Redis is colocated in the MongoDB pod in this
-installation. This is not a highly available deployment.
-
-The API container requests 100m CPU and 256 MiB memory, with limits of 1 CPU and
-768 MiB. These are reservations and ceilings, not measured usage. Inspect actual
-consumption with `kubectl top pods -n sync-store --containers` before resizing.
-MongoDB and Redis have their own resources and persistent volumes; do not delete
-their PVCs during an application rollback.
-
-The `sync-store-secrets` Kubernetes Secret supplies database, Redis, JWT and CSRF
-credentials. Registry pull credentials and the gateway OIDC client secret are
-also provisioned separately. The repository contains references, not secret
-values. Preserve these secrets across application releases.
-
-## Dashboard SSO and application API access
-
-There are two browser authentication steps:
-
-1. Envoy Gateway protects the UI using Keycloak client `sync-store-gateway`.
-   Its callback and logout paths are `/oauth2/callback` and `/oauth2/logout`.
-2. Sync Store's native dashboard SSO uses client `sync-store-dashboard`. Its
-   authorization-code flow uses PKCE and returns to `/api/v1/sso/callback`.
-   The existing Keycloak browser session normally avoids another password prompt.
-
-The native client is public, uses the standard authorization-code flow and
-requires PKCE S256. It does not require a client secret. Its exact redirect URI is:
-
-```text
-https://sync-store.example.com/api/v1/sso/callback
-```
-
-The application ConfigMap sets:
-
-```dotenv
-API_URL=https://sync-store.example.com
-SSO_ISSUER=https://id.example.com/realms/example
-SSO_CLIENT_ID=sync-store-dashboard
-SSO_REDIRECT_URI=https://sync-store.example.com/api/v1/sso/callback
-SSO_PROVIDER_NAME=Keycloak
-SSO_ALLOWED_EMAILS=<comma-separated approved administrator email addresses>
-```
-
-The deployed allow-list grants installation administrator access only to the
-approved operator accounts. Keycloak must supply their verified email
-addresses in ID tokens; `openid email profile` are the default scopes. Native
-SSO authorizes by the configured email allow-list, not the legacy
-`sync-store-admin` realm role. Do not enable a broad email-domain allow-list as a
-shortcut. Settings saved in the dashboard override environment values; inspect
-those overrides when diagnosing a mismatch.
-
-The old `ADMIN_OIDC_*` variables and `/dashboard/` redirect may remain during the
-transition to support rollback to the previous custom image. Current upstream
-SSO uses `SSO_*` variables and `/api/v1/sso/callback`.
-
-The `/api/v1` and `/socket.io` routes bypass the gateway's interactive browser
-login. Sync Store still authenticates those requests itself. Applications such
-as Pay use a Sync Store API key with the required tenant/user/instance context;
-they do not need a Keycloak client ID or client secret. A dashboard SSO session
-authorizes administration routes only and must not work as an application API key.
-See the [dashboard SSO guide](../apps/docs/content/docs/guides/dashboard-sso.mdx)
-for session behavior and access revocation.
-
-## Validate a release
-
-Run from an authorized operator environment with the intended Kubernetes context:
+For an application release, build the repository's API Dockerfile from the
+repository root. It includes the dashboard, SDK build dependencies, generated
+database client and migration checks. For example:
 
 ```sh
-kubectl --context <cluster-context> -n argocd get application sync-store
-kubectl --context <cluster-context> -n sync-store rollout status deployment/sync-store --timeout=300s
-kubectl --context <cluster-context> -n sync-store get pods
-kubectl --context <cluster-context> -n sync-store get deployment sync-store \
-  -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
-kubectl --context <cluster-context> -n sync-store get pods -l app=sync-store \
-  -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[0].imageID}{"\n"}{end}'
+docker build --file apps/api/Dockerfile --tag registry.example.com/team/sync-store:VERSION .
+docker push registry.example.com/team/sync-store:VERSION
 ```
 
-Compare the GitHub SHA, successful GitLab build, GitOps gitlink/image tag and live
-container image ID. A green pipeline with an older running pod is not a completed
-deployment. Also verify:
+Replace `VERSION` and the registry with your release values. Configure registry
+authentication as a masked CI secret or workload identity. Build for the target
+node architecture; use a multi-platform builder when publishing multiple
+architectures. Record the resulting image digest and scan the image according
+to your project's release policy. Avoid mutable `latest` tags for deployments.
 
-- An anonymous `/dashboard/` request redirects to Keycloak.
-- Both approved administrator accounts can open the dashboard and admin API.
-- An account outside the allow-list cannot obtain administrator access.
-- Anonymous requests and forged bearer tokens cannot access protected API routes.
-- A dashboard SSO token cannot access application data routes.
-- Existing application API keys still work without a Keycloak browser cookie.
+## Prepare a private environment
 
-The installation must already have its bootstrap administrator. SSO does not
-replace first-time setup or create that administrator automatically.
+1. Provision a MongoDB replica set and a migration account with `readWrite` and
+   `dbAdmin` on the application database. Create and test a backup/restore plan.
+2. For multiple replicas, provision shared Redis 7.2+ with AOF enabled and
+   permission for `WAITAOF`. Account for memory, persistence and failover.
+3. Create a Kubernetes namespace and an environment Secret containing
+   `DATABASE_URL`, `JWT_SECRET` and `CSRF_SECRET` (at least 32 characters).
+   Add `REDIS_URL`, `SSO_CLIENT_SECRET` and `METRICS_TOKEN` when needed. Use a
+   secret manager or a protected local environment file, never committed values.
+4. Configure an ingress controller, DNS and a TLS Secret for public access.
+   Set `env.API_URL` to the public API base including `/api`, and restrict CORS
+   to your application's origins. Preserve WebSocket upgrades and connections.
+5. Copy the chart's [production values example](../charts/sync-store/ci/production-values.yaml)
+   to private storage. Replace hostnames, email allowlists, Secret references,
+   resource budgets, image repository and digest. Review it for your environment.
 
-## Troubleshooting
+The [Secret template](../charts/sync-store/examples/secret.example.yaml) documents
+the key names. Its placeholder values are not working credentials.
 
-| Symptom | Check |
-| --- | --- |
-| No pipeline after a GitHub push | Shared CronJob status/logs, GitHub connectivity, trigger secret and protected `main` |
-| Pipeline succeeds without building | `SYNC_STORE_CHANGED=0`: the tracked source and image tag already match |
-| Build fails or is evicted | Job log, runner disk usage, 12 GiB ephemeral-storage allowance, registry/package connectivity |
-| Deploy job reports a superseded commit | A newer GitHub commit arrived during the build; follow its pipeline |
-| GitOps push fails | Protected push credential, branch permissions and concurrent manual changes; retry the deploy job |
-| Argo is OutOfSync or Degraded | Application conditions, image pull, init-container logs, PVC availability and readiness |
-| SSO callback fails | Exact client redirect URI, PKCE, issuer, verified email claim and application allow-list/overrides |
-| UI works but Pay is rejected | Check the native API key and request context; a Keycloak token is not a replacement |
+## Deploy a reviewed release
 
-The shared poller records the source SHA when it successfully *triggers* a
-pipeline. It does not automatically retry a failed build for an unchanged GitHub
-SHA. Retry that failed GitLab pipeline/job or run a new pipeline on infrastructure
-`main`; preparation compares against the deployed version and rebuilds as needed.
-
-Useful diagnostics (avoid sharing logs that contain credentials or user data):
+An example deployment command, using a preconfigured CI Kubernetes identity:
 
 ```sh
-kubectl --context <cluster-context> -n sync-store describe deployment sync-store
-kubectl --context <cluster-context> -n sync-store logs deployment/sync-store -c migrate --tail=100
-kubectl --context <cluster-context> -n sync-store logs deployment/sync-store -c api --tail=100
-kubectl --context <cluster-context> -n sync-store get events --sort-by=.lastTimestamp
+helm upgrade --install sync-store ./charts/sync-store \
+  --kube-context EXAMPLE_CONTEXT --namespace sync-store --create-namespace \
+  --values /secure/path/production-values.yaml \
+  --set-string image.repository=registry.example.com/team/sync-store \
+  --set-string image.digest=sha256:REPLACE_WITH_IMAGE_DIGEST \
+  --wait --timeout 12m
+
+helm test sync-store --kube-context EXAMPLE_CONTEXT \
+  --namespace sync-store --timeout 2m
 ```
 
-## Rollback
+The database and environment Secret must exist before Helm starts: the
+pre-install/pre-upgrade migration Job runs before normal release resources.
+Serialize deployments to the same environment/database. Retain failed Job logs
+for diagnosis and report the deployed commit, image digest and chart version.
 
-### Prisma contract compatibility
+Use a dedicated deploy identity scoped to the release namespace; store its
+credentials in CI secrets or use workload identity. If you automate deployment,
+run it only on trusted release branches after build and validation succeed.
+Never give untrusted pull-request code production credentials.
 
-The Docker build regenerates the database contract and runs
-`bun run --cwd apps/api db:check-migrations`. This offline check requires a
-migration path from every checked-in historical storage state (and a fresh
-database) to the generated contract. The runtime image copies the same generated
-contract from the build stage.
+For GitOps, maintain chart references, image digests and environment overlays in
+a private deployment repository. Review your controller's hook semantics: it
+must run migrations and wait for success before replacing application Pods.
+Do not assume `pre-install` has identical behavior in every GitOps controller.
 
-Prisma release candidates can change the storage format even when
-`contract.prisma` is unchanged. The deployed migration history currently uses
-`@prisma/orm-mongo` **8.0.0-rc.22** with `prisma` **8.0.0-rc.29**. Upgrading to
-rc.23/rc.33 changed index metadata and the storage hash, producing
-`MIGRATION.PATH_UNREACHABLE` during startup. Keep the compatible pair pinned until
-a tested upgrade can read the old snapshots and migrate existing data. Do not
-reset the database, rewrite migration history, or use `db:push` to bypass this
-failure. Validate dependency upgrades against a restored test database before
-production.
+## Verify and notify
 
-### Application rollback
+Wait for the Helm release and test to succeed, then check dashboard setup/login,
+an authenticated API write/read, and WebSocket synchronization with a dedicated
+test application key. For dashboard OIDC, verify an allowed administrator can
+log in and an unlisted user is rejected. REST/SDK/WebSocket applications use API
+keys; they should not require an interactive browser login.
 
-For a normal code regression, revert the offending application change on GitHub
-`master`. The resulting new commit goes through the same build and deployment
-path, preserving a clear release history.
+An optional CI notification can send the repository/release, status, commit and
+job URL to your chosen notification service after deployment. Keep bot tokens,
+relay URLs and recipient identifiers in protected CI secrets. Redact credentials
+and setup codes from notifications and logs. A successful build alone must not
+be reported as a successful deployment.
 
-For an emergency rollback to an already published image:
+## Diagnose and roll back
 
-1. Coordinate a temporary pause of automatic releases. Suspend the shared
-   `relay-github-poller` CronJob and cancel pending Sync Store deploy jobs; this
-   also pauses GitHub detection for IPU and Telegram Relay. Remember that an
-   infrastructure `main` pipeline can independently run the Sync Store jobs.
-2. In an infrastructure branch, restore the previous working image tag/digest in
-   `gitops/apps/sync-store/kustomization.yaml` and matching
-   `gitops/vendor/sync-store` gitlink. Commit through the normal protected-branch
-   process while keeping automatic Sync Store deploy jobs paused.
-3. Let Argo CD reconcile, then repeat the health and authentication checks above.
-   Do not rely on `kubectl rollout undo`: Argo CD would restore the Git version.
-4. Fix or revert the upstream regression before re-enabling the shared poller
-   and deployment jobs, or automation can deploy the bad revision again.
+Inspect Pod events, image pull failures, PVC binding and the migration Job before
+retrying. See the chart guide for concrete commands and resource defaults.
+Dependency upgrades must pass the database migration checks and be exercised
+against a restored database before release; never reset production data or
+rewrite migration history to bypass an error.
 
-An image rollback does not reverse database changes. Review migration
-compatibility and take a verified data backup before releases that change the
-schema. Never remove persistent storage or rotate application secrets merely to
-roll back an image.
+Roll back to a known compatible image through your maintained Helm values or
+GitOps repository. A Helm rollback restores application resources, **not** the
+database schema or data. Review compatibility before rolling back and restore
+a verified backup if required. Pause automatic promotion while investigating a
+bad release so it cannot immediately deploy the failing version again.

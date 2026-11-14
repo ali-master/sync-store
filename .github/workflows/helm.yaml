@@ -26,10 +26,15 @@ jobs:
           set -Eeuo pipefail
           helm lint charts/sync-store --strict
           helm lint charts/sync-store --strict --values charts/sync-store/ci/production-values.yaml
+          helm lint charts/sync-store --strict --values charts/sync-store/examples/quickstart/values.yaml
+          bash -n charts/sync-store/examples/quickstart/install.sh
           mkdir -p rendered dist
           helm template sync-store charts/sync-store --namespace sync-store > rendered/default.yaml
           helm template sync-store charts/sync-store --namespace sync-store \
             --values charts/sync-store/ci/production-values.yaml > rendered/production.yaml
+          helm template sync-store charts/sync-store --namespace sync-store-example \
+            --values charts/sync-store/examples/quickstart/values.yaml > rendered/quickstart.yaml
+          cp charts/sync-store/examples/quickstart/dependencies.yaml rendered/dependencies.yaml
           helm package charts/sync-store --destination dist
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

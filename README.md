@@ -77,8 +77,8 @@ Once the service is running:
 The dashboard serves daily administration; `/api/docs` provides the interactive API
 reference. For multiple backend replicas, follow the
 [deployment guide](apps/docs/content/docs/guides/deployment.mdx).
-For the managed Kubernetes installation, see the
-[CI/CD and deployment runbook](docs/cicd-deployment.md).
+For portable Kubernetes installation and pipeline examples, see the
+[CI/CD and deployment guide](docs/cicd-deployment.md).
 For a portable Kubernetes installation, use the
 [Helm chart and installation guide](charts/sync-store/README.md).
 

@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "sync-store.fullname" . }}-test
+  labels:
+    {{- include "sync-store.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: http
+      image: {{ include "sync-store.image" . | quote }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      command: [bun, -e]
+      args:
+        - 'const response = await fetch(process.env.TEST_URL, { signal: AbortSignal.timeout(10000) }); if (!response.ok) throw new Error(`HTTP ${response.status}`); console.log("Sync Store HTTP check passed");'
+      env:
+        - name: TEST_URL
+          value: {{ printf "http://%s:%v/api/v1/setup" (include "sync-store.fullname" .) .Values.service.port | quote }}
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+  {{- with .Values.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.affinity }}
+  affinity:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}

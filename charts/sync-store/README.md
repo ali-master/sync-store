@@ -1,10 +1,39 @@
 # Sync Store Helm chart
 
 This chart installs the Sync Store API, dashboard and WebSocket server from the
-published `alimaster/sync-store` image. Chart `0.2.0` defaults to application
+published `alimaster/sync-store` image. Chart `0.3.0` defaults to application
 `1.2.0`. It creates a Deployment, Service, migration Job and optional Ingress and
 PodDisruptionBudget. MongoDB, Redis, TLS certificates and credentials are managed
 outside this chart.
+
+All files in this directory are public, provider-independent examples. They do
+not describe any particular organization's infrastructure. Keep real values,
+credentials and deployment overlays in a private repository or secret manager.
+
+## Quick start: complete evaluation stack
+
+For a first installation, use the [complete example](examples/quickstart/README.md).
+It provisions a single-node MongoDB replica set, authenticated Redis with AOF,
+persistent volumes, random credentials and the application, then runs a Helm
+HTTP test. No database service or credentials need to be prepared manually.
+
+Requirements: Kubernetes 1.25+, Helm 3.17+, `kubectl`, Bash, OpenSSL, a default
+StorageClass with dynamic provisioning, and access to the public container
+images. A local kind cluster with Docker is one option:
+
+```sh
+git clone https://github.com/ali-master/sync-store.git
+cd sync-store
+kind create cluster --name sync-store-demo
+bash charts/sync-store/examples/quickstart/install.sh --context kind-sync-store-demo
+kubectl --context kind-sync-store-demo --namespace sync-store-example \
+  port-forward service/sync-store 3000:80
+```
+
+Open `http://localhost:3000/dashboard/`, obtain the setup code from the application
+logs, and create the first administrator. Use a disposable cluster for this
+evaluation example. It has no public ingress, TLS, database HA or backup system.
+For managed databases and a public service, follow the installation below.
 
 ## Prerequisites
 
@@ -51,6 +80,8 @@ helm upgrade --install sync-store ./charts/sync-store \
   --set existingSecret=sync-store-secrets \
   --wait --timeout 12m
 
+helm test sync-store --namespace sync-store --timeout 2m
+
 kubectl --namespace sync-store port-forward \
   service/sync-store-sync-store 3000:80
 ```
@@ -74,6 +105,9 @@ file and replace the example hostnames, ingress class, Secret names and email
 allowlist. It demonstrates two replicas, shared TLS ingress, dashboard SSO and a
 disruption budget. Create the database/Redis credentials and TLS Secret before
 installation. The example requires `REDIS_URL` in `sync-store-production`.
+This is an example to adapt and review, not a complete production environment.
+The [Secret template](examples/secret.example.yaml) documents required keys;
+replace every placeholder locally and never commit the filled-in file.
 
 ```sh
 helm upgrade --install sync-store ./charts/sync-store \
@@ -182,6 +216,8 @@ compatibility before rolling back; restore a database backup when necessary.
 The readiness/startup endpoint checks HTTP availability, not complete database
 health. After installation, verify dashboard login and an authenticated API
 write/read using a dedicated test application key.
+`helm test` verifies that the Service reaches the application's setup endpoint;
+it does not exercise SSO, WebSockets or authenticated data operations.
 
 ## Validate and package
 
@@ -189,6 +225,8 @@ write/read using a dedicated test application key.
 helm lint charts/sync-store --strict
 helm lint charts/sync-store --strict \
   --values charts/sync-store/ci/production-values.yaml
+helm lint charts/sync-store --strict \
+  --values charts/sync-store/examples/quickstart/values.yaml
 helm template sync-store charts/sync-store --namespace sync-store
 helm template sync-store charts/sync-store --namespace sync-store \
   --values charts/sync-store/ci/production-values.yaml
@@ -196,7 +234,9 @@ helm package charts/sync-store --destination /tmp/sync-store-chart
 ```
 
 The `Helm chart` GitHub Actions workflow lints, renders and packages chart
-changes. Its downloadable artifact contains `sync-store-0.2.0.tgz`. This
+changes. Its downloadable artifact contains `sync-store-0.3.0.tgz`. This
 validation workflow does not install the chart or change a running release.
 The chart is distributed from this repository; no Helm repository or OCI
 registry is required for a local-path installation.
+See [the CI/CD example](https://github.com/ali-master/sync-store/blob/master/docs/cicd-deployment.md) for image builds,
+private release values, deployment, verification and rollback.

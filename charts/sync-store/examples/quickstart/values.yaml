@@ -1,0 +1,7 @@
+# Local evaluation only. The installer creates the referenced Secret.
+fullnameOverride: sync-store
+existingSecret: sync-store-example
+env:
+  API_URL: http://localhost:3000/api
+  LOG_LEVEL: info
+  LOG_FORMAT: json
